@@ -95,9 +95,9 @@ export default function Login() {
 
         <div style={{ textAlign: "center", marginTop: "15px", fontSize: "14px" }}>
           <p>
-            New here?{" "}
+            Don't have an account?{" "}
             <Link to="/register" style={{ color: "#667eea" }}>
-              Create account
+              Sign Up
             </Link>
           </p>
           <Link to="/forgot-password" style={{ color: "#667eea" }}>
