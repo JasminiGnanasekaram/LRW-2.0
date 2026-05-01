@@ -26,45 +26,155 @@ export default function Register() {
 
   if (done) {
     return (
-      <div style={{ maxWidth: 420, margin: "60px auto" }}>
-        <div className="card">
-          <h1>Check your email</h1>
-          <p className="muted">
-            We sent a verification link to <strong>{email}</strong>. Click the link to activate your account, then sign in.
-          </p>
-          <p className="muted">
-            (In dev mode without SMTP, the link is printed to the backend console.)
-          </p>
-          <Link to="/login">Back to sign in</Link>
+      <div style={container}>
+        <div style={card}>
+          <h2>📧 Check your email</h2>
+          <p style={muted}>Verification link sent to <b>{email}</b></p>
+          <Link to="/login" style={link}>Back to login</Link>
         </div>
       </div>
     );
   }
 
   return (
-    <div style={{ maxWidth: 420, margin: "60px auto" }}>
-      <div className="card">
-        <h1>Create account</h1>
-        <form onSubmit={submit}>
-          <label className="label">Name</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} required />
-          <label className="label">Email</label>
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-          <label className="label">Password (min 6 chars)</label>
-          <input type="password" minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} required />
-          <label className="label">Role</label>
-          <select value={role} onChange={(e) => setRole(e.target.value)}>
-            <option value="student">Student</option>
-            <option value="researcher">Researcher / NLP Developer</option>
-            <option value="admin">Admin</option>
-          </select>
-          {error && <div className="error">{error}</div>}
-          <button disabled={loading} type="submit">{loading ? "Creating..." : "Create account"}</button>
-        </form>
-        <p className="muted" style={{ marginTop: 16 }}>
-          Already have an account? <Link to="/login">Sign in</Link>
-        </p>
+    <div style={container}>
+      <div style={wrapper}>
+
+        {/* LEFT SIDE */}
+        <div style={leftPanel}>
+          <h2 style={{ color: "#fff" }}>Join Our Community ✨</h2>
+          <p style={{ color: "#ddd", marginTop: "10px" }}>
+            Create your account and start your journey with us.
+          </p>
+        </div>
+
+        {/* RIGHT SIDE */}
+        <div style={rightPanel}>
+          <h2 style={{ textAlign: "center" }}>Create Account ✨</h2>
+
+          <form onSubmit={submit}>
+            <input
+              placeholder="Enter your name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              style={input}
+            />
+
+            <input
+              type="email"
+              placeholder="Enter your email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              style={input}
+            />
+
+            <input
+              type="password"
+              placeholder="Create password"
+              minLength={6}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              style={input}
+            />
+
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              style={input}
+            >
+              <option value="student">Student</option>
+              <option value="researcher">Researcher / NLP Developer</option>
+              <option value="admin">Admin</option>
+            </select>
+
+            {error && <div style={{ color: "red" }}>{error}</div>}
+
+            <button disabled={loading} style={button}>
+              {loading ? "Creating..." : "Create account →"}
+            </button>
+          </form>
+
+          <p style={{ textAlign: "center", marginTop: "15px" }}>
+            Already have an account?{" "}
+            <Link to="/login" style={link}>Sign in</Link>
+          </p>
+        </div>
+
       </div>
     </div>
   );
 }
+
+/* ---------- STYLES ---------- */
+
+const container = {
+  height: "100vh",
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+  background: "#eef2ff"
+};
+
+const wrapper = {
+  display: "flex",
+  width: "850px",
+  borderRadius: "12px",
+  overflow: "hidden",
+  boxShadow: "0 10px 30px rgba(0,0,0,0.2)"
+};
+
+const leftPanel = {
+  flex: 1,
+  padding: "40px",
+  background: "linear-gradient(135deg, #667eea, #764ba2)",
+  display: "flex",
+  flexDirection: "column",
+  justifyContent: "center"
+};
+
+const rightPanel = {
+  flex: 1,
+  padding: "40px",
+  background: "#fff"
+};
+
+const input = {
+  width: "100%",
+  padding: "12px",
+  marginTop: "12px",
+  borderRadius: "8px",
+  border: "1px solid #ddd",
+  fontSize: "14px"
+};
+
+const button = {
+  width: "100%",
+  marginTop: "20px",
+  padding: "12px",
+  border: "none",
+  borderRadius: "8px",
+  background: "linear-gradient(135deg, #667eea, #764ba2)",
+  color: "#fff",
+  fontSize: "16px",
+  cursor: "pointer"
+};
+
+const link = {
+  color: "#667eea",
+  textDecoration: "none",
+  fontWeight: "500"
+};
+
+const muted = {
+  color: "#666"
+};
+
+const card = {
+  padding: "30px",
+  background: "#fff",
+  borderRadius: "12px",
+  boxShadow: "0 10px 30px rgba(0,0,0,0.2)"
+};

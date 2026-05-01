@@ -23,23 +23,98 @@ export default function Login() {
   };
 
   return (
-    <div style={{ maxWidth: 420, margin: "60px auto" }}>
-      <div className="card">
-        <h1>Sign in</h1>
+    <div style={{
+      height: "100vh",
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center",
+      background: "linear-gradient(135deg, #667eea, #764ba2)"
+    }}>
+      <div style={{
+        width: "100%",
+        maxWidth: "400px",
+        padding: "30px",
+        borderRadius: "12px",
+        background: "#fff",
+        boxShadow: "0 10px 30px rgba(0,0,0,0.2)"
+      }}>
+        <h2 style={{ textAlign: "center", marginBottom: "20px" }}>
+          Welcome Back 👋
+        </h2>
+
         <form onSubmit={submit}>
-          <label className="label">Email</label>
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-          <label className="label">Password</label>
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-          {error && <div className="error">{error}</div>}
-          <button disabled={loading} type="submit">{loading ? "Signing in..." : "Sign in"}</button>
+          <label style={{ fontWeight: "500" }}>Email</label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            style={inputStyle}
+          />
+
+          <label style={{ fontWeight: "500", marginTop: "10px", display: "block" }}>
+            Password
+          </label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            style={inputStyle}
+          />
+
+          {error && (
+            <div style={{
+              color: "red",
+              marginTop: "10px",
+              fontSize: "14px"
+            }}>
+              {error}
+            </div>
+          )}
+
+          <button
+            disabled={loading}
+            type="submit"
+            style={{
+              width: "100%",
+              marginTop: "20px",
+              padding: "10px",
+              border: "none",
+              borderRadius: "8px",
+              background: "#667eea",
+              color: "#fff",
+              fontSize: "16px",
+              cursor: "pointer",
+              transition: "0.3s"
+            }}
+          >
+            {loading ? "Signing in..." : "Sign in"}
+          </button>
         </form>
-        <p className="muted" style={{ marginTop: 16 }}>
-          New here? <Link to="/register">Create an account</Link>
-          <br/>
-          <Link to="/forgot-password">Forgot password?</Link>
-        </p>
+
+        <div style={{ textAlign: "center", marginTop: "15px", fontSize: "14px" }}>
+          <p>
+            New here?{" "}
+            <Link to="/register" style={{ color: "#667eea" }}>
+              Create account
+            </Link>
+          </p>
+          <Link to="/forgot-password" style={{ color: "#667eea" }}>
+            Forgot password?
+          </Link>
+        </div>
       </div>
     </div>
   );
 }
+
+const inputStyle = {
+  width: "100%",
+  padding: "10px",
+  marginTop: "5px",
+  borderRadius: "8px",
+  border: "1px solid #ccc",
+  outline: "none",
+  fontSize: "14px"
+};
