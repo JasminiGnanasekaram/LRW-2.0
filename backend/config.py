@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     SMTP_PORT: int = 587
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
-    SMTP_FROM: str = "no-reply@lrw.local"
+    SMTP_FROM: str = ""
     APP_BASE_URL: str = "http://localhost:5173"
 
     class Config:

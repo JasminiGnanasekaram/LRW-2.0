@@ -108,14 +108,14 @@ export default function Register() {
   );
 }
 
-/* ---------- STYLES ---------- */
+
 
 const container = {
   height: "100vh",
   display: "flex",
   justifyContent: "center",
   alignItems: "center",
-  background: "#eef2ff"
+  background: "linear-gradient(135deg,#1a3a2a, #d4e8d0)"
 };
 
 const wrapper = {
@@ -129,7 +129,7 @@ const wrapper = {
 const leftPanel = {
   flex: 1,
   padding: "40px",
-  background: "linear-gradient(135deg, #667eea, #764ba2)",
+  background: "linear-gradient(135deg, #1a3a2a, #d4e8d0)",
   display: "flex",
   flexDirection: "column",
   justifyContent: "center"
@@ -156,14 +156,14 @@ const button = {
   padding: "12px",
   border: "none",
   borderRadius: "8px",
-  background: "linear-gradient(135deg, #667eea, #764ba2)",
+  background: "linear-gradient(135deg, #1a3a2a, #d4e8d0)",
   color: "#fff",
   fontSize: "16px",
   cursor: "pointer"
 };
 
 const link = {
-  color: "#667eea",
+  color: "#386641",
   textDecoration: "none",
   fontWeight: "500"
 };
