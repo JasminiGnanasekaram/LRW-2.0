@@ -39,7 +39,7 @@ export default function Login() {
         boxShadow: "0 10px 30px rgba(0,0,0,0.2)"
       }}>
         <h2 style={{ textAlign: "center", marginBottom: "20px" }}>
-          Welcome Back 👋
+          Welcome Back 
         </h2>
 
         <form onSubmit={submit}>

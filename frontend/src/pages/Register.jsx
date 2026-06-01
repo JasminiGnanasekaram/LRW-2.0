@@ -6,13 +6,42 @@ export default function Register() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [passwordError, setPasswordError] = useState("");   // ✅ NEW
   const [role, setRole] = useState("student");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
 
+  // ✅ NEW — validation function
+  const validatePassword = (value) => {
+    if (value.length < 8)
+      return "Password must be at least 8 characters.";
+    if (!/[A-Z]/.test(value))
+      return "Must include at least one capital letter.";
+    if (!/[0-9]/.test(value))
+      return "Must include at least one number.";
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(value))
+      return "Must include at least one special character (!@#$...).";
+    return "";
+  };
+
+  // ✅ NEW — handle password change with live validation
+  const handlePasswordChange = (e) => {
+    const value = e.target.value;
+    setPassword(value);
+    setPasswordError(validatePassword(value));
+  };
+
   const submit = async (e) => {
     e.preventDefault();
+
+    // ✅ NEW — block submit if password invalid
+    const pwdErr = validatePassword(password);
+    if (pwdErr) {
+      setPasswordError(pwdErr);
+      return;
+    }
+
     setError(""); setLoading(true);
     try {
       await register(name, email, password, role);
@@ -70,22 +99,27 @@ export default function Register() {
               style={input}
             />
 
+            {/* ✅ CHANGED — removed minLength={6}, added handlePasswordChange */}
             <input
               type="password"
               placeholder="Create password"
-              minLength={6}
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={handlePasswordChange}
               required
               style={input}
             />
+
+            {/* ✅ NEW — shows error message below password field */}
+            {passwordError && (
+              <p style={pwdErrStyle}>{passwordError}</p>
+            )}
 
             <select
               value={role}
               onChange={(e) => setRole(e.target.value)}
               style={input}
             >
-              <option value="student">Student</option>
+              <option value="student">Guest</option>
               <option value="researcher">Researcher / NLP Developer</option>
               <option value="admin">Admin</option>
             </select>
@@ -177,4 +211,12 @@ const card = {
   background: "#fff",
   borderRadius: "12px",
   boxShadow: "0 10px 30px rgba(0,0,0,0.2)"
+};
+
+// ✅ NEW
+const pwdErrStyle = {
+  color: "red",
+  fontSize: "12px",
+  marginTop: "5px",
+  marginBottom: "0"
 };
