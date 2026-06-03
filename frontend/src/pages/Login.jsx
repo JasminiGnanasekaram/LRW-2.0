@@ -16,106 +16,62 @@ export default function Login() {
       await login(email, password);
       navigate("/");
     } catch (err) {
-      setError(err.response?.data?.detail || "Login failed");
+      setError(err.response?.data?.detail || "Login failed. Please check your credentials.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div style={{
-      height: "100vh",
-      width: "100%",
-      display: "flex",
-      justifyContent: "center",
-      alignItems: "center",
-      background: "linear-gradient(135deg,#1a3a2a, #d4e8d0)"
-    }}>
-      <div style={{
-        width: "100%",
-        maxWidth: "600px",
-        padding: "50px",
-        borderRadius: "12px",
-        background: "#EAE0D5",
-        boxShadow: "0 10px 30px rgba(0,0,0,0.2)"
-      }}>
-        <h2 style={{ textAlign: "center", marginBottom: "20px" }}>
-          Welcome Back 👋
-        </h2>
+    <div className="auth-shell">
+      <div className="auth-card fade-up">
+        <div className="auth-logo">LR<span>W</span></div>
+        <p className="auth-tagline">Language Resource Workspace</p>
 
         <form onSubmit={submit}>
-          <label style={{ fontWeight: "500" }}>Email</label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            style={inputStyle}
-          />
+          <div className="auth-field">
+            <label>Email address</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              placeholder="you@example.com"
+              autoFocus
+            />
+          </div>
 
-          <label style={{ fontWeight: "500", marginTop: "10px", display: "block" }}>
-            Password
-          </label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            style={inputStyle}
-          />
+          <div className="auth-field">
+            <label>Password</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              placeholder="••••••••"
+            />
+          </div>
 
-          {error && (
-            <div style={{
-              color: "red",
-              marginTop: "10px",
-              fontSize: "14px"
-            }}>
-              {error}
-            </div>
-          )}
+          {error && <div className="alert-error">{error}</div>}
 
           <button
             disabled={loading}
             type="submit"
-            style={{
-              width: "100%",
-              marginTop: "20px",
-              padding: "10px",
-              border: "none",
-              borderRadius: "8px",
-              background: "linear-gradient(135deg, #1a3a2a, #d4e8d0)",
-              color: "#fff",
-              fontSize: "16px",
-              cursor: "pointer",
-              transition: "0.3s"
-            }}
+            className="btn btn-primary btn-full"
+            style={{ marginTop: 8 }}
           >
-            {loading ? "Signing in..." : "Sign in"}
+            {loading ? "Signing in…" : "Sign in"}
           </button>
         </form>
 
-        <div style={{ textAlign: "center", marginTop: "15px", fontSize: "14px" }}>
-          <p>
-            Don't have an account?{" "}
-            <Link to="/register" style={{ color: "#386641" }}>
-              Sign Up
-            </Link>
-          </p>
-          <Link to="/forgot-password" style={{ color: "#386641" }}>
-            Forgot password?
-          </Link>
+        <hr className="divider" />
+
+        <div style={{ textAlign: "center", fontSize: 13, color: "var(--ink-lt)" }}>
+          <Link to="/forgot-password" style={{ color: "var(--forest)" }}>Forgot your password?</Link>
+          <span style={{ margin: "0 10px" }}>·</span>
+          <span>No account? <Link to="/register" style={{ color: "var(--forest)", fontWeight: 600 }}>Sign up</Link></span>
         </div>
       </div>
     </div>
   );
 }
-
-const inputStyle = {
-  width: "100%",
-  padding: "10px",
-  marginTop: "5px",
-  borderRadius: "8px",
-  border: "1px solid #ccc",
-  outline: "none",
-  fontSize: "14px"
-};

@@ -1,4 +1,4 @@
-import { Routes, Route, Link, Navigate, useNavigate } from "react-router-dom";
+import { Routes, Route, Link, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { currentUser, logout } from "./api";
 import Login from "./pages/Login.jsx";
 import Register from "./pages/Register.jsx";
@@ -20,20 +20,32 @@ function ProtectedRoute({ children, role }) {
 
 function TopBar() {
   const navigate = useNavigate();
+  const location = useLocation();
   const user = currentUser();
   if (!user) return null;
+
   const handleLogout = async () => { await logout(); navigate("/login"); };
+
+  const isActive = (path) => location.pathname === path ? "active" : "";
+
   return (
     <nav className="topbar">
-      <span className="brand">LRW</span>
-      <Link to="/">Dashboard</Link>
-      <Link to="/upload">Upload</Link>
-      <Link to="/search">Search</Link>
-      {user.role === "admin" && <Link to="/admin">Admin</Link>}
-      <span style={{ marginLeft: "auto" }}>
-        {user.name} <span className="badge">{user.role}</span>
-      </span>
-      <button className="ghost" onClick={handleLogout} style={{ background: "transparent", color: "#fff", borderColor: "#fff" }}>Logout</button>
+      <span className="topbar-brand">LR<span>W</span></span>
+      <div className="topbar-links">
+        <Link to="/" className={isActive("/")}>Dashboard</Link>
+        <Link to="/upload" className={isActive("/upload")}>Upload</Link>
+        <Link to="/search" className={isActive("/search")}>Search</Link>
+        {user.role === "admin" && <Link to="/admin" className={isActive("/admin")}>Admin</Link>}
+      </div>
+      <div className="topbar-right">
+        <div className="topbar-user">
+          <span>{user.name}</span>
+          <span className="badge" style={{ background: "rgba(255,255,255,0.15)", color: "#fff", fontSize: "11px" }}>
+            {user.role}
+          </span>
+        </div>
+        <button className="topbar-logout" onClick={handleLogout}>Sign out</button>
+      </div>
     </nav>
   );
 }
@@ -42,21 +54,19 @@ export default function App() {
   return (
     <>
       <TopBar />
-      <div className="container">
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/verify-email" element={<VerifyEmail />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-          <Route path="/upload" element={<ProtectedRoute><Upload /></ProtectedRoute>} />
-          <Route path="/search" element={<ProtectedRoute><Search /></ProtectedRoute>} />
-          <Route path="/documents/:id" element={<ProtectedRoute><DocumentView /></ProtectedRoute>} />
-          <Route path="/admin" element={<ProtectedRoute role="admin"><Admin /></ProtectedRoute>} />
-          <Route path="*" element={<Navigate to="/" />} />
-        </Routes>
-      </div>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/verify-email" element={<VerifyEmail />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        <Route path="/upload" element={<ProtectedRoute><Upload /></ProtectedRoute>} />
+        <Route path="/search" element={<ProtectedRoute><Search /></ProtectedRoute>} />
+        <Route path="/documents/:id" element={<ProtectedRoute><DocumentView /></ProtectedRoute>} />
+        <Route path="/admin" element={<ProtectedRoute role="admin"><Admin /></ProtectedRoute>} />
+        <Route path="*" element={<Navigate to="/" />} />
+      </Routes>
     </>
   );
 }

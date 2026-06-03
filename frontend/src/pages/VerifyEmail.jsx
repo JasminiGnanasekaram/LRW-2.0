@@ -9,27 +9,35 @@ export default function VerifyEmail() {
   const token = params.get("token");
 
   useEffect(() => {
-    if (!token) { setStatus("error"); setError("Missing token"); return; }
+    if (!token) { setStatus("error"); setError("Missing token."); return; }
     verifyEmail(token)
       .then(() => setStatus("ok"))
-      .catch((e) => { setStatus("error"); setError(e.response?.data?.detail || "Verification failed"); });
+      .catch((e) => { setStatus("error"); setError(e.response?.data?.detail || "Verification failed."); });
   }, [token]);
 
   return (
-    <div style={{ maxWidth: 420, margin: "60px auto" }}>
-      <div className="card">
-        {status === "verifying" && <p className="muted">Verifying...</p>}
+    <div className="auth-shell">
+      <div className="auth-card fade-up" style={{ textAlign: "center" }}>
+        {status === "verifying" && (
+          <>
+            <div style={{ fontSize: 40, marginBottom: 16 }}>🔄</div>
+            <p style={{ color: "var(--ink-lt)" }}>Verifying your email…</p>
+          </>
+        )}
         {status === "ok" && (
           <>
-            <h1>Email verified</h1>
-            <p>Your account is active. <Link to="/login">Sign in now.</Link></p>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>
+            <h2 style={{ fontFamily: "var(--font-head)", color: "var(--forest)", marginBottom: 8 }}>Email verified!</h2>
+            <p style={{ color: "var(--ink-lt)", fontSize: 14, marginBottom: 24 }}>Your account is now active.</p>
+            <Link to="/login" className="btn btn-primary btn-full">Sign in now →</Link>
           </>
         )}
         {status === "error" && (
           <>
-            <h1>Verification failed</h1>
-            <div className="error">{error}</div>
-            <p><Link to="/login">Back to sign in</Link></p>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>❌</div>
+            <h2 style={{ fontFamily: "var(--font-head)", color: "var(--forest)", marginBottom: 8 }}>Verification failed</h2>
+            <div className="alert-error" style={{ textAlign: "left" }}>{error}</div>
+            <Link to="/login" className="btn btn-ghost btn-full" style={{ marginTop: 8 }}>Back to sign in</Link>
           </>
         )}
       </div>

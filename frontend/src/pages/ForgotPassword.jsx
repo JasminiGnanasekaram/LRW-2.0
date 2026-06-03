@@ -10,140 +10,53 @@ export default function ForgotPassword() {
   const submit = async (e) => {
     e.preventDefault();
     setLoading(true);
-
-    try {
-      await forgotPassword(email);
-    } catch {}
-
-    setDone(true);
-    setLoading(false);
+    try { await forgotPassword(email); } catch {}
+    setDone(true); setLoading(false);
   };
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        background: "linear-gradient(135deg, #1a3a2a, #d4e8d0)",
-        padding: 20,
-      }}
-    >
-      <div
-        style={{
-          width: "100%",
-          maxWidth: 420,
-          background: "#EAE0D5",
-          padding: "35px",
-          borderRadius: "18px",
-          boxShadow: "0 10px 30px rgba(0,0,0,0.15)",
-        }}
-      >
-        <h1
-          style={{
-            textAlign: "center",
-            marginBottom: 25,
-            color: "#1a3a2a",
-          }}
-        >
-          Forgot Password
-        </h1>
+    <div className="auth-shell">
+      <div className="auth-card fade-up">
+        <div className="auth-logo">LR<span>W</span></div>
 
         {done ? (
+          <div style={{ textAlign: "center", marginTop: 16 }}>
+            <div style={{ fontSize: 40, marginBottom: 16 }}>✉️</div>
+            <h2 style={{ fontFamily: "var(--font-head)", color: "var(--forest)", marginBottom: 8 }}>Check your email</h2>
+            <p style={{ color: "var(--ink-lt)", fontSize: 14, marginBottom: 24 }}>
+              If an account exists for <strong style={{ color: "var(--ink)" }}>{email}</strong>, a reset link has been sent.
+            </p>
+            <Link to="/login" className="btn btn-primary btn-full">Back to sign in</Link>
+          </div>
+        ) : (
           <>
-            <p
-              style={{
-                color: "#555",
-                textAlign: "center",
-                lineHeight: 1.6,
-              }}
-            >
-              If an account exists for <strong>{email}</strong>, a reset link
-              has been sent.
+            <h2 style={{ fontFamily: "var(--font-head)", color: "var(--forest)", margin: "16px 0 6px" }}>Reset password</h2>
+            <p style={{ color: "var(--ink-lt)", fontSize: 13, marginBottom: 28 }}>
+              Enter your email and we'll send a reset link.
             </p>
 
-            <div style={{ textAlign: "center", marginTop: 20 }}>
-              <Link
-                to="/login"
-                style={{
-                  color: "#1a3a2a",
-                  fontWeight: "600",
-                  textDecoration: "none",
-                }}
-              >
-                Back to sign in
-              </Link>
+            <form onSubmit={submit}>
+              <div className="auth-field">
+                <label>Email address</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  placeholder="you@example.com"
+                  autoFocus
+                />
+              </div>
+
+              <button disabled={loading} type="submit" className="btn btn-primary btn-full" style={{ marginBottom: 16 }}>
+                {loading ? "Sending…" : "Send reset link"}
+              </button>
+            </form>
+
+            <div style={{ textAlign: "center" }}>
+              <Link to="/login" style={{ color: "var(--forest)", fontSize: 13 }}>← Back to sign in</Link>
             </div>
           </>
-        ) : (
-          <form onSubmit={submit}>
-            <label
-              style={{
-                display: "block",
-                marginBottom: 8,
-                fontWeight: "600",
-                color: "#1a3a2a",
-              }}
-            >
-              Email
-            </label>
-
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              placeholder="Enter your email"
-              style={{
-                width: "100%",
-                padding: "12px",
-                borderRadius: "10px",
-                border: "1px solid #cbd5c0",
-                outline: "none",
-                marginBottom: 20,
-                fontSize: "15px",
-                boxSizing: "border-box",
-              }}
-            />
-
-            <button
-              disabled={loading}
-              type="submit"
-              style={{
-                width: "100%",
-                padding: "12px",
-                border: "none",
-                borderRadius: "10px",
-                background: "linear-gradient(135deg, #1a3a2a, #d4e8d0)",
-                color: "#fff",
-                fontSize: "16px",
-                fontWeight: "600",
-                cursor: "pointer",
-                transition: "0.3s",
-              }}
-            >
-              {loading ? "Sending..." : "Send Reset Link"}
-            </button>
-
-            <p
-              style={{
-                marginTop: 18,
-                textAlign: "center",
-              }}
-            >
-              <Link
-                to="/login"
-                style={{
-                  color: "#1a3a2a",
-                  textDecoration: "none",
-                  fontWeight: "600",
-                }}
-              >
-                Back to sign in
-              </Link>
-            </p>
-          </form>
         )}
       </div>
     </div>
