@@ -25,21 +25,22 @@ export default function Login() {
   return (
     <div style={{
       height: "100vh",
+      width: "100%",
       display: "flex",
       justifyContent: "center",
       alignItems: "center",
-      background: "linear-gradient(135deg, #667eea, #764ba2)"
+      background: "linear-gradient(135deg,#1a3a2a, #d4e8d0)"
     }}>
       <div style={{
         width: "100%",
-        maxWidth: "400px",
-        padding: "30px",
+        maxWidth: "600px",
+        padding: "50px",
         borderRadius: "12px",
-        background: "#fff",
+        background: "#EAE0D5",
         boxShadow: "0 10px 30px rgba(0,0,0,0.2)"
       }}>
         <h2 style={{ textAlign: "center", marginBottom: "20px" }}>
-          Welcome Back 
+          Welcome Back 👋
         </h2>
 
         <form onSubmit={submit}>
@@ -82,7 +83,7 @@ export default function Login() {
               padding: "10px",
               border: "none",
               borderRadius: "8px",
-              background: "#667eea",
+              background: "linear-gradient(135deg, #1a3a2a, #d4e8d0)",
               color: "#fff",
               fontSize: "16px",
               cursor: "pointer",
@@ -96,11 +97,11 @@ export default function Login() {
         <div style={{ textAlign: "center", marginTop: "15px", fontSize: "14px" }}>
           <p>
             Don't have an account?{" "}
-            <Link to="/register" style={{ color: "#667eea" }}>
+            <Link to="/register" style={{ color: "#386641" }}>
               Sign Up
             </Link>
           </p>
-          <Link to="/forgot-password" style={{ color: "#667eea" }}>
+          <Link to="/forgot-password" style={{ color: "#386641" }}>
             Forgot password?
           </Link>
         </div>
