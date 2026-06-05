@@ -12,7 +12,7 @@ export default function Register() {
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
 
-  // ✅ NEW — validation function
+  // NEW — validation function
   const validatePassword = (value) => {
     if (value.length < 8)
       return "Password must be at least 8 characters.";
@@ -25,7 +25,7 @@ export default function Register() {
     return "";
   };
 
-  // ✅ NEW — handle password change with live validation
+  // NEW — handle password change with live validation
   const handlePasswordChange = (e) => {
     const value = e.target.value;
     setPassword(value);
