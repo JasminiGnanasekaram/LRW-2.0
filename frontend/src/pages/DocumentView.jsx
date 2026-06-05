@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
 } from "recharts";
 import { getDocument, exportDocumentURL } from "../api";
 
-const PIE_COLORS = ["#2962ff", "#8e24aa", "#00897b", "#ef6c00", "#c62828", "#558b2f", "#283593", "#6a1b9a"];
+const PIE_COLORS = ["#1a3a2a", "#4a7c59", "#8fb89a", "#d4e8d0", "#2d5a3d", "#6aaa80", "#b0d8b8", "#386641"];
 
 export default function DocumentView() {
   const { id } = useParams();
@@ -17,39 +17,63 @@ export default function DocumentView() {
   useEffect(() => {
     getDocument(id)
       .then(setDoc)
-      .catch((e) => setError(e.response?.data?.detail || "Failed to load"));
+      .catch((e) => setError(e.response?.data?.detail || "Failed to load document."));
   }, [id]);
 
-  if (error) return <div className="error">{error}</div>;
-  if (!doc) return <p className="muted">Loading...</p>;
+  if (error) return (
+    <div className="page" style={{ maxWidth: 720 }}>
+      <div className="alert-error">{error}</div>
+      <Link to="/" className="btn btn-ghost btn-sm">← Back to dashboard</Link>
+    </div>
+  );
+  if (!doc) return <div className="page"><p className="muted">Loading…</p></div>;
 
   const posData = Object.entries(doc.nlp?.pos_distribution || {})
     .map(([pos, count]) => ({ pos, count }))
     .sort((a, b) => b.count - a.count);
-  const topWordsData = (doc.nlp?.top_words || [])
-    .slice(0, 15)
-    .map(([word, count]) => ({ word, count }));
+  const topWordsData = (doc.nlp?.top_words || []).slice(0, 15).map(([word, count]) => ({ word, count }));
+
+  const TABS = [
+    { key: "cleaned", label: "Cleaned" },
+    { key: "raw", label: "Raw" },
+    { key: "nlp", label: "NLP Data" },
+    { key: "charts", label: "Charts" },
+    { key: "metadata", label: "Metadata" },
+  ];
 
   return (
-    <div>
-      <h1>{doc.filename}</h1>
-      <p className="muted">
-        <span className="badge">{doc.file_type}</span>{" "}
-        Uploaded {new Date(doc.created_at).toLocaleString()} ·
-        Tokens: {doc.nlp?.token_count ?? "-"}
-      </p>
+    <div className="page">
+      <div className="page-header fade-up">
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ flex: 1 }}>
+            <Link to="/" className="muted" style={{ fontSize: 13, marginBottom: 6, display: "inline-block" }}>← Dashboard</Link>
+            <h1 className="page-title" style={{ wordBreak: "break-word" }}>{doc.filename}</h1>
+            <div style={{ display: "flex", gap: 10, marginTop: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <span className="badge">{doc.file_type}</span>
+              <span className="muted">{new Date(doc.created_at).toLocaleDateString()}</span>
+              {doc.nlp?.token_count && (
+                <span className="muted">{doc.nlp.token_count.toLocaleString()} tokens</span>
+              )}
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+            <a href={exportDocumentURL(id, "json")} target="_blank" rel="noreferrer">
+              <button className="btn btn-ghost btn-sm" type="button">↓ JSON</button>
+            </a>
+            <a href={exportDocumentURL(id, "csv")} target="_blank" rel="noreferrer">
+              <button className="btn btn-ghost btn-sm" type="button">↓ CSV</button>
+            </a>
+          </div>
+        </div>
+      </div>
 
-      <div className="card">
-        <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-          {["cleaned", "raw", "nlp", "charts", "metadata"].map((t) => (
-            <button key={t} className={tab === t ? "" : "ghost"} onClick={() => setTab(t)} type="button">{t}</button>
+      <div className="card fade-up fade-up-1">
+        <div className="tabs">
+          {TABS.map(({ key, label }) => (
+            <button key={key} className={`tab-btn${tab === key ? " active" : ""}`} onClick={() => setTab(key)} type="button">
+              {label}
+            </button>
           ))}
-          <a href={exportDocumentURL(id, "json")} target="_blank" rel="noreferrer" style={{ marginLeft: "auto" }}>
-            <button className="ghost" type="button">Export JSON</button>
-          </a>
-          <a href={exportDocumentURL(id, "csv")} target="_blank" rel="noreferrer">
-            <button className="ghost" type="button">Export CSV</button>
-          </a>
         </div>
 
         {tab === "cleaned" && <pre className="snippet">{doc.cleaned_text}</pre>}
@@ -58,14 +82,14 @@ export default function DocumentView() {
 
         {tab === "nlp" && doc.nlp && (
           <div>
-            <h2>POS Distribution</h2>
-            <div>
+            <h3 style={{ fontFamily: "var(--font-head)", color: "var(--forest)", marginBottom: 12 }}>POS Distribution</h3>
+            <div style={{ marginBottom: 28 }}>
               {Object.entries(doc.nlp.pos_distribution || {}).map(([pos, n]) => (
                 <span key={pos} className="pos-chip">{pos}: {n}</span>
               ))}
             </div>
-            <h2 style={{ marginTop: 24 }}>Tokens (first 200)</h2>
-            <div className="snippet">
+            <h3 style={{ fontFamily: "var(--font-head)", color: "var(--forest)", marginBottom: 12 }}>Tokens (first 200)</h3>
+            <div className="snippet" style={{ maxHeight: 240 }}>
               {(doc.nlp.tokens || []).slice(0, 200).map((t, i) => (
                 <span key={i} className="pos-chip" title={t.tag}>{t.text} <em>({t.pos})</em></span>
               ))}
@@ -75,17 +99,12 @@ export default function DocumentView() {
 
         {tab === "charts" && doc.nlp && (
           <div>
-            <h2>POS Distribution</h2>
-            <div style={{ width: "100%", height: 300 }}>
+            <h3 style={{ fontFamily: "var(--font-head)", color: "var(--forest)", marginBottom: 20 }}>POS Distribution</h3>
+            <div style={{ width: "100%", height: 280 }}>
               <ResponsiveContainer>
                 <PieChart>
-                  <Pie
-                    data={posData} dataKey="count" nameKey="pos"
-                    cx="50%" cy="50%" outerRadius={100} label
-                  >
-                    {posData.map((_, i) => (
-                      <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-                    ))}
+                  <Pie data={posData} dataKey="count" nameKey="pos" cx="50%" cy="50%" outerRadius={100} label>
+                    {posData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
                   </Pie>
                   <Tooltip />
                   <Legend />
@@ -93,14 +112,14 @@ export default function DocumentView() {
               </ResponsiveContainer>
             </div>
 
-            <h2 style={{ marginTop: 32 }}>Top Words</h2>
-            <div style={{ width: "100%", height: 360 }}>
+            <h3 style={{ fontFamily: "var(--font-head)", color: "var(--forest)", margin: "28px 0 20px" }}>Top Words</h3>
+            <div style={{ width: "100%", height: 340 }}>
               <ResponsiveContainer>
                 <BarChart data={topWordsData} layout="vertical" margin={{ left: 60 }}>
-                  <XAxis type="number" />
-                  <YAxis type="category" dataKey="word" />
+                  <XAxis type="number" tick={{ fontSize: 12 }} />
+                  <YAxis type="category" dataKey="word" tick={{ fontSize: 12 }} />
                   <Tooltip />
-                  <Bar dataKey="count" fill="#2962ff" />
+                  <Bar dataKey="count" fill="#1a3a2a" radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

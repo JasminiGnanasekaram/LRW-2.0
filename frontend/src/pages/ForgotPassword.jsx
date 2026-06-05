@@ -15,21 +15,48 @@ export default function ForgotPassword() {
   };
 
   return (
-    <div style={{ maxWidth: 420, margin: "60px auto" }}>
-      <div className="card">
-        <h1>Forgot password</h1>
+    <div className="auth-shell">
+      <div className="auth-card fade-up">
+        <div className="auth-logo">LR<span>W</span></div>
+
         {done ? (
-          <>
-            <p className="muted">If an account exists for <strong>{email}</strong>, a reset link has been sent.</p>
-            <Link to="/login">Back to sign in</Link>
-          </>
+          <div style={{ textAlign: "center", marginTop: 16 }}>
+            <div style={{ fontSize: 40, marginBottom: 16 }}>✉️</div>
+            <h2 style={{ fontFamily: "var(--font-head)", color: "var(--forest)", marginBottom: 8 }}>Check your email</h2>
+            <p style={{ color: "var(--ink-lt)", fontSize: 14, marginBottom: 24 }}>
+              If an account exists for <strong style={{ color: "var(--ink)" }}>{email}</strong>, a reset link has been sent.
+            </p>
+            <Link to="/login" className="btn btn-primary btn-full">Back to sign in</Link>
+          </div>
         ) : (
-          <form onSubmit={submit}>
-            <label className="label">Email</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-            <button disabled={loading} type="submit">{loading ? "Sending..." : "Send reset link"}</button>
-            <p className="muted" style={{ marginTop: 12 }}><Link to="/login">Back to sign in</Link></p>
-          </form>
+          <>
+            <h2 style={{ fontFamily: "var(--font-head)", color: "var(--forest)", margin: "16px 0 6px" }}>Reset password</h2>
+            <p style={{ color: "var(--ink-lt)", fontSize: 13, marginBottom: 28 }}>
+              Enter your email and we'll send a reset link.
+            </p>
+
+            <form onSubmit={submit}>
+              <div className="auth-field">
+                <label>Email address</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  placeholder="you@example.com"
+                  autoFocus
+                />
+              </div>
+
+              <button disabled={loading} type="submit" className="btn btn-primary btn-full" style={{ marginBottom: 16 }}>
+                {loading ? "Sending…" : "Send reset link"}
+              </button>
+            </form>
+
+            <div style={{ textAlign: "center" }}>
+              <Link to="/login" style={{ color: "var(--forest)", fontSize: 13 }}>← Back to sign in</Link>
+            </div>
+          </>
         )}
       </div>
     </div>

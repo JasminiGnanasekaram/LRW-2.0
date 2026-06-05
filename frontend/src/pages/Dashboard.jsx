@@ -10,71 +10,75 @@ export default function Dashboard() {
   useEffect(() => {
     listDocuments()
       .then(setDocs)
-      .catch((e) => setError(e.response?.data?.detail || "Failed to load"))
+      .catch((e) => setError(e.response?.data?.detail || "Failed to load documents."))
       .finally(() => setLoading(false));
   }, []);
 
   return (
-    <div>
-      <div style={{ display: "flex", alignItems: "center" }}>
-        <h1 style={{ marginRight: "auto" }}>Your Documents</h1>
-        {docs.length > 0 && (
-          <a href={exportAllURL("csv")} target="_blank" rel="noreferrer">
-            <button className="ghost" type="button">Export all (CSV)</button>
-          </a>
-        )}
+    <div className="page">
+      <div className="page-header fade-up" style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+        <div>
+          <h1 className="page-title">Your Documents</h1>
+          {!loading && <p className="page-subtitle">{docs.length} document{docs.length !== 1 ? "s" : ""} in your corpus</p>}
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          {docs.length > 0 && (
+            <a href={exportAllURL("csv")} target="_blank" rel="noreferrer">
+              <button className="btn btn-ghost btn-sm" type="button">↓ Export CSV</button>
+            </a>
+          )}
+          <Link to="/upload">
+            <button className="btn btn-primary btn-sm" type="button">+ Upload</button>
+          </Link>
+        </div>
       </div>
-      <div className="card">
-        {loading && <p className="muted">Loading...</p>}
-        {error && <div className="error">{error}</div>}
+
+      <div className="card fade-up fade-up-1">
+        {loading && <p className="muted" style={{ padding: "24px 0" }}>Loading…</p>}
+        {error && <div className="alert-error">{error}</div>}
+
         {!loading && docs.length === 0 && (
-          <p className="muted">
-            No documents yet. <Link to="/upload">Upload your first document.</Link>
-          </p>
+          <div className="empty-state">
+            <div className="empty-state-icon">📄</div>
+            <div className="empty-state-title">No documents yet</div>
+            <p>Upload your first document to get started.</p>
+            <Link to="/upload" style={{ display: "inline-block", marginTop: 16 }}>
+              <button className="btn btn-primary">Upload document</button>
+            </Link>
+          </div>
         )}
+
         {docs.length > 0 && (
-          <table>
-            <thead>
-              <tr>
-                <th>Filename</th>
-                <th>Type</th>
-                <th>Tokens</th>
-                <th>Uploaded</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {docs.map((d) => (
-                <tr key={d.id}>
-                  <td>{d.filename}</td>
-                  <td><span className="badge">{d.file_type}</span></td>
-                  <td>{d.nlp?.token_count ?? "-"}</td>
-                  <td>{new Date(d.created_at).toLocaleString()}</td>
-                  <td><Link to={`/documents/${d.id}`}>View</Link></td>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Filename</th>
+                  <th>Type</th>
+                  <th>Tokens</th>
+                  <th>Uploaded</th>
+                  <th></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {docs.map((d) => (
+                  <tr key={d.id}>
+                    <td style={{ fontWeight: 500 }}>{d.filename}</td>
+                    <td><span className="badge">{d.file_type}</span></td>
+                    <td style={{ color: "var(--ink-mid)" }}>{d.nlp?.token_count?.toLocaleString() ?? "—"}</td>
+                    <td className="muted">{new Date(d.created_at).toLocaleDateString()}</td>
+                    <td style={{ textAlign: "right" }}>
+                      <Link to={`/documents/${d.id}`}>
+                        <button className="btn btn-ghost btn-sm">View →</button>
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
