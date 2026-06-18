@@ -9,7 +9,8 @@ def document_to_csv(doc: dict) -> str:
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow(["token_index", "text", "lemma", "pos", "tag", "is_stop"])
-    tokens = (doc.get("nlp") or {}).get("tokens") or []
+    nlp = doc.get("nlp") or {}
+    tokens = nlp.get("token_details") or []
     for i, t in enumerate(tokens):
         writer.writerow([i, t.get("text"), t.get("lemma"), t.get("pos"), t.get("tag"), t.get("is_stop")])
     return buf.getvalue()

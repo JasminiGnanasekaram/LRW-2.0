@@ -1,6 +1,9 @@
 import axios from "axios";
 
-const API_BASE = "http://localhost:8000";
+const API_BASE = import.meta.env.VITE_API_BASE ||
+  (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+    ? "http://localhost:8000"
+    : `http://${window.location.hostname}:8000`);
 
 export const api = axios.create({ baseURL: API_BASE });
 
@@ -94,12 +97,37 @@ export async function getDocument(id) {
   return data;
 }
 
-export function exportDocumentURL(id, format = "json") {
-  return `${API_BASE}/documents/${id}/export?format=${format}`;
+export async function deleteDocument(id) {
+  const { data } = await api.delete(`/documents/${id}`);
+  return data;
 }
 
-export function exportAllURL(format = "csv") {
-  return `${API_BASE}/documents/export/all?format=${format}`;
+export async function exportDocument(id, format = "json") {
+  const { data } = await api.get(`/documents/${id}/export`, {
+    params: { format },
+    responseType: "blob",
+  });
+  triggerDownload(data, `document_${id}.${format}`);
+}
+
+export async function exportAll(format = "csv") {
+  const { data } = await api.get(`/documents/export/all`, {
+    params: { format },
+    responseType: "blob",
+  });
+  triggerDownload(data, `documents_export.${format}`);
+}
+
+// Helper to trigger browser download from a blob
+function triggerDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 // ---- Search ----

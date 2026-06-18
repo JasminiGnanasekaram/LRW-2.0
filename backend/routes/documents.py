@@ -206,6 +206,33 @@ async def export_document(doc_id: str, format: str = "json", user: dict = Depend
     raise HTTPException(status_code=400, detail="Unsupported format. Use json or csv.")
 
 
+@router.delete("/{doc_id}")
+async def delete_document(doc_id: str, user: dict = Depends(get_current_user)):
+    """Delete a document and all associated data."""
+    raw = await raw_documents_col.find_one({"_id": ObjectId(doc_id)})
+    if not raw:
+        raise HTTPException(status_code=404, detail="Not found")
+    if str(raw["user_id"]) != user["id"] and user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    # Delete raw document
+    await raw_documents_col.delete_one({"_id": raw["_id"]})
+    
+    # Delete cleaned documents and associated NLP analysis
+    cleaned_docs = await cleaned_documents_col.find({"raw_document_id": raw["_id"]}).to_list(None)
+    for cleaned in cleaned_docs:
+        await nlp_analysis_col.delete_many({"cleaned_document_id": cleaned["_id"]})
+    await cleaned_documents_col.delete_many({"raw_document_id": raw["_id"]})
+    
+    # Delete metadata
+    await document_metadata_col.delete_one({"raw_document_id": raw["_id"]})
+    
+    # Delete source
+    await sources_col.delete_one({"_id": raw.get("source_id")})
+    
+    return {"message": "Document deleted"}
+
+
 @router.get("/export/all")
 async def export_all(format: str = "csv", user: dict = Depends(get_current_user)):
     """Bulk export the user's documents as a summary table (csv) or list (json)."""

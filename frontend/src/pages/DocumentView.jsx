@@ -4,7 +4,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
 } from "recharts";
-import { getDocument, exportDocumentURL } from "../api";
+import { getDocument, exportDocument } from "../api";
 
 const PIE_COLORS = ["#1a3a2a", "#4a7c59", "#8fb89a", "#d4e8d0", "#2d5a3d", "#6aaa80", "#b0d8b8", "#386641"];
 
@@ -41,6 +41,15 @@ export default function DocumentView() {
     { key: "metadata", label: "Metadata" },
   ];
 
+  const POS_LABELS = {
+  // English
+  NOUN: "Noun", VERB: "Verb", ADJ: "Adjective", ADV: "Adverb",
+  PROPN: "Proper Noun", DET: "Determiner", ADP: "Preposition",
+  PRON: "Pronoun", CCONJ: "Conjunction", PUNCT: "Punctuation",
+  NUM: "Number", AUX: "Auxiliary Verb", PART: "Particle", X: "Other",
+  // Tamil (same keys, already covered above)
+};
+
   return (
     <div className="page">
       <div className="page-header fade-up">
@@ -57,12 +66,8 @@ export default function DocumentView() {
             </div>
           </div>
           <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-            <a href={exportDocumentURL(id, "json")} target="_blank" rel="noreferrer">
-              <button className="btn btn-ghost btn-sm" type="button">↓ JSON</button>
-            </a>
-            <a href={exportDocumentURL(id, "csv")} target="_blank" rel="noreferrer">
-              <button className="btn btn-ghost btn-sm" type="button">↓ CSV</button>
-            </a>
+            <button className="btn btn-ghost btn-sm" type="button" onClick={() => exportDocument(id, "json")}>↓ JSON</button>
+            <button className="btn btn-ghost btn-sm" type="button" onClick={() => exportDocument(id, "csv")}>↓ CSV</button>
           </div>
         </div>
       </div>
@@ -85,14 +90,14 @@ export default function DocumentView() {
             <h3 style={{ fontFamily: "var(--font-head)", color: "var(--forest)", marginBottom: 12 }}>POS Distribution</h3>
             <div style={{ marginBottom: 28 }}>
               {Object.entries(doc.nlp.pos_distribution || {}).map(([pos, n]) => (
-                <span key={pos} className="pos-chip">{pos}: {n}</span>
+                <span key={pos} className="pos-chip">{POS_LABELS[pos] || pos}: {n}</span>
               ))}
             </div>
             <h3 style={{ fontFamily: "var(--font-head)", color: "var(--forest)", marginBottom: 12 }}>Tokens (first 200)</h3>
             <div className="snippet" style={{ maxHeight: 240 }}>
-              {(doc.nlp.tokens || []).slice(0, 200).map((t, i) => (
-                <span key={i} className="pos-chip" title={t.tag}>{t.text} <em>({t.pos})</em></span>
-              ))}
+              {(doc.nlp.token_details || []).slice(0, 200).map((t, i) => (
+               <span key={i} className="pos-chip" title={t.tag}>{t.text} <em>({POS_LABELS[t.pos] || t.pos})</em></span>
+            ))}
             </div>
           </div>
         )}
