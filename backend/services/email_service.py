@@ -23,8 +23,8 @@ def generate_token(nbytes: int = 32) -> str:
     return secrets.token_urlsafe(nbytes)
 
 
-def expiry(hours: int = 24) -> datetime:
-    return datetime.utcnow() + timedelta(hours=hours)
+def expiry(minutes: int = 5) -> datetime:
+    return datetime.utcnow() + timedelta(minutes=minutes)
 
 
 def _get_gmail_service():
@@ -42,7 +42,6 @@ def _get_gmail_service():
 
 
 def send_email(to: str, subject: str, body: str) -> None:
-    # Dev mode — no credentials file present
     if not os.path.exists(TOKEN_FILE):
         print("\n" + "="*50, flush=True)
         print("📧  DEV EMAIL — copy the link below", flush=True)
@@ -78,7 +77,7 @@ def send_email(to: str, subject: str, body: str) -> None:
         """
 
         msg = MIMEMultipart("alternative")
-        msg["From"] = settings.SMTP_FROM
+        msg["From"] = f"Language Resource Workbench <{settings.SMTP_FROM}>"
         msg["To"] = to
         msg["Subject"] = subject
         msg.attach(MIMEText(body, "plain"))
@@ -98,27 +97,29 @@ def send_email(to: str, subject: str, body: str) -> None:
         print(f"[email ERROR] ❌ {e}", flush=True)
 
 
-def send_verification_email(to: str, token: str) -> None:
-    link = f"{settings.APP_BASE_URL}/verify-email?token={token}"
+def send_verification_email(to: str, token: str, base_url: str = None) -> None:
+    url = base_url or settings.APP_BASE_URL
+    link = f"{url}/verify-email?token={token}"
     send_email(
         to,
         "Verify your LRW account",
         f"Welcome to the Language Resource Workbench!\n\n"
         f"Please verify your email address by clicking the link below:\n\n"
         f"{link}\n\n"
-        f"This link expires in 24 hours.\n\n"
+        f"This link expires in 5 minutes.\n\n"
         f"If you did not register, please ignore this email.",
     )
 
 
-def send_reset_email(to: str, token: str) -> None:
-    link = f"{settings.APP_BASE_URL}/reset-password?token={token}"
+def send_reset_email(to: str, token: str, base_url: str = None) -> None:
+    url = base_url or settings.APP_BASE_URL
+    link = f"{url}/reset-password?token={token}"
     send_email(
         to,
         "Reset your LRW password",
         f"You requested a password reset for your LRW account.\n\n"
         f"Click the link below to set a new password:\n\n"
         f"{link}\n\n"
-        f"This link expires in 1 hour.\n\n"
+        f"This link expires in 5 minutes.\n\n"
         f"If you did not request this, please ignore this email.",
     )

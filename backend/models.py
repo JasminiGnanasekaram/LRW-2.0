@@ -8,7 +8,7 @@ class RegisterRequest(BaseModel):
     name: str
     email: EmailStr
     password: str = Field(min_length=6)
-    role: str = "student"  # admin | researcher | student | guest
+    role: str = "guest"  # admin | researcher | student | guest
 
 
 class LoginRequest(BaseModel):

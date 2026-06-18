@@ -37,6 +37,9 @@ export default function VerifyEmail() {
             <div style={{ fontSize: 48, marginBottom: 16 }}>❌</div>
             <h2 style={{ fontFamily: "var(--font-head)", color: "var(--forest)", marginBottom: 8 }}>Verification failed</h2>
             <div className="alert-error" style={{ textAlign: "left" }}>{error}</div>
+            <Link to="/resend-verification" className="btn btn-primary btn-full" style={{ marginTop: 8 }}>
+              Resend verification link
+            </Link>
             <Link to="/login" className="btn btn-ghost btn-full" style={{ marginTop: 8 }}>Back to sign in</Link>
           </>
         )}

@@ -11,6 +11,7 @@ import VerifyEmail from "./pages/VerifyEmail.jsx";
 import ForgotPassword from "./pages/ForgotPassword.jsx";
 import ResetPassword from "./pages/ResetPassword.jsx";
 import Home from "./pages/Home.jsx";
+import ResendVerification from "./pages/ResendVerification.jsx";
 
 function ProtectedRoute({ children, role }) {
   const u = currentUser();
@@ -58,7 +59,7 @@ function TopBar() {
       <div className="topbar-right">
         <div className="topbar-user">
           <span>{user.name}</span>
-          <span className="badge" style={{ background: "rgba(255,255,255,0.15)", color: "#fff", fontSize: "11px" }}>{user.role}</span>
+          <span className="badge" style={{ background: "rgba(255,255,255,0.15)", color: "#fff", fontSize: "11px" }}>{user.role.charAt(0).toUpperCase() + user.role.slice(1)}</span>
         </div>
         <button className="topbar-logout" onClick={handleLogout}>Sign out</button>
       </div>
@@ -82,6 +83,7 @@ export default function App() {
         <Route path="/search" element={<ProtectedRoute><Search /></ProtectedRoute>} />
         <Route path="/documents/:id" element={<ProtectedRoute><DocumentView /></ProtectedRoute>} />
         <Route path="/admin" element={<ProtectedRoute role="admin"><Admin /></ProtectedRoute>} />
+        <Route path="/resend-verification" element={<ResendVerification />} />
         <Route path="*" element={<Navigate to="/home" />} />
       </Routes>
     </>

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
@@ -16,7 +16,9 @@ from services.email_service import (
     generate_token, expiry,
     send_verification_email, send_reset_email,
 )
+from config import get_settings
 
+settings = get_settings()
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
@@ -31,13 +33,15 @@ def _public_user(user_doc: dict) -> dict:
 
 
 @router.post("/register")
-async def register(payload: RegisterRequest):
+async def register(payload: RegisterRequest, request: Request):
     existing = await users_col.find_one({"email": payload.email})
     if existing:
-        raise HTTPException(status_code=400, detail="Email already registered")
+        if not existing.get("verified"):
+            raise HTTPException(status_code=400, detail="Email already registered but not verified. Check your inbox or resend verification.")
+        raise HTTPException(status_code=400, detail="Email already registered. Please sign in.")
 
     valid_roles = {"admin", "researcher", "guest"}
-    role = payload.role if payload.role in valid_roles else "student"
+    role = payload.role if payload.role in valid_roles else "guest"
 
     doc = {
         "name": payload.name,
@@ -50,16 +54,17 @@ async def register(payload: RegisterRequest):
     }
     res = await users_col.insert_one(doc)
 
-    # Create verification token
     token = generate_token()
     await email_verifications_col.insert_one({
         "user_id": res.inserted_id,
         "token": token,
-        "expires_at": expiry(24),
+        "expires_at": expiry(5),
         "created_at": datetime.utcnow(),
     })
+
     try:
-        send_verification_email(payload.email, token)
+        base_url = request.headers.get("origin", settings.APP_BASE_URL)
+        send_verification_email(payload.email, token, base_url)
     except Exception as e:
         print(f"[register] Email send error: {e}", flush=True)
 
@@ -73,14 +78,18 @@ async def register(payload: RegisterRequest):
 async def verify_email(token: str):
     rec = await email_verifications_col.find_one({"token": token})
     if not rec:
-        raise HTTPException(status_code=400, detail="Invalid or expired token")
+        raise HTTPException(status_code=400, detail="Invalid or expired verification link.")
+    # CHECK EXPIRY
+    if rec.get("expires_at") and datetime.utcnow() > rec["expires_at"]:
+        await email_verifications_col.delete_one({"_id": rec["_id"]})
+        raise HTTPException(status_code=400, detail="Verification link has expired. Please request a new one.")
     await users_col.update_one({"_id": rec["user_id"]}, {"$set": {"verified": True}})
     await email_verifications_col.delete_one({"_id": rec["_id"]})
     return {"message": "Email verified. You can now sign in."}
 
 
 @router.post("/resend-verification")
-async def resend_verification(email: EmailStr):
+async def resend_verification(email: EmailStr, request: Request):
     user = await users_col.find_one({"email": email})
     if not user:
         return {"message": "If that email exists, a verification link was sent."}
@@ -90,10 +99,11 @@ async def resend_verification(email: EmailStr):
     token = generate_token()
     await email_verifications_col.insert_one({
         "user_id": user["_id"], "token": token,
-        "expires_at": expiry(24), "created_at": datetime.utcnow(),
+        "expires_at": expiry(5), "created_at": datetime.utcnow(),
     })
     try:
-        send_verification_email(email, token)
+        base_url = request.headers.get("origin", settings.APP_BASE_URL)
+        send_verification_email(email, token, base_url)
     except Exception as e:
         print(f"[resend] Email send error: {e}", flush=True)
     return {"message": "Verification email sent."}
@@ -107,9 +117,9 @@ async def login(form: OAuth2PasswordRequestForm = Depends()):
     if user.get("blocked"):
         raise HTTPException(status_code=403, detail="Account blocked")
     if not user.get("verified"):
-        raise HTTPException(status_code=403, detail="Email not verified. Check your inbox.")
+        raise HTTPException(status_code=403, detail="Email not verified. Check your inbox or resend the verification link.")
 
-    token = create_access_token(str(user["_id"]), user.get("role", "student"))
+    token = create_access_token(str(user["_id"]), user.get("role", "guest"))
     await sessions_col.insert_one({
         "user_id": user["_id"], "token": token, "created_at": datetime.utcnow(),
     })
@@ -134,21 +144,23 @@ class ForgotPasswordRequest(BaseModel):
 
 class ResetPasswordRequest(BaseModel):
     token: str
-    new_password: str = Field(min_length=6)
+    new_password: str = Field(min_length=8)
 
 
 @router.post("/forgot-password")
-async def forgot_password(payload: ForgotPasswordRequest):
+async def forgot_password(payload: ForgotPasswordRequest, request: Request):
+    # FIXED: now accepts Request so reset link uses correct origin
     user = await users_col.find_one({"email": payload.email})
     if user:
         await password_resets_col.delete_many({"user_id": user["_id"]})
         token = generate_token()
         await password_resets_col.insert_one({
             "user_id": user["_id"], "token": token,
-            "expires_at": expiry(1), "created_at": datetime.utcnow(),
+            "expires_at": expiry(5), "created_at": datetime.utcnow(),
         })
         try:
-            send_reset_email(payload.email, token)
+            base_url = request.headers.get("origin", settings.APP_BASE_URL)
+            send_reset_email(payload.email, token, base_url)
         except Exception as e:
             print(f"[forgot-password] Email send error: {e}", flush=True)
     return {"message": "If that email exists, a reset link was sent."}
@@ -158,7 +170,11 @@ async def forgot_password(payload: ForgotPasswordRequest):
 async def reset_password(payload: ResetPasswordRequest):
     rec = await password_resets_col.find_one({"token": payload.token})
     if not rec:
-        raise HTTPException(status_code=400, detail="Invalid or expired token")
+        raise HTTPException(status_code=400, detail="Invalid or expired reset link.")
+    # CHECK EXPIRY
+    if rec.get("expires_at") and datetime.utcnow() > rec["expires_at"]:
+        await password_resets_col.delete_one({"_id": rec["_id"]})
+        raise HTTPException(status_code=400, detail="Reset link has expired. Please request a new one.")
     await users_col.update_one(
         {"_id": rec["user_id"]},
         {"$set": {"password_hash": hash_password(payload.new_password)}},

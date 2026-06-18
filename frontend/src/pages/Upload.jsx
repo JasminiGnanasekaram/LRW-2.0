@@ -32,8 +32,8 @@ export default function Upload() {
   const FILE_TYPES = [
     { value: "text", label: "Text file", desc: ".txt" },
     { value: "pdf", label: "PDF", desc: ".pdf" },
-    { value: "image", label: "Image (OCR)", desc: ".jpg, .png" },
-    { value: "audio", label: "Audio (STT)", desc: "not yet implemented" },
+    { value: "image", label: "Image ", desc: ".jpg, .png" },
+    { value: "audio", label: "Audio ", desc: "not yet implemented" },
     { value: "url", label: "URL", desc: "web page" },
   ];
 
@@ -109,44 +109,10 @@ export default function Upload() {
           </div>
         </div>
 
-        {/* Metadata */}
-        <div className="card fade-up fade-up-2">
-          <div className="card-title">Metadata <span style={{ fontWeight: 400, color: "var(--ink-lt)", fontSize: 14 }}>(optional)</span></div>
-          <div className="row">
-            <div className="field">
-              <label>Source</label>
-              <input value={meta.source} placeholder="e.g. Reuters" onChange={(e) => setMeta({ ...meta, source: e.target.value })} />
-            </div>
-            <div className="field">
-              <label>Author</label>
-              <input value={meta.author} placeholder="Author name" onChange={(e) => setMeta({ ...meta, author: e.target.value })} />
-            </div>
-          </div>
-          <div className="row">
-            <div className="field">
-              <label>Domain</label>
-              <input value={meta.domain} placeholder="news, science, law…" onChange={(e) => setMeta({ ...meta, domain: e.target.value })} />
-            </div>
-            <div className="field">
-              <label>Category</label>
-              <input value={meta.category} placeholder="Category" onChange={(e) => setMeta({ ...meta, category: e.target.value })} />
-            </div>
-          </div>
-          <div className="row">
-            <div className="field">
-              <label>Publication date</label>
-              <input type="date" value={meta.publication_date} onChange={(e) => setMeta({ ...meta, publication_date: e.target.value })} />
-            </div>
-            <div className="field">
-              <label>License</label>
-              <select value={meta.license} onChange={(e) => setMeta({ ...meta, license: e.target.value })}>
-                <option value="open">Open</option>
-                <option value="research">Research only</option>
-                <option value="restricted">Restricted</option>
-              </select>
-            </div>
-          </div>
-        </div>
+        
+           
+         
+           
 
         {error && <div className="alert-error fade-up">{error}</div>}
 

@@ -46,8 +46,8 @@ export default function Register() {
       await register(name, email, password, role);
       setDone(true);
     } catch (err) {
-      setError(err.response?.data?.detail || "Registration failed.");
-    } finally {
+      setError(err.response?.data?.detail || "Registration failed. Please try again.");
+    }finally {
       setLoading(false);
     }
   };
@@ -65,6 +65,9 @@ export default function Register() {
             <strong style={{ color: "var(--ink)" }}>{email}</strong>
           </p>
           <Link to="/login" className="btn btn-primary btn-full">Back to sign in</Link>
+          <Link to="/resend-verification" className="btn btn-ghost btn-full" style={{ marginTop: 8 }}>
+                 Resend verification email
+          </Link>
         </div>
       </div>
     );

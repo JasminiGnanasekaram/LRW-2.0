@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_BASE = "http://localhost:8000";
+const API_BASE = `http://${window.location.hostname}:8000`;
 
 export const api = axios.create({ baseURL: API_BASE });
 
@@ -25,9 +25,11 @@ api.interceptors.response.use(
 );
 
 // ---- Auth ----
-export async function register(name, email, password, role = "student") {
+
+// FIX: default was "student" which backend rejects → changed to "guest"
+export async function register(name, email, password, role = "guest") {
   const { data } = await api.post("/auth/register", { name, email, password, role });
-  return data; // { message, email } — user must verify before logging in
+  return data;
 }
 
 export async function verifyEmail(token) {
@@ -35,6 +37,7 @@ export async function verifyEmail(token) {
   return data;
 }
 
+// FIX: use params object instead of string (handles + and special chars in email safely)
 export async function resendVerification(email) {
   const { data } = await api.post("/auth/resend-verification", null, { params: { email } });
   return data;
