@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { listDocuments, exportAllURL } from "../api";
+import { listDocuments, exportAllURL, deleteDocument } from "../api";
 
 export default function Dashboard() {
   const [docs, setDocs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [deletingId, setDeletingId] = useState(null);
 
   useEffect(() => {
     listDocuments()
@@ -14,12 +15,38 @@ export default function Dashboard() {
       .finally(() => setLoading(false));
   }, []);
 
+  const handleDelete = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this document?")) return;
+    setDeletingId(id);
+    try {
+      await deleteDocument(id);
+      setDocs((prev) => prev.filter((d) => d.id !== id));
+    } catch (err) {
+      setError(err.response?.data?.detail || "Delete failed. Please try again.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   return (
     <div className="page">
-      <div className="page-header fade-up" style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+      <div
+        className="page-header fade-up"
+        style={{
+          display: "flex",
+          alignItems: "flex-end",
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: 12,
+        }}
+      >
         <div>
           <h1 className="page-title">Your Documents</h1>
-          {!loading && <p className="page-subtitle">{docs.length} document{docs.length !== 1 ? "s" : ""} in your corpus</p>}
+          {!loading && (
+            <p className="page-subtitle">
+              {docs.length} document{docs.length !== 1 ? "s" : ""} in your corpus
+            </p>
+          )}
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           {docs.length > 0 && (
@@ -65,12 +92,32 @@ export default function Dashboard() {
                   <tr key={d.id}>
                     <td style={{ fontWeight: 500 }}>{d.filename}</td>
                     <td><span className="badge">{d.file_type}</span></td>
-                    <td style={{ color: "var(--ink-mid)" }}>{d.nlp?.token_count?.toLocaleString() ?? "—"}</td>
-                    <td className="muted">{new Date(d.created_at).toLocaleDateString()}</td>
+                    <td style={{ color: "var(--ink-mid)" }}>
+                      {d.nlp?.token_count?.toLocaleString() ?? "—"}
+                    </td>
+                    <td className="muted">
+                      {new Date(d.created_at).toLocaleDateString()}
+                    </td>
                     <td style={{ textAlign: "right" }}>
-                      <Link to={`/documents/${d.id}`}>
-                        <button className="btn btn-ghost btn-sm">View →</button>
-                      </Link>
+                      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                        <Link to={`/documents/${d.id}`}>
+                          <button className="btn btn-ghost btn-sm">View →</button>
+                        </Link>
+                        <button
+                          className="btn btn-sm"
+                          onClick={() => handleDelete(d.id)}
+                          disabled={deletingId === d.id}
+                          style={{
+                            background: "#c0392b",
+                            color: "#fff",
+                            border: "none",
+                            opacity: deletingId === d.id ? 0.6 : 1,
+                            cursor: deletingId === d.id ? "not-allowed" : "pointer",
+                          }}
+                        >
+                          {deletingId === d.id ? "Deleting…" : "Delete"}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
