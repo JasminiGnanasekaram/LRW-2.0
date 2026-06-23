@@ -3,6 +3,10 @@ import io
 import requests
 from typing import Optional
 from bs4 import BeautifulSoup
+import pytesseract  # Import pytesseract for OCR
+
+# Tell Python where Tesseract is installed on Windows
+pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 
 def extract_from_text(content: bytes, encoding: str = "utf-8") -> str:
@@ -10,21 +14,21 @@ def extract_from_text(content: bytes, encoding: str = "utf-8") -> str:
 
 
 def extract_from_pdf(content: bytes) -> str:
-    import pdfplumber
-    text_parts = []
-    with pdfplumber.open(io.BytesIO(content)) as pdf:
-        for page in pdf.pages:
-            page_text = page.extract_text() or ""
-            text_parts.append(page_text)
+    """PDF extraction using PyMuPDF (fitz) - Fast, lightweight single tool."""
+    import fitz  # PyMuPDF
+    # Open the PDF directly from bytes in memory
+    doc = fitz.open(stream=content, filetype="pdf")
+    text_parts = [page.get_text() for page in doc]
     return "\n".join(text_parts)
 
 
 def extract_from_image(content: bytes) -> str:
-    """OCR using Tesseract."""
+    """OCR using Tesseract (supports English, Tamil, and Sinhala)."""
     from PIL import Image
-    import pytesseract
+    # Load the image from memory bytes
     img = Image.open(io.BytesIO(content))
-    return pytesseract.image_to_string(img)
+    # "eng+tam+sin" tells Tesseract to recognize English, Tamil, and Sinhala text
+    return pytesseract.image_to_string(img, lang="eng+tam+sin")
 
 
 def extract_from_url(url: str, timeout: int = 15) -> str:
@@ -39,7 +43,6 @@ def extract_from_url(url: str, timeout: int = 15) -> str:
 
 
 _whisper_model = None
-
 
 def _get_whisper():
     """Lazy-load faster-whisper model based on settings."""

@@ -97,6 +97,11 @@ export async function getDocument(id) {
   return data;
 }
 
+export async function deleteDocument(id) {
+  const { data } = await api.delete(`/documents/${id}`);
+  return data;
+}
+
 export function exportDocumentURL(id, format = "json") {
   return `${API_BASE}/documents/${id}/export?format=${format}`;
 }
