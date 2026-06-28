@@ -15,17 +15,16 @@ router = APIRouter(prefix="/search", tags=["search"])
 
 @router.get("/")
 async def search(
-    q: str = Query(..., min_length=1, description="Search query (keyword)"),
-    pos: Optional[str] = Query(None, description="POS tag filter (e.g. NOUN, VERB, ADJ)"),
+    q: str = Query(..., min_length=1),
+    pos: Optional[str] = Query(None),
     domain: Optional[str] = Query(None),
     license: Optional[str] = Query(None),
     file_type: Optional[str] = Query(None),
-    date_from: Optional[str] = Query(None, description="ISO date YYYY-MM-DD"),
+    date_from: Optional[str] = Query(None),
     date_to: Optional[str] = Query(None),
     limit: int = 20,
     user: dict = Depends(get_current_user),
 ):
-    """Keyword search with optional POS, metadata, and date filters."""
     base_filter: dict = {"$text": {"$search": q}}
     if user["role"] != "admin":
         base_filter["user_id"] = ObjectId(user["id"])
@@ -34,7 +33,7 @@ async def search(
         cursor = (
             cleaned_documents_col.find(base_filter, {"score": {"$meta": "textScore"}})
             .sort([("score", {"$meta": "textScore"})])
-            .limit(limit * 4)  # over-fetch since post-filters trim
+            .limit(limit * 4)
         )
         candidates = [doc async for doc in cursor]
     except Exception:
@@ -62,16 +61,25 @@ async def search(
         if license and meta_data.get("license") != license:
             continue
 
-        # POS filter: keep if any token matches the requested POS *and* the lemma contains q
+        # FIX: POS filter works with both string and dict tokens
         if pos:
             analysis = await nlp_analysis_col.find_one({"cleaned_document_id": cleaned["_id"]})
-            tokens = ((analysis or {}).get("data") or {}).get("tokens") or []
+            nlp_data = ((analysis or {}).get("data") or {})
+            tokens = nlp_data.get("token_details") or nlp_data.get("tokens") or []
             ql = q.lower()
-            match = any(
-                (t.get("pos") or "").upper() == pos.upper()
-                and (ql in (t.get("text") or "").lower() or ql in (t.get("lemma") or "").lower())
-                for t in tokens
-            )
+            match = False
+            for t in tokens:
+                if isinstance(t, dict):
+                    token_pos = (t.get("pos") or "").upper()
+                    token_text = (t.get("text") or "").lower()
+                    token_lemma = (t.get("lemma") or "").lower()
+                else:
+                    token_pos = ""
+                    token_text = str(t).lower()
+                    token_lemma = token_text
+                if token_pos == pos.upper() and (ql in token_text or ql in token_lemma):
+                    match = True
+                    break
             if not match:
                 continue
 

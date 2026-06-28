@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { listDocuments, exportAllURL, deleteDocument } from "../api";
-
+import { listDocuments, exportAll, deleteDocument } from "../api";
 export default function Dashboard() {
   const [docs, setDocs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -50,9 +49,9 @@ export default function Dashboard() {
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           {docs.length > 0 && (
-            <a href={exportAllURL("csv")} target="_blank" rel="noreferrer">
-              <button className="btn btn-ghost btn-sm" type="button">↓ Export CSV</button>
-            </a>
+            <button className="btn btn-ghost btn-sm" type="button" onClick={() => exportAll("csv")}>
+              ↓ Export CSV
+            </button>
           )}
           <Link to="/upload">
             <button className="btn btn-primary btn-sm" type="button">+ Upload</button>

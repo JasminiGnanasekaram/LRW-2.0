@@ -87,7 +87,7 @@ async def upload(
         if not url:
             raise HTTPException(status_code=400, detail="url field required for url uploads")
         try:
-            raw_text = extraction.extract(file_type, url=url)
+            raw_text, extraction_info = extraction.extract(file_type, url=url)
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"URL extraction failed: {e}")
         filename = url
@@ -96,7 +96,7 @@ async def upload(
             raise HTTPException(status_code=400, detail="file required")
         content = await file.read()
         try:
-            raw_text = extraction.extract(file_type, content=content)
+            raw_text, extraction_info = extraction.extract(file_type, content=content)
         except NotImplementedError as e:
             raise HTTPException(status_code=501, detail=str(e))
         except Exception as e:

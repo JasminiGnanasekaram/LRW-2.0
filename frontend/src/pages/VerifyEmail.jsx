@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { verifyEmail } from "../api";
 
@@ -7,12 +7,19 @@ export default function VerifyEmail() {
   const [status, setStatus] = useState("verifying");
   const [error, setError] = useState("");
   const token = params.get("token");
+  const called = useRef(false);
 
   useEffect(() => {
     if (!token) { setStatus("error"); setError("Missing token."); return; }
+    if (called.current) return;
+    called.current = true;
+
     verifyEmail(token)
       .then(() => setStatus("ok"))
-      .catch((e) => { setStatus("error"); setError(e.response?.data?.detail || "Verification failed."); });
+      .catch((e) => {
+        setStatus("error");
+        setError(e.response?.data?.detail || "Verification failed.");
+      });
   }, [token]);
 
   return (

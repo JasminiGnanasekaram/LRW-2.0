@@ -58,7 +58,7 @@ async def register(payload: RegisterRequest, request: Request):
     await email_verifications_col.insert_one({
         "user_id": res.inserted_id,
         "token": token,
-        "expires_at": expiry(5),
+        "expires_at": expiry(60),
         "created_at": datetime.utcnow(),
     })
 
@@ -74,12 +74,11 @@ async def register(payload: RegisterRequest, request: Request):
     }
 
 
-@router.post("/verify-email")
+@router.get("/verify-email")
 async def verify_email(token: str):
     rec = await email_verifications_col.find_one({"token": token})
     if not rec:
         raise HTTPException(status_code=400, detail="Invalid or expired verification link.")
-    # CHECK EXPIRY
     if rec.get("expires_at") and datetime.utcnow() > rec["expires_at"]:
         await email_verifications_col.delete_one({"_id": rec["_id"]})
         raise HTTPException(status_code=400, detail="Verification link has expired. Please request a new one.")
@@ -99,7 +98,7 @@ async def resend_verification(email: EmailStr, request: Request):
     token = generate_token()
     await email_verifications_col.insert_one({
         "user_id": user["_id"], "token": token,
-        "expires_at": expiry(5), "created_at": datetime.utcnow(),
+        "expires_at": expiry(60), "created_at": datetime.utcnow(),
     })
     try:
         base_url = request.headers.get("origin", settings.APP_BASE_URL)
@@ -149,14 +148,13 @@ class ResetPasswordRequest(BaseModel):
 
 @router.post("/forgot-password")
 async def forgot_password(payload: ForgotPasswordRequest, request: Request):
-    # FIXED: now accepts Request so reset link uses correct origin
     user = await users_col.find_one({"email": payload.email})
     if user:
         await password_resets_col.delete_many({"user_id": user["_id"]})
         token = generate_token()
         await password_resets_col.insert_one({
             "user_id": user["_id"], "token": token,
-            "expires_at": expiry(5), "created_at": datetime.utcnow(),
+            "expires_at": expiry(60), "created_at": datetime.utcnow(),
         })
         try:
             base_url = request.headers.get("origin", settings.APP_BASE_URL)
@@ -171,7 +169,6 @@ async def reset_password(payload: ResetPasswordRequest):
     rec = await password_resets_col.find_one({"token": payload.token})
     if not rec:
         raise HTTPException(status_code=400, detail="Invalid or expired reset link.")
-    # CHECK EXPIRY
     if rec.get("expires_at") and datetime.utcnow() > rec["expires_at"]:
         await password_resets_col.delete_one({"_id": rec["_id"]})
         raise HTTPException(status_code=400, detail="Reset link has expired. Please request a new one.")

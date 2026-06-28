@@ -24,12 +24,15 @@ class TokenResponse(BaseModel):
 
 # ----- Documents -----
 class MetadataIn(BaseModel):
-    source: Optional[str] = None
-    author: Optional[str] = None
-    publication_date: Optional[str] = None
-    domain: Optional[str] = None
-    category: Optional[str] = None
-    license: str = "open"  # open | research | restricted
+    # Required
+    source: str
+    license: str
+    domain: str
+
+    # Optional
+    publication_date: str | None = None
+    author: str | None = None
+    category: str | None = None # open | research | restricted
 
 
 class DocumentOut(BaseModel):

@@ -18,10 +18,10 @@ export default function Login() {
       navigate("/");
     } catch (err) {
       const detail = err.response?.data?.detail || "Login failed. Please check your credentials.";
-      // FIX: detect unverified and show resend link
-      if (err.response?.status === 403 && detail.toLowerCase().includes("not verified")) {
-        setUnverified(true);
-      }
+      const isUnverified =
+        err.response?.status === 403 &&
+        /not.verified|unverified|verify/i.test(detail);
+      if (isUnverified) setUnverified(true);
       setError(detail);
     } finally {
       setLoading(false);
@@ -60,7 +60,6 @@ export default function Login() {
 
           {error && <div className="alert-error">{error}</div>}
 
-          {/* FIX: resend link appears when email is not verified */}
           {unverified && (
             <div style={{ marginTop: 8, textAlign: "center", fontSize: 13 }}>
               <Link
