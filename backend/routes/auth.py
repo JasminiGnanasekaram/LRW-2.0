@@ -74,8 +74,23 @@ async def register(payload: RegisterRequest, request: Request):
     }
 
 
+# GET — when user clicks the link in their email (opens in browser)
 @router.get("/verify-email")
-async def verify_email(token: str):
+async def verify_email_get(token: str):
+    rec = await email_verifications_col.find_one({"token": token})
+    if not rec:
+        raise HTTPException(status_code=400, detail="Invalid or expired verification link.")
+    if rec.get("expires_at") and datetime.utcnow() > rec["expires_at"]:
+        await email_verifications_col.delete_one({"_id": rec["_id"]})
+        raise HTTPException(status_code=400, detail="Verification link has expired. Please request a new one.")
+    await users_col.update_one({"_id": rec["user_id"]}, {"$set": {"verified": True}})
+    await email_verifications_col.delete_one({"_id": rec["_id"]})
+    return {"message": "Email verified. You can now sign in."}
+
+
+# POST — called by the frontend VerifyEmail page (this was missing — that caused the 405 error)
+@router.post("/verify-email")
+async def verify_email_post(token: str):
     rec = await email_verifications_col.find_one({"token": token})
     if not rec:
         raise HTTPException(status_code=400, detail="Invalid or expired verification link.")
