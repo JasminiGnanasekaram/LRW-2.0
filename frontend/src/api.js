@@ -97,12 +97,39 @@ export async function getDocument(id) {
   return data;
 }
 
-export function exportDocumentURL(id, format = "json") {
-  return `${API_BASE}/documents/${id}/export?format=${format}`;
+export async function deleteDocument(id) {
+  const { data } = await api.delete(`/documents/${id}`);
+  return data;
 }
 
-export function exportAllURL(format = "csv") {
-  return `${API_BASE}/documents/export/all?format=${format}`;
+function triggerBlobDownload(blobData, filename) {
+  const blob = new Blob([blobData]);
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+}
+
+export async function exportDocument(id, format = "json", filename = "document") {
+  const response = await api.get(`/documents/${id}/export`, {
+    params: { format },
+    responseType: "blob",
+  });
+  const ext = format === "csv" ? "csv" : "json";
+  triggerBlobDownload(response.data, `${filename}.${ext}`);
+}
+
+export async function exportAll(format = "csv") {
+  const response = await api.get("/documents/export/all", {
+    params: { format },
+    responseType: "blob",
+  });
+  const ext = format === "csv" ? "csv" : "json";
+  triggerBlobDownload(response.data, `lrw_documents.${ext}`);
 }
 
 // ---- Search ----

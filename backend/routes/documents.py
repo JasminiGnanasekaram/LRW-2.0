@@ -44,8 +44,8 @@ async def upload(
     user: dict = Depends(get_current_user),
 ):
     """Upload a document or URL. Runs extraction + cleaning + NLP synchronously (MVP)."""
-    if user["role"] == "guest":
-        raise HTTPException(status_code=403, detail="Guests cannot upload")
+    #if user["role"] == "guest":
+        #raise HTTPException(status_code=403, detail="Guests cannot upload")
 
     settings = get_settings()
     if settings.USE_CELERY:
@@ -87,7 +87,7 @@ async def upload(
         if not url:
             raise HTTPException(status_code=400, detail="url field required for url uploads")
         try:
-            raw_text = extraction.extract(file_type, url=url)
+            raw_text, extraction_info = extraction.extract(file_type, url=url)
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"URL extraction failed: {e}")
         filename = url
@@ -96,7 +96,7 @@ async def upload(
             raise HTTPException(status_code=400, detail="file required")
         content = await file.read()
         try:
-            raw_text = extraction.extract(file_type, content=content)
+            raw_text, extraction_info = extraction.extract(file_type, content=content)
         except NotImplementedError as e:
             raise HTTPException(status_code=501, detail=str(e))
         except Exception as e:
@@ -186,7 +186,28 @@ async def get_document(doc_id: str, user: dict = Depends(get_current_user)):
         analysis = await nlp_analysis_col.find_one({"cleaned_document_id": cleaned["_id"]})
     return _doc_out(raw, cleaned, meta, analysis)
 
+@router.delete("/{doc_id}")
+async def delete_document(doc_id: str, user: dict = Depends(get_current_user)):
+    # Find the document
+    raw = await raw_documents_col.find_one({"_id": ObjectId(doc_id)})
+    if not raw:
+        raise HTTPException(status_code=404, detail="Not found")
+    
+    # Only owner or admin can delete
+    if str(raw["user_id"]) != user["id"] and user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Forbidden")
 
+    # Delete from all 4 collections
+    cleaned = await cleaned_documents_col.find_one({"raw_document_id": raw["_id"]})
+    
+    await raw_documents_col.delete_one({"_id": raw["_id"]})
+    await cleaned_documents_col.delete_one({"raw_document_id": raw["_id"]})
+    await document_metadata_col.delete_one({"raw_document_id": raw["_id"]})
+    
+    if cleaned:
+        await nlp_analysis_col.delete_one({"cleaned_document_id": cleaned["_id"]})
+
+    return {"detail": "Deleted successfully"}
 @router.get("/{doc_id}/export")
 async def export_document(doc_id: str, format: str = "json", user: dict = Depends(get_current_user)):
     """Export a processed document. format = json | csv."""
