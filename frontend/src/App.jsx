@@ -11,6 +11,7 @@ import VerifyEmail from "./pages/VerifyEmail.jsx";
 import ForgotPassword from "./pages/ForgotPassword.jsx";
 import ResetPassword from "./pages/ResetPassword.jsx";
 import Home from "./pages/Home.jsx";
+import Profile from "./pages/Profile.jsx";
 
 function ProtectedRoute({ children, role }) {
   const u = currentUser();
@@ -56,7 +57,7 @@ function TopBar() {
         {user.role === "admin" && <Link to="/admin" className={isActive("/admin")}>Admin</Link>}
       </div>
       <div className="topbar-right">
-        <div className="topbar-user">
+        <div className="topbar-user" onClick={() => navigate("/profile")} style={{ cursor: "pointer" }} title="View profile">
           <span>{user.name}</span>
           <span className="badge" style={{ background: "rgba(255,255,255,0.15)", color: "#fff", fontSize: "11px" }}>{user.role}</span>
         </div>
@@ -82,6 +83,7 @@ export default function App() {
         <Route path="/search" element={<ProtectedRoute><Search /></ProtectedRoute>} />
         <Route path="/documents/:id" element={<ProtectedRoute><DocumentView /></ProtectedRoute>} />
         <Route path="/admin" element={<ProtectedRoute role="admin"><Admin /></ProtectedRoute>} />
+        <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/home" />} />
       </Routes>
     </>

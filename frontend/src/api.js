@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_BASE = "http://localhost:8000";
+const API_BASE = `http://${window.location.hostname}:8000`;
 
 export const api = axios.create({ baseURL: API_BASE });
 
@@ -63,7 +63,7 @@ export async function login(email, password) {
 }
 
 export async function logout() {
-  try { await api.post("/auth/logout"); } catch {}
+  try { await api.post("/auth/logout"); } catch { }
   localStorage.removeItem("lrw_token");
   localStorage.removeItem("lrw_user");
 }
