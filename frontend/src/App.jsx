@@ -1,4 +1,5 @@
 import { Routes, Route, Link, Navigate, useNavigate, useLocation } from "react-router-dom";
+import { useState as useLocalState, useEffect, useRef as useLocalRef } from "react";
 import { currentUser, logout } from "./api";
 import Login from "./pages/Login.jsx";
 import Register from "./pages/Register.jsx";
@@ -24,8 +25,18 @@ function TopBar() {
   const navigate = useNavigate();
   const location = useLocation();
   const user = currentUser();
+  const [dropOpen, setDropOpen] = useLocalState(false);
+  const dropRef = useLocalRef(null);
 
   const isActive = (path) => location.pathname === path ? "active" : "";
+
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (dropRef.current && !dropRef.current.contains(e.target)) setDropOpen(false);
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
 
   if (!user) {
     const publicPages = ["/home", "/login", "/register", "/forgot-password", "/reset-password", "/verify-email"];
@@ -45,7 +56,10 @@ function TopBar() {
     );
   }
 
-  const handleLogout = async () => { await logout(); navigate("/home"); };
+  const handleLogout = async () => { setDropOpen(false); await logout(); navigate("/home"); };
+
+  const avatarSrc = user.image || user.avatar ||
+    `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || "U")}&background=4a7c59&color=fff`;
 
   return (
     <nav className="topbar">
@@ -57,11 +71,32 @@ function TopBar() {
         {user.role === "admin" && <Link to="/admin" className={isActive("/admin")}>Admin</Link>}
       </div>
       <div className="topbar-right">
-        <div className="topbar-user" onClick={() => navigate("/profile")} style={{ cursor: "pointer" }} title="View profile">
-          <span>{user.name}</span>
-          <span className="badge" style={{ background: "rgba(255,255,255,0.15)", color: "#fff", fontSize: "11px" }}>{user.role}</span>
+        <div className="topbar-avatar-wrap" ref={dropRef}>
+          <img
+            src={avatarSrc}
+            alt={user.name}
+            className="topbar-avatar"
+            onClick={() => setDropOpen(o => !o)}
+            title={user.name}
+          />
+          {dropOpen && (
+            <div className="topbar-dropdown">
+              <div className="topbar-dropdown-header">
+                <div className="topbar-dropdown-name">{user.name}</div>
+                <div className="topbar-dropdown-role">{user.role}</div>
+              </div>
+              <div className="topbar-dropdown-divider" />
+              <button className="topbar-dropdown-item" onClick={() => { setDropOpen(false); navigate("/profile"); }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+                Profile
+              </button>
+              <button className="topbar-dropdown-item topbar-dropdown-signout" onClick={handleLogout}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                Sign out
+              </button>
+            </div>
+          )}
         </div>
-        <button className="topbar-logout" onClick={handleLogout}>Sign out</button>
       </div>
     </nav>
   );

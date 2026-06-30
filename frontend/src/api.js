@@ -102,6 +102,21 @@ export function exportAllURL(format = "csv") {
   return `${API_BASE}/documents/export/all?format=${format}`;
 }
 
+export async function downloadDocumentFile(id, format = "json") {
+  const token = localStorage.getItem("lrw_token");
+  const res = await fetch(`${API_BASE}/documents/${id}/export?format=${format}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) throw new Error("Download failed");
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `document_${id}.${format}`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 // ---- Search ----
 export async function searchDocuments(params) {
   const { data } = await api.get("/search/", { params });
