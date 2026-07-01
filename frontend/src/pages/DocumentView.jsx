@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -23,10 +23,10 @@ export default function DocumentView() {
   if (error) return (
     <div className="page" style={{ maxWidth: 720 }}>
       <div className="alert-error">{error}</div>
-      <Link to="/" className="btn btn-ghost btn-sm">← Back to dashboard</Link>
+      <Link to="/" className="btn btn-ghost btn-sm">ÔåÉ Back to dashboard</Link>
     </div>
   );
-  if (!doc) return <div className="page"><p className="muted">Loading…</p></div>;
+  if (!doc) return <div className="page"><p className="muted">LoadingÔÇª</p></div>;
 
   const posData = Object.entries(doc.nlp?.pos_distribution || {})
     .map(([pos, count]) => ({ pos, count }))
@@ -51,10 +51,10 @@ export default function DocumentView() {
     NUM: "Number", AUX: "Auxiliary Verb", PART: "Particle", X: "Other",
   };
   const POS_LABELS_TA = {
-    NOUN: "பெயர்ச்சொல்", VERB: "வினைச்சொல்", ADJ: "பெயரடை", ADV: "வினையடை",
-    PROPN: "உயர்நாமம்", DET: "துணைநாமம்", ADP: "இடையியல்",
-    PRON: "முன்னெழுத்து", CCONJ: "இணைப்புச் சொல்", PUNCT: "இலக்கணம்",
-    NUM: "எண்", AUX: "உதவி வினைச்சொல்", PART: "எண்", X: "ಇತರ",
+    NOUN: "Ó«¬Ó»åÓ«»Ó«░Ó»ìÓ«ÜÓ»ìÓ«ÜÓ»èÓ«▓Ó»ì", VERB: "Ó«ÁÓ«┐Ó«®Ó»êÓ«ÜÓ»ìÓ«ÜÓ»èÓ«▓Ó»ì", ADJ: "Ó«¬Ó»åÓ«»Ó«░Ó«ƒÓ»ê", ADV: "Ó«ÁÓ«┐Ó«®Ó»êÓ«»Ó«ƒÓ»ê",
+    PROPN: "Ó«ëÓ«»Ó«░Ó»ìÓ«¿Ó«¥Ó««Ó««Ó»ì", DET: "Ó«ñÓ»üÓ«úÓ»êÓ«¿Ó«¥Ó««Ó««Ó»ì", ADP: "Ó«çÓ«ƒÓ»êÓ«»Ó«┐Ó«»Ó«▓Ó»ì",
+    PRON: "Ó««Ó»üÓ«®Ó»ìÓ«®Ó»åÓ«┤Ó»üÓ«ñÓ»ìÓ«ñÓ»ü", CCONJ: "Ó«çÓ«úÓ»êÓ«¬Ó»ìÓ«¬Ó»üÓ«ÜÓ»ì Ó«ÜÓ»èÓ«▓Ó»ì", PUNCT: "Ó«çÓ«▓Ó«òÓ»ìÓ«òÓ«úÓ««Ó»ì",
+    NUM: "Ó«ÄÓ«úÓ»ì", AUX: "Ó«ëÓ«ñÓ«ÁÓ«┐ Ó«ÁÓ«┐Ó«®Ó»êÓ«ÜÓ»ìÓ«ÜÓ»èÓ«▓Ó»ì", PART: "Ó«ÄÓ«úÓ»ì", X: "Ó▓çÓ▓ñÓ▓░",
   };
   const POS_LABELS = isTamil ? POS_LABELS_TA : isSinhala ? {} : POS_LABELS_EN;
 
@@ -77,12 +77,13 @@ export default function DocumentView() {
   // Section wrapper style
   const section = { marginBottom: 28 };
 
-  // Lemmatization: pairs of (original → lemma) where they differ
+  // Lemmatization: pairs of (original ÔåÆ lemma) where they differ
   const lemmaPairs = (doc.nlp?.token_details || [])
     .filter(t => t.lemma && t.text !== t.lemma)
     .slice(0, 100);
 
   // Morphology: tokens that have feats/morph info (spaCy English)
+  // For Tamil/Sinhala we show suffix-based breakdown from token details
   const morphTokens = (doc.nlp?.token_details || [])
     .filter(t => t.morph && t.morph !== "")
     .slice(0, 50);
@@ -91,145 +92,147 @@ export default function DocumentView() {
   const translateMorph = (morphStr, lang) => {
     if (!morphStr) return "";
 
-    const MORPH_TAMIL = {
-      // Case
-      "Case=Nom":  "எழுவாய் வேற்றுமை",
-      "Case=Acc":  "செயப்படுபொருள் வேற்றுமை",
-      "Case=Dat":  "கொடை வேற்றுமை",
-      "Case=Gen":  "உடைமை வேற்றுமை",
-      "Case=Loc":  "இட வேற்றுமை",
-      "Case=Abl":  "நீக்க வேற்றுமை",
-      "Case=Ins":  "கருவி வேற்றுமை",
-      "Case=Voc":  "விளி வேற்றுமை",
-      // Number
-      "Number=Sing": "ஒருமை",
-      "Number=Plur": "பன்மை",
-      // Gender
-      "Gender=Masc": "ஆண்பால்",
-      "Gender=Fem":  "பெண்பால்",
-      "Gender=Neut": "நடுப்பால்",
-      "Gender=Com":  "உயர்திணை",
-      // Person
-      "Person=1": "முன்னிலை",
-      "Person=2": "நேர்முகம்",
-      "Person=3": "படர்க்கை",
-      // Tense
-      "Tense=Past":  "இறந்தகாலம்",
-      "Tense=Pres":  "நிகழ்காலம்",
-      "Tense=Fut":   "எதிர்காலம்",
-      // VerbForm
-      "VerbForm=Inf":   "தொழிற்பெயர்",
-      "VerbForm=Fin":   "முற்று வினை",
-      "VerbForm=Part":  "பெயரெச்சம்",
-      "VerbForm=Conv":  "வினையெச்சம்",
-      "VerbForm=Vnoun": "வினையெழுச்சி",
-      // Voice
-      "Voice=Act":  "கர்த்தரி வினை",
-      "Voice=Pass": "கர்மணி வினை",
-      // Polarity
-      "Polarity=Pos": "உடன்பாடு",
-      "Polarity=Neg": "எதிர்மறை",
-      // Animacy
-      "Animacy=Anim":   "உயிர்ப்பு",
-      "Animacy=Inanim": "உயிரற்ற",
-      // NumType
-      "NumType=Card": "அடிப்படை எண்",
-      "NumType=Ord":  "வரிசை எண்",
-      // Degree
-      "Degree=Pos":  "சாதாரண நிலை",
-      "Degree=Cmp":  "ஒப்பிட்டு நிலை",
-      "Degree=Sup":  "மிகை நிலை",
-      // Mood
-      "Mood=Ind":  "நேர் சொல்",
-      "Mood=Imp":  "கட்டளை",
-      "Mood=Sub":  "ஐயநிலை",
+  const MORPH_TAMIL = {
+        // Case
+        "Case=Nom":  "Ó«ÄÓ«┤Ó»üÓ«ÁÓ«¥Ó«»Ó»ì Ó«ÁÓ»çÓ«▒Ó»ìÓ«▒Ó»üÓ««Ó»ê",
+        "Case=Acc":  "Ó«ÜÓ»åÓ«»Ó«¬Ó»ìÓ«¬Ó«ƒÓ»üÓ«¬Ó»èÓ«░Ó»üÓ«│Ó»ì Ó«ÁÓ»çÓ«▒Ó»ìÓ«▒Ó»üÓ««Ó»ê",
+        "Case=Dat":  "Ó«òÓ»èÓ«ƒÓ»ê Ó«ÁÓ»çÓ«▒Ó»ìÓ«▒Ó»üÓ««Ó»ê",
+        "Case=Gen":  "Ó«ëÓ«ƒÓ»êÓ««Ó»ê Ó«ÁÓ»çÓ«▒Ó»ìÓ«▒Ó»üÓ««Ó»ê",
+        "Case=Loc":  "Ó«çÓ«ƒ Ó«ÁÓ»çÓ«▒Ó»ìÓ«▒Ó»üÓ««Ó»ê",
+        "Case=Abl":  "Ó«¿Ó»ÇÓ«òÓ»ìÓ«ò Ó«ÁÓ»çÓ«▒Ó»ìÓ«▒Ó»üÓ««Ó»ê",
+        "Case=Ins":  "Ó«òÓ«░Ó»üÓ«ÁÓ«┐ Ó«ÁÓ»çÓ«▒Ó»ìÓ«▒Ó»üÓ««Ó»ê",
+        "Case=Voc":  "Ó«ÁÓ«┐Ó«│Ó«┐ Ó«ÁÓ»çÓ«▒Ó»ìÓ«▒Ó»üÓ««Ó»ê",
+        // Number
+        "Number=Sing": "Ó«ÆÓ«░Ó»üÓ««Ó»ê",
+        "Number=Plur": "Ó«¬Ó«®Ó»ìÓ««Ó»ê",
+        // Gender
+        "Gender=Masc": "Ó«åÓ«úÓ»ìÓ«¬Ó«¥Ó«▓Ó»ì",
+        "Gender=Fem":  "Ó«¬Ó»åÓ«úÓ»ìÓ«¬Ó«¥Ó«▓Ó»ì",
+        "Gender=Neut": "Ó«¿Ó«ƒÓ»üÓ«¬Ó»ìÓ«¬Ó«¥Ó«▓Ó»ì",
+        "Gender=Com":  "Ó«ëÓ«»Ó«░Ó»ìÓ«ñÓ«┐Ó«úÓ»ê",
+        // Person
+        "Person=1": "Ó««Ó»üÓ«®Ó»ìÓ«®Ó«┐Ó«▓Ó»ê",
+        "Person=2": "Ó«¿Ó»çÓ«░Ó»ìÓ««Ó»üÓ«òÓ««Ó»ì",
+        "Person=3": "Ó«¬Ó«ƒÓ«░Ó»ìÓ«òÓ»ìÓ«òÓ»ê",
+        // Tense
+        "Tense=Past":  "Ó«çÓ«▒Ó«¿Ó»ìÓ«ñÓ«òÓ«¥Ó«▓Ó««Ó»ì",
+        "Tense=Pres":  "Ó«¿Ó«┐Ó«òÓ«┤Ó»ìÓ«òÓ«¥Ó«▓Ó««Ó»ì",
+        "Tense=Fut":   "Ó«ÄÓ«ñÓ«┐Ó«░Ó»ìÓ«òÓ«¥Ó«▓Ó««Ó»ì",
+        // VerbForm
+        "VerbForm=Inf":    "Ó«ñÓ»èÓ«┤Ó«┐Ó«▒Ó»ìÓ«¬Ó»åÓ«»Ó«░Ó»ì",
+        "VerbForm=Fin":    "Ó««Ó»üÓ«▒Ó»ìÓ«▒Ó»ü Ó«ÁÓ«┐Ó«®Ó»ê",
+        "VerbForm=Part":   "Ó«¬Ó»åÓ«»Ó«░Ó»åÓ«ÜÓ»ìÓ«ÜÓ««Ó»ì",
+        "VerbForm=Conv":   "Ó«ÁÓ«┐Ó«®Ó»êÓ«»Ó»åÓ«ÜÓ»ìÓ«ÜÓ««Ó»ì",
+        "VerbForm=Vnoun":  "Ó«ÁÓ«┐Ó«®Ó»êÓ«»Ó»åÓ«┤Ó»üÓ«ÜÓ»ìÓ«ÜÓ«┐",
+        // Voice
+        "Voice=Act":  "Ó«òÓ«░Ó»ìÓ«ñÓ»ìÓ«ñÓ«░Ó«┐ Ó«ÁÓ«┐Ó«®Ó»ê",
+        "Voice=Pass": "Ó«òÓ«░Ó»ìÓ««Ó«úÓ«┐ Ó«ÁÓ«┐Ó«®Ó»ê",
+        // Polarity
+        "Polarity=Pos": "Ó«ëÓ«ƒÓ«®Ó»ìÓ«¬Ó«¥Ó«ƒÓ»ü",
+        "Polarity=Neg": "Ó«ÄÓ«ñÓ«┐Ó«░Ó»ìÓ««Ó«▒Ó»ê",
+        // Animacy
+        "Animacy=Anim":   "Ó«ëÓ«»Ó«┐Ó«░Ó»ìÓ«¬Ó»ìÓ«¬Ó»ü",
+        "Animacy=Inanim": "Ó«ëÓ«»Ó«┐Ó«░Ó«▒Ó»ìÓ«▒",
+        // NumType
+        "NumType=Card": "Ó«àÓ«ƒÓ«┐Ó«¬Ó»ìÓ«¬Ó«ƒÓ»ê Ó«ÄÓ«úÓ»ì",
+        "NumType=Ord":  "Ó«ÁÓ«░Ó«┐Ó«ÜÓ»ê Ó«ÄÓ«úÓ»ì",
+        // Degree
+        "Degree=Pos":  "Ó«ÜÓ«¥Ó«ñÓ«¥Ó«░Ó«ú Ó«¿Ó«┐Ó«▓Ó»ê",
+        "Degree=Cmp":  "Ó«ÆÓ«¬Ó»ìÓ«¬Ó«┐Ó«ƒÓ»ìÓ«ƒÓ»ü Ó«¿Ó«┐Ó«▓Ó»ê",
+        "Degree=Sup":  "Ó««Ó«┐Ó«òÓ»ê Ó«¿Ó«┐Ó«▓Ó»ê",
+        // Mood
+        "Mood=Ind":  "Ó«¿Ó»çÓ«░Ó»ì Ó«ÜÓ»èÓ«▓Ó»ì",
+        "Mood=Imp":  "Ó«òÓ«ƒÓ»ìÓ«ƒÓ«│Ó»ê",
+        "Mood=Sub":  "Ó«ÉÓ«»Ó«¿Ó«┐Ó«▓Ó»ê",
     };
 
-    const MORPH_SINHALA = {
-      // Case
-      "Case=Nom":  "කර්තෘ කාරකය",
-      "Case=Acc":  "කර්ම කාරකය",
-      "Case=Dat":  "සම්ප්රදාන කාරකය",
-      "Case=Gen":  "ෂෂ්ඨී කාරකය",
-      "Case=Loc":  "අධිකරණ කාරකය",
-      "Case=Abl":  "පඤ්චමී කාරකය",
-      "Case=Ins":  "කරණ කාරකය",
-      "Case=Voc":  "සම්බෝධන කාරකය",
-      // Number
-      "Number=Sing": "එකවචන",
-      "Number=Plur": "බහුවචන",
-      // Gender
-      "Gender=Masc": "පුල්ලිංග",
-      "Gender=Fem":  "ස්ත්රීලිංග",
-      "Gender=Neut": "නපුංසකලිංග",
-      "Gender=Com":  "සාමාන්ය ලිංග",
-      // Person
-      "Person=1": "උත්තම පුරුෂ",
-      "Person=2": "මධ්යම පුරුෂ",
-      "Person=3": "ප්රථම පුරුෂ",
-      // Tense
-      "Tense=Past":  "අතීත කාලය",
-      "Tense=Pres":  "වර්තමාන කාලය",
-      "Tense=Fut":   "අනාගත කාලය",
-      // VerbForm
-      "VerbForm=Inf":  "අනන්ත ක්රියා",
-      "VerbForm=Fin":  "සීමිත ක්රියා",
-      "VerbForm=Part": "කෘදන්ත",
-      "VerbForm=Conv": "ගෙරුන්ඩ්",
-      // Voice
-      "Voice=Act":  "කර්තරී",
-      "Voice=Pass": "කර්මකාරක",
-      // Polarity
-      "Polarity=Pos": "ධනාත්මක",
-      "Polarity=Neg": "ඍණාත්මක",
-      // Animacy
-      "Animacy=Anim":   "සජීවී",
-      "Animacy=Inanim": "අජීවී",
-      // NumType
-      "NumType=Card": "සංඛ්යාව",
-      "NumType=Ord":  "අනුක්රමික",
-      // Degree
-      "Degree=Pos":  "සාමාන්ය",
-      "Degree=Cmp":  "සැසඳීම",
-      "Degree=Sup":  "උපරිම",
-      // Mood
-      "Mood=Ind":  "ප්රකාශාත්මක",
-      "Mood=Imp":  "අණ",
-      "Mood=Sub":  "සාපේක්ෂ",
+    
+  const MORPH_SINHALA = {
+        // Case
+        "Case=Nom":  "ÓÂÜÓÂ╗ÓÀèÓÂ¡ÓÀÿ ÓÂÜÓÀÅÓÂ╗ÓÂÜÓÂ║",
+        "Case=Acc":  "ÓÂÜÓÂ╗ÓÀèÓÂ© ÓÂÜÓÀÅÓÂ╗ÓÂÜÓÂ║",
+        "Case=Dat":  "ÓÀâÓÂ©ÓÀèÓÂ┤ÓÀèÔÇìÓÂ╗ÓÂ»ÓÀÅÓÂ▒ ÓÂÜÓÀÅÓÂ╗ÓÂÜÓÂ║",
+        "Case=Gen":  "ÓÀéÓÀéÓÀèÓÂ¿ÓÀô ÓÂÜÓÀÅÓÂ╗ÓÂÜÓÂ║",
+        "Case=Loc":  "ÓÂàÓÂ░ÓÀÆÓÂÜÓÂ╗ÓÂ½ ÓÂÜÓÀÅÓÂ╗ÓÂÜÓÂ║",
+        "Case=Abl":  "ÓÂ┤ÓÂñÓÀèÓÂáÓÂ©ÓÀô ÓÂÜÓÀÅÓÂ╗ÓÂÜÓÂ║",
+        "Case=Ins":  "ÓÂÜÓÂ╗ÓÂ½ ÓÂÜÓÀÅÓÂ╗ÓÂÜÓÂ║",
+        "Case=Voc":  "ÓÀâÓÂ©ÓÀèÓÂÂÓÀØÓÂ░ÓÂ▒ ÓÂÜÓÀÅÓÂ╗ÓÂÜÓÂ║",
+        // Number
+        "Number=Sing": "ÓÂæÓÂÜÓÀÇÓÂáÓÂ▒",
+        "Number=Plur": "ÓÂÂÓÀäÓÀöÓÀÇÓÂáÓÂ▒",
+        // Gender
+        "Gender=Masc": "ÓÂ┤ÓÀöÓÂ¢ÓÀèÓÂ¢ÓÀÆÓÂéÓÂ£",
+        "Gender=Fem":  "ÓÀâÓÀèÓÂ¡ÓÀèÔÇìÓÂ╗ÓÀôÓÂ¢ÓÀÆÓÂéÓÂ£",
+        "Gender=Neut": "ÓÂ▒ÓÂ┤ÓÀöÓÂéÓÀâÓÂÜÓÂ¢ÓÀÆÓÂéÓÂ£",
+        "Gender=Com":  "ÓÀâÓÀÅÓÂ©ÓÀÅÓÂ▒ÓÀèÔÇìÓÂ║ ÓÂ¢ÓÀÆÓÂéÓÂ£",
+        // Person
+        "Person=1": "ÓÂïÓÂ¡ÓÀèÓÂ¡ÓÂ© ÓÂ┤ÓÀöÓÂ╗ÓÀöÓÀé",
+        "Person=2": "ÓÂ©ÓÂ░ÓÀèÔÇìÓÂ║ÓÂ© ÓÂ┤ÓÀöÓÂ╗ÓÀöÓÀé",
+        "Person=3": "ÓÂ┤ÓÀèÔÇìÓÂ╗ÓÂ«ÓÂ© ÓÂ┤ÓÀöÓÂ╗ÓÀöÓÀé",
+        // Tense
+        "Tense=Past":  "ÓÂàÓÂ¡ÓÀôÓÂ¡ ÓÂÜÓÀÅÓÂ¢ÓÂ║",
+        "Tense=Pres":  "ÓÀÇÓÂ╗ÓÀèÓÂ¡ÓÂ©ÓÀÅÓÂ▒ ÓÂÜÓÀÅÓÂ¢ÓÂ║",
+        "Tense=Fut":   "ÓÂàÓÂ▒ÓÀÅÓÂ£ÓÂ¡ ÓÂÜÓÀÅÓÂ¢ÓÂ║",
+        // VerbForm
+        "VerbForm=Inf":   "ÓÂàÓÂ▒ÓÂ▒ÓÀèÓÂ¡ ÓÂÜÓÀèÔÇìÓÂ╗ÓÀÆÓÂ║ÓÀÅ",
+        "VerbForm=Fin":   "ÓÀâÓÀôÓÂ©ÓÀÆÓÂ¡ ÓÂÜÓÀèÔÇìÓÂ╗ÓÀÆÓÂ║ÓÀÅ",
+        "VerbForm=Part":  "ÓÂÜÓÀÿÓÂ»ÓÂ▒ÓÀèÓÂ¡",
+        "VerbForm=Conv":  "ÓÂ£ÓÀÖÓÂ╗ÓÀöÓÂ▒ÓÀèÓÂ®ÓÀè",
+        // Voice
+        "Voice=Act":  "ÓÂÜÓÂ╗ÓÀèÓÂ¡ÓÂ╗ÓÀô",
+        "Voice=Pass": "ÓÂÜÓÂ╗ÓÀèÓÂ©ÓÂÜÓÀÅÓÂ╗ÓÂÜ",
+        // Polarity
+        "Polarity=Pos": "ÓÂ░ÓÂ▒ÓÀÅÓÂ¡ÓÀèÓÂ©ÓÂÜ",
+        "Polarity=Neg": "ÓÂìÓÂ½ÓÀÅÓÂ¡ÓÀèÓÂ©ÓÂÜ",
+        // Animacy
+        "Animacy=Anim":   "ÓÀâÓÂóÓÀôÓÀÇÓÀô",
+        "Animacy=Inanim": "ÓÂàÓÂóÓÀôÓÀÇÓÀô",
+        // NumType
+        "NumType=Card": "ÓÀâÓÂéÓÂøÓÀèÔÇìÓÂ║ÓÀÅÓÀÇ",
+        "NumType=Ord":  "ÓÂàÓÂ▒ÓÀöÓÂÜÓÀèÔÇìÓÂ╗ÓÂ©ÓÀÆÓÂÜ",
+        // Degree
+        "Degree=Pos":  "ÓÀâÓÀÅÓÂ©ÓÀÅÓÂ▒ÓÀèÔÇìÓÂ║",
+        "Degree=Cmp":  "ÓÀâÓÀÉÓÀâÓÂ│ÓÀôÓÂ©",
+        "Degree=Sup":  "ÓÂïÓÂ┤ÓÂ╗ÓÀÆÓÂ©",
+        // Mood
+        "Mood=Ind":  "ÓÂ┤ÓÀèÔÇìÓÂ╗ÓÂÜÓÀÅÓÀüÓÀÅÓÂ¡ÓÀèÓÂ©ÓÂÜ",
+        "Mood=Imp":  "ÓÂàÓÂ½",
+        "Mood=Sub":  "ÓÀâÓÀÅÓÂ┤ÓÀÜÓÂÜÓÀèÓÀé",
     };
 
-    const MORPH_EN = {
-      "Case=Nom":  "Nominative", "Case=Acc": "Accusative",
-      "Case=Dat":  "Dative",     "Case=Gen": "Genitive",
-      "Case=Loc":  "Locative",   "Case=Abl": "Ablative",
-      "Case=Ins":  "Instrumental","Case=Voc": "Vocative",
-      "Number=Sing": "Singular", "Number=Plur": "Plural",
-      "Gender=Masc": "Masculine","Gender=Fem": "Feminine",
-      "Gender=Neut": "Neuter",   "Gender=Com": "Common",
-      "Person=1": "1st Person",  "Person=2": "2nd Person", "Person=3": "3rd Person",
-      "Tense=Past": "Past",      "Tense=Pres": "Present",  "Tense=Fut": "Future",
-      "VerbForm=Inf": "Infinitive","VerbForm=Fin": "Finite",
-      "VerbForm=Part": "Participle","VerbForm=Conv": "Converb",
-      "Voice=Act": "Active",     "Voice=Pass": "Passive",
-      "Polarity=Pos": "Positive","Polarity=Neg": "Negative",
-      "Animacy=Anim": "Animate", "Animacy=Inanim": "Inanimate",
-      "NumType=Card": "Cardinal","NumType=Ord": "Ordinal",
-      "Degree=Pos": "Positive",  "Degree=Cmp": "Comparative","Degree=Sup": "Superlative",
-      "Mood=Ind": "Indicative",  "Mood=Imp": "Imperative",  "Mood=Sub": "Subjunctive",
+  const MORPH_EN = {
+        "Case=Nom":  "Nominative", "Case=Acc": "Accusative",
+        "Case=Dat":  "Dative", "Case=Gen": "Genitive",
+        "Case=Loc":  "Locative", "Case=Abl": "Ablative",
+        "Case=Ins":  "Instrumental", "Case=Voc": "Vocative",
+        "Number=Sing": "Singular", "Number=Plur": "Plural",
+        "Gender=Masc": "Masculine", "Gender=Fem": "Feminine",
+        "Gender=Neut": "Neuter", "Gender=Com": "Common",
+        "Person=1": "1st Person", "Person=2": "2nd Person", "Person=3": "3rd Person",
+        "Tense=Past": "Past", "Tense=Pres": "Present", "Tense=Fut": "Future",
+        "VerbForm=Inf": "Infinitive", "VerbForm=Fin": "Finite",
+        "VerbForm=Part": "Participle", "VerbForm=Conv": "Converb",
+        "Voice=Act": "Active", "Voice=Pass": "Passive",
+        "Polarity=Pos": "Positive", "Polarity=Neg": "Negative",
+        "Animacy=Anim": "Animate", "Animacy=Inanim": "Inanimate",
+        "NumType=Card": "Cardinal", "NumType=Ord": "Ordinal",
+        "Degree=Pos": "Positive", "Degree=Cmp": "Comparative", "Degree=Sup": "Superlative",
+        "Mood=Ind": "Indicative", "Mood=Imp": "Imperative", "Mood=Sub": "Subjunctive",
     };
 
-    const map = lang === "Tamil" ? MORPH_TAMIL :
+  const map = lang === "Tamil" ? MORPH_TAMIL :
                 lang === "Sinhala" ? MORPH_SINHALA : MORPH_EN;
 
-    return morphStr.split("|").map(feat => map[feat] || feat).join(" | ");
+      return morphStr.split("|").map(feat => map[feat] || feat).join(" | ");
   };
+  
 
   return (
     <div className="page">
       <div className="page-header fade-up">
         <div style={{ display: "flex", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
           <div style={{ flex: 1 }}>
-            <Link to="/" className="muted" style={{ fontSize: 13, marginBottom: 6, display: "inline-block" }}>← Dashboard</Link>
+            <Link to="/" className="muted" style={{ fontSize: 13, marginBottom: 6, display: "inline-block" }}>ÔåÉ Dashboard</Link>
             <h1 className="page-title" style={{ wordBreak: "break-word" }}>{doc.filename}</h1>
             <div style={{ display: "flex", gap: 10, marginTop: 8, alignItems: "center", flexWrap: "wrap" }}>
               <span className="badge">{doc.file_type}</span>
@@ -244,18 +247,17 @@ export default function DocumentView() {
           </div>
           <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
             <button
-              className="btn btn-ghost btn-sm"
               title="Download complete document data, metadata, and NLP analysis"
               onClick={() => downloadDocumentFile(id, "json")}
             >
-              ↓ JSON
+              JSON
             </button>
+
             <button
-              className="btn btn-ghost btn-sm"
               title="Download token-level NLP analysis for Excel and data analysis"
               onClick={() => downloadDocumentFile(id, "csv")}
             >
-              ↓ CSV
+              CSV
             </button>
           </div>
         </div>
@@ -264,12 +266,7 @@ export default function DocumentView() {
       <div className="card fade-up fade-up-1">
         <div className="tabs">
           {TABS.map(({ key, label }) => (
-            <button
-              key={key}
-              className={`tab-btn${tab === key ? " active" : ""}`}
-              onClick={() => setTab(key)}
-              type="button"
-            >
+            <button key={key} className={`tab-btn${tab === key ? " active" : ""}`} onClick={() => setTab(key)} type="button">
               {label}
             </button>
           ))}
@@ -282,23 +279,23 @@ export default function DocumentView() {
         {tab === "nlp" && doc.nlp && (
           <div>
 
-            {/* ── 1. Language Detection ── */}
+            {/* ÔöÇÔöÇ 1. Language Detection ÔöÇÔöÇ */}
             <div style={section}>
-              <h3 style={sectionHead}>Language Detection</h3>
+              <h3 style={sectionHead}> Language Detection</h3>
               <span className="pos-chip" style={{ fontSize: 14, padding: "6px 16px", fontWeight: 600 }}>
                 {doc.nlp.language_display || doc.nlp.language}
               </span>
               <span className="muted" style={{ marginLeft: 10, fontSize: 13 }}>
-                {doc.nlp.token_count?.toLocaleString()} tokens ·{" "}
-                {doc.nlp.unique_tokens?.toLocaleString()} unique ·{" "}
+                {doc.nlp.token_count?.toLocaleString()} tokens ┬À{" "}
+                {doc.nlp.unique_tokens?.toLocaleString()} unique ┬À{" "}
                 {doc.nlp.sentence_count} sentences
               </span>
             </div>
 
-            {/* ── 2. Sentiment Analysis ── */}
+            {/* ÔöÇÔöÇ 2. Sentiment Analysis ÔöÇÔöÇ */}
             {doc.nlp.sentiment && Object.keys(doc.nlp.sentiment).length > 0 && (
               <div style={section}>
-                <h3 style={sectionHead}>Sentiment Analysis</h3>
+                <h3 style={sectionHead}> Sentiment Analysis</h3>
                 <span
                   className="pos-chip"
                   style={{
@@ -314,10 +311,10 @@ export default function DocumentView() {
               </div>
             )}
 
-            {/* ── 3. Text Classification ── */}
+            {/* ÔöÇÔöÇ 3. Text Classification ÔöÇÔöÇ */}
             {doc.nlp.classification && Object.keys(doc.nlp.classification).length > 0 && (
               <div style={section}>
-                <h3 style={sectionHead}>Text Classification</h3>
+                <h3 style={sectionHead}> Text Classification</h3>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                   {(doc.nlp.classification.all || []).slice(0, 8).map((c, i) => (
                     <span
@@ -336,15 +333,13 @@ export default function DocumentView() {
               </div>
             )}
 
-            {/* ── 4. Named Entity Recognition (NER) ── */}
+            {/* ÔöÇÔöÇ 4. Named Entity Recognition (NER) ÔöÇÔöÇ */}
             {doc.nlp.entities?.length > 0 && (
               <div style={section}>
-                <h3 style={sectionHead}>
-                  Named Entity Recognition — NER ({doc.nlp.entities.length})
-                </h3>
+                <h3 style={sectionHead}> Named Entity Recognition ÔÇö NER ({doc.nlp.entities.length})</h3>
                 <p className="muted" style={{ fontSize: 12, marginBottom: 10 }}>
-                  {isTamil ? "நபர்கள், இடங்கள், நிறுவனங்களை அடையாளம் காண்கிறது" :
-                   isSinhala ? "පුද්ගලයන්, ස්ථාන, සංවිධාන හඳුනා ගනී" :
+                  {isTamil ? "Ó«¿Ó«¬Ó«░Ó»ìÓ«òÓ«│Ó»ì, Ó«çÓ«ƒÓ«ÖÓ»ìÓ«òÓ«│Ó»ì, Ó«¿Ó«┐Ó«▒Ó»üÓ«ÁÓ«®Ó«ÖÓ»ìÓ«òÓ«│Ó»ê Ó«àÓ«ƒÓ»êÓ«»Ó«¥Ó«│Ó««Ó»ì Ó«òÓ«¥Ó«úÓ»ìÓ«òÓ«┐Ó«▒Ó«ñÓ»ü" :
+                   isSinhala ? "ÓÂ┤ÓÀöÓÂ»ÓÀèÓÂ£ÓÂ¢ÓÂ║ÓÂ▒ÓÀè, ÓÀâÓÀèÓÂ«ÓÀÅÓÂ▒, ÓÀâÓÂéÓÀÇÓÀÆÓÂ░ÓÀÅÓÂ▒ ÓÀäÓÂ│ÓÀöÓÂ▒ÓÀÅ ÓÂ£ÓÂ▒ÓÀô" :
                    "Identifies people, places, and organizations in text"}
                 </p>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -355,9 +350,9 @@ export default function DocumentView() {
                       title={`Score: ${e.score}`}
                       style={{
                         background:
-                          e.label_en === "PER" || e.label === "Person" || e.label === "நபர்" || e.label === "පුද්ගල නාමය" ? "#e8f4fd" :
-                          e.label_en === "ORG" || e.label === "Organization" || e.label === "நிறுவனம்" || e.label === "සංවිධානය" ? "#fef3e2" :
-                          e.label_en === "LOC" || e.label === "Location" || e.label === "இடம்" || e.label === "ස්ථාන නාමය" ? "#e8fdf0" :
+                          e.label_en === "PER" || e.label === "Person" || e.label === "Ó«¿Ó«¬Ó«░Ó»ì" || e.label === "ÓÂ┤ÓÀöÓÂ»ÓÀèÓÂ£ÓÂ¢ ÓÂ▒ÓÀÅÓÂ©ÓÂ║" ? "#e8f4fd" :
+                          e.label_en === "ORG" || e.label === "Organization" || e.label === "Ó«¿Ó«┐Ó«▒Ó»üÓ«ÁÓ«®Ó««Ó»ì" || e.label === "ÓÀâÓÂéÓÀÇÓÀÆÓÂ░ÓÀÅÓÂ▒ÓÂ║" ? "#fef3e2" :
+                          e.label_en === "LOC" || e.label === "Location" || e.label === "Ó«çÓ«ƒÓ««Ó»ì" || e.label === "ÓÀâÓÀèÓÂ«ÓÀÅÓÂ▒ ÓÂ▒ÓÀÅÓÂ©ÓÂ║" ? "#e8fdf0" :
                           undefined,
                       }}
                     >
@@ -368,15 +363,12 @@ export default function DocumentView() {
                 {/* NER Legend */}
                 <div style={{ display: "flex", gap: 12, marginTop: 10, flexWrap: "wrap" }}>
                   {[
-                    { color: "#e8f4fd", label: isTamil ? "நபர்" : isSinhala ? "පුද්ගල" : "Person" },
-                    { color: "#fef3e2", label: isTamil ? "நிறுவனம்" : isSinhala ? "සංවිධාන" : "Organization" },
-                    { color: "#e8fdf0", label: isTamil ? "இடம்" : isSinhala ? "ස්ථාන" : "Location" },
+                    { color: "#e8f4fd", label: isTamil ? "Ó«¿Ó«¬Ó«░Ó»ì" : isSinhala ? "ÓÂ┤ÓÀöÓÂ»ÓÀèÓÂ£ÓÂ¢" : "Person" },
+                    { color: "#fef3e2", label: isTamil ? "Ó«¿Ó«┐Ó«▒Ó»üÓ«ÁÓ«®Ó««Ó»ì" : isSinhala ? "ÓÀâÓÂéÓÀÇÓÀÆÓÂ░ÓÀÅÓÂ▒" : "Organization" },
+                    { color: "#e8fdf0", label: isTamil ? "Ó«çÓ«ƒÓ««Ó»ì" : isSinhala ? "ÓÀâÓÀèÓÂ«ÓÀÅÓÂ▒" : "Location" },
                   ].map((item, i) => (
                     <span key={i} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12 }}>
-                      <span style={{
-                        width: 12, height: 12, borderRadius: 3,
-                        background: item.color, border: "1px solid #ccc", display: "inline-block",
-                      }} />
+                      <span style={{ width: 12, height: 12, borderRadius: 3, background: item.color, border: "1px solid #ccc", display: "inline-block" }} />
                       {item.label}
                     </span>
                   ))}
@@ -384,12 +376,12 @@ export default function DocumentView() {
               </div>
             )}
 
-            {/* ── 5. POS Tagging ── */}
+            {/* ÔöÇÔöÇ 5. POS Tagging ÔöÇÔöÇ */}
             <div style={section}>
-              <h3 style={sectionHead}>Part-of-Speech (POS) Distribution</h3>
+              <h3 style={sectionHead}> Part-of-Speech (POS) Distribution</h3>
               <p className="muted" style={{ fontSize: 12, marginBottom: 10 }}>
-                {isTamil ? "வார்த்தைகளை பெயர்ச்சொல், வினைச்சொல், பெயரடை என வகைப்படுத்துகிறது" :
-                 isSinhala ? "වචන නාම, ක්රියා, විශේෂණ ලෙස වර්ගීකරණය කරයි" :
+                {isTamil ? "Ó«ÁÓ«¥Ó«░Ó»ìÓ«ñÓ»ìÓ«ñÓ»êÓ«òÓ«│Ó»ê Ó«¬Ó»åÓ«»Ó«░Ó»ìÓ«ÜÓ»ìÓ«ÜÓ»èÓ«▓Ó»ì, Ó«ÁÓ«┐Ó«®Ó»êÓ«ÜÓ»ìÓ«ÜÓ»èÓ«▓Ó»ì, Ó«¬Ó»åÓ«»Ó«░Ó«ƒÓ»ê Ó«ÄÓ«® Ó«ÁÓ«òÓ»êÓ«¬Ó»ìÓ«¬Ó«ƒÓ»üÓ«ñÓ»ìÓ«ñÓ»üÓ«òÓ«┐Ó«▒Ó«ñÓ»ü" :
+                 isSinhala ? "ÓÀÇÓÂáÓÂ▒ ÓÂ▒ÓÀÅÓÂ©, ÓÂÜÓÀèÔÇìÓÂ╗ÓÀÆÓÂ║ÓÀÅ, ÓÀÇÓÀÆÓÀüÓÀÜÓÀéÓÂ½ ÓÂ¢ÓÀÖÓÀâ ÓÀÇÓÂ╗ÓÀèÓÂ£ÓÀôÓÂÜÓÂ╗ÓÂ½ÓÂ║ ÓÂÜÓÂ╗ÓÂ║ÓÀÆ" :
                  "Identifies nouns, verbs, adjectives, and other grammatical categories"}
               </p>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -399,12 +391,12 @@ export default function DocumentView() {
               </div>
             </div>
 
-            {/* ── 6. Tokenization ── */}
+            {/* ÔöÇÔöÇ 6. Tokenization ÔöÇÔöÇ */}
             <div style={section}>
-              <h3 style={sectionHead}>Tokenization (first 200)</h3>
+              <h3 style={sectionHead}> Tokenization (first 200)</h3>
               <p className="muted" style={{ fontSize: 12, marginBottom: 10 }}>
-                {isTamil ? "உரையை தனிப்பட்ட வார்த்தைகளாக பிரிக்கிறது" :
-                 isSinhala ? "පෙළ තනි වචනවලට බෙදා වෙන් කරයි" :
+                {isTamil ? "Ó«ëÓ«░Ó»êÓ«»Ó»ê Ó«ñÓ«®Ó«┐Ó«¬Ó»ìÓ«¬Ó«ƒÓ»ìÓ«ƒ Ó«ÁÓ«¥Ó«░Ó»ìÓ«ñÓ»ìÓ«ñÓ»êÓ«òÓ«│Ó«¥Ó«ò Ó«¬Ó«┐Ó«░Ó«┐Ó«òÓ»ìÓ«òÓ«┐Ó«▒Ó«ñÓ»ü" :
+                 isSinhala ? "ÓÂ┤ÓÀÖÓÀà ÓÂ¡ÓÂ▒ÓÀÆ ÓÀÇÓÂáÓÂ▒ÓÀÇÓÂ¢ÓÂº ÓÂÂÓÀÖÓÂ»ÓÀÅ ÓÀÇÓÀÖÓÂ▒ÓÀè ÓÂÜÓÂ╗ÓÂ║ÓÀÆ" :
                  "Splits text into individual words with their grammatical role"}
               </p>
               <div className="snippet" style={{ maxHeight: 240 }}>
@@ -416,13 +408,13 @@ export default function DocumentView() {
               </div>
             </div>
 
-            {/* ── 7. Lemmatization ── */}
+            {/* ÔöÇÔöÇ 7. Lemmatization ÔöÇÔöÇ */}
             <div style={section}>
-              <h3 style={sectionHead}>Lemmatization</h3>
+              <h3 style={sectionHead}> Lemmatization</h3>
               <p className="muted" style={{ fontSize: 12, marginBottom: 10 }}>
-                {isTamil ? "வார்த்தைகளை அவற்றின் மூல வடிவத்திற்கு குறைக்கிறது" :
-                 isSinhala ? "වචන ඒවායේ මූල ස්වරූපයට අඩු කරයි" :
-                 "Reduces words to their base dictionary form (e.g. 'running' → 'run')"}
+                {isTamil ? "Ó«ÁÓ«¥Ó«░Ó»ìÓ«ñÓ»ìÓ«ñÓ»êÓ«òÓ«│Ó»ê Ó«àÓ«ÁÓ«▒Ó»ìÓ«▒Ó«┐Ó«®Ó»ì Ó««Ó»éÓ«▓ Ó«ÁÓ«ƒÓ«┐Ó«ÁÓ«ñÓ»ìÓ«ñÓ«┐Ó«▒Ó»ìÓ«òÓ»ü Ó«òÓ»üÓ«▒Ó»êÓ«òÓ»ìÓ«òÓ«┐Ó«▒Ó«ñÓ»ü" :
+                 isSinhala ? "ÓÀÇÓÂáÓÂ▒ ÓÂÆÓÀÇÓÀÅÓÂ║ÓÀÜ ÓÂ©ÓÀûÓÂ¢ ÓÀâÓÀèÓÀÇÓÂ╗ÓÀûÓÂ┤ÓÂ║ÓÂº ÓÂàÓÂ®ÓÀö ÓÂÜÓÂ╗ÓÂ║ÓÀÆ" :
+                 "Reduces words to their base dictionary form (e.g. 'running' ÔåÆ 'run')"}
               </p>
               {lemmaPairs.length > 0 ? (
                 <div style={{
@@ -442,15 +434,15 @@ export default function DocumentView() {
                       borderBottom: "1px solid var(--border)",
                     }}>
                       <span style={{ fontWeight: 600, color: "var(--ink)" }}>{t.text}</span>
-                      <span style={{ color: "var(--ink-lt)" }}>→</span>
+                      <span style={{ color: "var(--ink-lt)" }}>ÔåÆ</span>
                       <span style={{ color: "var(--forest)" }}>{t.lemma}</span>
                     </div>
                   ))}
                 </div>
               ) : (
                 <p className="muted" style={{ fontSize: 13 }}>
-                  {isTamil ? "அனைத்து வார்த்தைகளும் ஏற்கனவே மூல வடிவத்தில் உள்ளன" :
-                   isSinhala ? "සියලුම වචන දැනටමත් මූල ස්වරූපයේ ඇත" :
+                  {isTamil ? "Ó«àÓ«®Ó»êÓ«ñÓ»ìÓ«ñÓ»ü Ó«ÁÓ«¥Ó«░Ó»ìÓ«ñÓ»ìÓ«ñÓ»êÓ«òÓ«│Ó»üÓ««Ó»ì Ó«ÅÓ«▒Ó»ìÓ«òÓ«®Ó«ÁÓ»ç Ó««Ó»éÓ«▓ Ó«ÁÓ«ƒÓ«┐Ó«ÁÓ«ñÓ»ìÓ«ñÓ«┐Ó«▓Ó»ì Ó«ëÓ«│Ó»ìÓ«│Ó«®" :
+                   isSinhala ? "ÓÀâÓÀÆÓÂ║ÓÂ¢ÓÀöÓÂ© ÓÀÇÓÂáÓÂ▒ ÓÂ»ÓÀÉÓÂ▒ÓÂºÓÂ©ÓÂ¡ÓÀè ÓÂ©ÓÀûÓÂ¢ ÓÀâÓÀèÓÀÇÓÂ╗ÓÀûÓÂ┤ÓÂ║ÓÀÜ ÓÂçÓÂ¡" :
                    "All words are already in their base form"}
                 </p>
               )}
@@ -459,12 +451,12 @@ export default function DocumentView() {
               </p>
             </div>
 
-            {/* ── 8. Morphological Analysis ── */}
+            {/* ÔöÇÔöÇ 8. Morphological Analysis ÔöÇÔöÇ */}
             <div style={section}>
-              <h3 style={sectionHead}>Morphological Analysis</h3>
+              <h3 style={sectionHead}> Morphological Analysis</h3>
               <p className="muted" style={{ fontSize: 12, marginBottom: 10 }}>
-                {isTamil ? "வார்த்தைகளின் இலக்கண அமைப்பை பகுப்பாய்வு செய்கிறது" :
-                 isSinhala ? "වචනවල ව්යාකරණ ව්යුහය විශ්ලේෂණය කරයි" :
+                {isTamil ? "Ó«ÁÓ«¥Ó«░Ó»ìÓ«ñÓ»ìÓ«ñÓ»êÓ«òÓ«│Ó«┐Ó«®Ó»ì Ó«çÓ«▓Ó«òÓ»ìÓ«òÓ«ú Ó«àÓ««Ó»êÓ«¬Ó»ìÓ«¬Ó»ê Ó«¬Ó«òÓ»üÓ«¬Ó»ìÓ«¬Ó«¥Ó«»Ó»ìÓ«ÁÓ»ü Ó«ÜÓ»åÓ«»Ó»ìÓ«òÓ«┐Ó«▒Ó«ñÓ»ü" :
+                 isSinhala ? "ÓÀÇÓÂáÓÂ▒ÓÀÇÓÂ¢ ÓÀÇÓÀèÔÇìÓÂ║ÓÀÅÓÂÜÓÂ╗ÓÂ½ ÓÀÇÓÀèÔÇìÓÂ║ÓÀöÓÀäÓÂ║ ÓÀÇÓÀÆÓÀüÓÀèÓÂ¢ÓÀÜÓÀéÓÂ½ÓÂ║ ÓÂÜÓÂ╗ÓÂ║ÓÀÆ" :
                  "Analyzes grammatical structure of words (tense, number, case, gender)"}
               </p>
               {morphTokens.length > 0 ? (
@@ -476,16 +468,16 @@ export default function DocumentView() {
                     <thead>
                       <tr style={{ borderBottom: "2px solid var(--border)" }}>
                         <th style={{ textAlign: "left", padding: "4px 8px", color: "var(--ink-lt)" }}>
-                          {isTamil ? "வார்த்தை" : isSinhala ? "වචනය" : "Word"}
+                          {isTamil ? "Ó«ÁÓ«¥Ó«░Ó»ìÓ«ñÓ»ìÓ«ñÓ»ê" : isSinhala ? "ÓÀÇÓÂáÓÂ▒ÓÂ║" : "Word"}
                         </th>
                         <th style={{ textAlign: "left", padding: "4px 8px", color: "var(--ink-lt)" }}>
-                          {isTamil ? "மூல வடிவம்" : isSinhala ? "මූල ස්වරූපය" : "Lemma"}
+                          {isTamil ? "Ó««Ó»éÓ«▓ Ó«ÁÓ«ƒÓ«┐Ó«ÁÓ««Ó»ì" : isSinhala ? "ÓÂ©ÓÀûÓÂ¢ ÓÀâÓÀèÓÀÇÓÂ╗ÓÀûÓÂ┤ÓÂ║" : "Lemma"}
                         </th>
                         <th style={{ textAlign: "left", padding: "4px 8px", color: "var(--ink-lt)" }}>
-                          {isTamil ? "இலக்கண வகை" : isSinhala ? "ව්යාකරණ වර්ගය" : "POS"}
+                          {isTamil ? "Ó«çÓ«▓Ó«òÓ»ìÓ«òÓ«ú Ó«ÁÓ«òÓ»ê" : isSinhala ? "ÓÀÇÓÀèÔÇìÓÂ║ÓÀÅÓÂÜÓÂ╗ÓÂ½ ÓÀÇÓÂ╗ÓÀèÓÂ£ÓÂ║" : "POS"}
                         </th>
                         <th style={{ textAlign: "left", padding: "4px 8px", color: "var(--ink-lt)" }}>
-                          {isTamil ? "உருபியல் தகவல்" : isSinhala ? "රූපවිද්යා තොරතුරු" : "Morphology"}
+                          {isTamil ? "Ó«ëÓ«░Ó»üÓ«¬Ó«┐Ó«»Ó«▓Ó»ì Ó«ñÓ«òÓ«ÁÓ«▓Ó»ì" : isSinhala ? "ÓÂ╗ÓÀûÓÂ┤ÓÀÇÓÀÆÓÂ»ÓÀèÔÇìÓÂ║ÓÀÅ ÓÂ¡ÓÀ£ÓÂ╗ÓÂ¡ÓÀöÓÂ╗ÓÀö" : "Morphology"}
                         </th>
                       </tr>
                     </thead>
@@ -495,9 +487,7 @@ export default function DocumentView() {
                           <td style={{ padding: "4px 8px", fontWeight: 600 }}>{t.text}</td>
                           <td style={{ padding: "4px 8px", color: "var(--forest)" }}>{t.lemma}</td>
                           <td style={{ padding: "4px 8px" }}>{POS_LABELS[t.pos] || t.pos}</td>
-                          <td style={{ padding: "4px 8px", color: "var(--ink-lt)", fontSize: 12 }}>
-                            {translateMorph(t.morph, doc.nlp.language)}
-                          </td>
+                          <td style={{ padding: "4px 8px", color: "var(--ink-lt)", fontSize: 12 }}>{translateMorph(t.morph, doc.nlp.language)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -513,13 +503,13 @@ export default function DocumentView() {
                     <thead>
                       <tr style={{ borderBottom: "2px solid var(--border)" }}>
                         <th style={{ textAlign: "left", padding: "4px 8px", color: "var(--ink-lt)" }}>
-                          {isTamil ? "வார்த்தை" : isSinhala ? "වචනය" : "Word"}
+                          {isTamil ? "Ó«ÁÓ«¥Ó«░Ó»ìÓ«ñÓ»ìÓ«ñÓ»ê" : isSinhala ? "ÓÀÇÓÂáÓÂ▒ÓÂ║" : "Word"}
                         </th>
                         <th style={{ textAlign: "left", padding: "4px 8px", color: "var(--ink-lt)" }}>
-                          {isTamil ? "மூல வடிவம்" : isSinhala ? "මූල ස්වරූපය" : "Lemma"}
+                          {isTamil ? "Ó««Ó»éÓ«▓ Ó«ÁÓ«ƒÓ«┐Ó«ÁÓ««Ó»ì" : isSinhala ? "ÓÂ©ÓÀûÓÂ¢ ÓÀâÓÀèÓÀÇÓÂ╗ÓÀûÓÂ┤ÓÂ║" : "Lemma"}
                         </th>
                         <th style={{ textAlign: "left", padding: "4px 8px", color: "var(--ink-lt)" }}>
-                          {isTamil ? "இலக்கண வகை" : isSinhala ? "ව්යාකරණ වර්ගය" : "POS"}
+                          {isTamil ? "Ó«çÓ«▓Ó«òÓ»ìÓ«òÓ«ú Ó«ÁÓ«òÓ»ê" : isSinhala ? "ÓÀÇÓÀèÔÇìÓÂ║ÓÀÅÓÂÜÓÂ╗ÓÂ½ ÓÀÇÓÂ╗ÓÀèÓÂ£ÓÂ║" : "POS"}
                         </th>
                       </tr>
                     </thead>
@@ -537,10 +527,10 @@ export default function DocumentView() {
               )}
             </div>
 
-            {/* ── 9. Sentences ── */}
+            {/* ÔöÇÔöÇ 9. Sentences ÔöÇÔöÇ */}
             {doc.nlp.sentences?.length > 0 && (
               <div style={section}>
-                <h3 style={sectionHead}>Sentences ({doc.nlp.sentence_count})</h3>
+                <h3 style={sectionHead}> Sentences ({doc.nlp.sentence_count})</h3>
                 <div style={{
                   maxHeight: 200, overflowY: "auto",
                   background: "var(--paper)", borderRadius: "var(--radius)", padding: 12,
@@ -562,9 +552,7 @@ export default function DocumentView() {
 
         {tab === "charts" && doc.nlp && (
           <div>
-            <h3 style={{ fontFamily: "var(--font-head)", color: "var(--forest)", marginBottom: 20 }}>
-              POS Distribution
-            </h3>
+            <h3 style={{ fontFamily: "var(--font-head)", color: "var(--forest)", marginBottom: 20 }}>POS Distribution</h3>
             <div style={{ width: "100%", height: 280 }}>
               <ResponsiveContainer>
                 <PieChart>
@@ -576,9 +564,7 @@ export default function DocumentView() {
                 </PieChart>
               </ResponsiveContainer>
             </div>
-            <h3 style={{ fontFamily: "var(--font-head)", color: "var(--forest)", margin: "28px 0 20px" }}>
-              Top Words
-            </h3>
+            <h3 style={{ fontFamily: "var(--font-head)", color: "var(--forest)", margin: "28px 0 20px" }}>Top Words</h3>
             <div style={{ width: "100%", height: 340 }}>
               <ResponsiveContainer>
                 <BarChart data={topWordsData} layout="vertical" margin={{ left: 60 }}>

@@ -10,10 +10,14 @@ class Settings(BaseSettings):
     JWT_EXPIRES_MINUTES: int = 1440
     UPLOAD_DIR: str = "./uploads"
     CORS_ORIGINS: str = "http://localhost:5173"
+    TESSERACT_CMD: str = ""
 
     WHISPER_MODEL: str = "base"
     REDIS_URL: str = "redis://localhost:6379/0"
     USE_CELERY: bool = False
+
+    # When true, newly registered users are auto-verified (development convenience)
+    DEV_SKIP_EMAIL_VERIFICATION: bool = False
 
     SMTP_HOST: str = ""
     SMTP_PORT: int = 587
@@ -21,6 +25,9 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str = ""
     SMTP_FROM: str = "no-reply@lrw.local"
     APP_BASE_URL: str = "http://localhost:5173"
+
+    # AI / LLM
+    GROQ_API_KEY: str = ""
 
     class Config:
         env_file = ".env"

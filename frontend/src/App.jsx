@@ -1,5 +1,5 @@
+﻿import React, { useState, useRef, useEffect } from "react";
 import { Routes, Route, Link, Navigate, useNavigate, useLocation } from "react-router-dom";
-import { useState as useLocalState, useEffect, useRef as useLocalRef } from "react";
 import { currentUser, logout } from "./api";
 import Login from "./pages/Login.jsx";
 import Register from "./pages/Register.jsx";
@@ -12,6 +12,7 @@ import VerifyEmail from "./pages/VerifyEmail.jsx";
 import ForgotPassword from "./pages/ForgotPassword.jsx";
 import ResetPassword from "./pages/ResetPassword.jsx";
 import Home from "./pages/Home.jsx";
+import ResendVerification from "./pages/ResendVerification.jsx";
 import Profile from "./pages/Profile.jsx";
 
 function ProtectedRoute({ children, role }) {
@@ -24,25 +25,34 @@ function ProtectedRoute({ children, role }) {
 function TopBar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const user = currentUser();
-  const [dropOpen, setDropOpen] = useLocalState(false);
-  const dropRef = useLocalRef(null);
-
-  const isActive = (path) => location.pathname === path ? "active" : "";
+  const [user, setUser] = useState(currentUser());
+  const [profileOpen, setProfileOpen] = useState(false);
+  const profileRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
-    const handleClick = (e) => {
-      if (dropRef.current && !dropRef.current.contains(e.target)) setDropOpen(false);
-    };
+    function handleClick(e) {
+      if (profileRef.current && !profileRef.current.contains(e.target)) setProfileOpen(false);
+    }
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
+
+  useEffect(() => {
+    function onUserUpdate(e) {
+      if (e?.detail) setUser(e.detail);
+      else setUser(currentUser());
+    }
+    window.addEventListener('lrw_user_updated', onUserUpdate);
+    return () => window.removeEventListener('lrw_user_updated', onUserUpdate);
+  }, []);
+
+  const isActive = (path) => location.pathname === path ? "active" : "";
 
   if (!user) {
     const publicPages = ["/home", "/login", "/register", "/forgot-password", "/reset-password", "/verify-email"];
     const isPublic = publicPages.some(p => location.pathname.startsWith(p));
     if (!isPublic) return null;
-    if (["/login", "/register"].includes(location.pathname)) return null;
 
     return (
       <nav className="topbar">
@@ -56,10 +66,7 @@ function TopBar() {
     );
   }
 
-  const handleLogout = async () => { setDropOpen(false); await logout(); navigate("/home"); };
-
-  const avatarSrc = user.image || user.avatar ||
-    `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || "U")}&background=4a7c59&color=fff`;
+  const handleLogout = async () => { await logout(); navigate("/home"); };
 
   return (
     <nav className="topbar">
@@ -71,29 +78,51 @@ function TopBar() {
         {user.role === "admin" && <Link to="/admin" className={isActive("/admin")}>Admin</Link>}
       </div>
       <div className="topbar-right">
-        <div className="topbar-avatar-wrap" ref={dropRef}>
-          <img
-            src={avatarSrc}
-            alt={user.name}
-            className="topbar-avatar"
-            onClick={() => setDropOpen(o => !o)}
-            title={user.name}
-          />
-          {dropOpen && (
-            <div className="topbar-dropdown">
-              <div className="topbar-dropdown-header">
-                <div className="topbar-dropdown-name">{user.name}</div>
-                <div className="topbar-dropdown-role">{user.role}</div>
+        <div className="profile" ref={profileRef}>
+          <div className="profile-toggle" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            <img className="profile-avatar" src={user.image || user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=4a7c59&color=fff`} alt="avatar" onClick={(e) => { e.stopPropagation(); if (fileInputRef.current) fileInputRef.current.click(); }} />
+            <button className="profile-name-btn" onClick={() => setProfileOpen(!profileOpen)} aria-expanded={profileOpen} style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontWeight: 600 }}>{user.name}</button>
+            <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={async (ev) => {
+              const f = ev.target.files && ev.target.files[0];
+              if (!f) return;
+              const reader = new FileReader();
+              reader.onload = () => {
+                const dataUrl = reader.result;
+                const updated = { ...(user || {}), image: dataUrl };
+                try { localStorage.setItem('lrw_user', JSON.stringify(updated)); } catch (e) {}
+                setUser(updated);
+                window.dispatchEvent(new CustomEvent('lrw_user_updated', { detail: updated }));
+              };
+              reader.readAsDataURL(f);
+            }} />
+          </div>
+          {profileOpen && (
+            <div className="profile-dropdown">
+              <div className="profile-card card">
+                <div className="row items-center">
+                  <img className="profile-avatar-lg" src={user.image || user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=4a7c59&color=fff`} alt="avatar" />
+                  <div>
+                    <div className="card-title">{user.name}</div>
+                    <div className="muted">{user.email}</div>
+                    <div style={{ marginTop: 6 }} className="badge">{user.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : "User"}</div>
+                  </div>
+                </div>
+                <div className="divider" />
+                <div className="field">
+                  <div className="label">Date of birth</div>
+                  <div>{(() => { try { const d = user.dob || user.date_of_birth || user.birthdate; return d ? new Date(d).toLocaleDateString() : 'ÔÇö'; } catch (e) { return 'ÔÇö'; } })()}</div>
+                </div>
+                <div className="field">
+                  <div className="label">Additional information</div>
+                  <div className="muted">{user.bio || user.info || user.additional || 'ÔÇö'}</div>
+                </div>
+                <div style={{ marginTop: 12 }} className="row">
+                  <button className="btn btn-ghost btn-sm" onClick={() => { setProfileOpen(false); navigate('/profile'); }}>Edit profile</button>
+                  <div style={{ marginLeft: 'auto' }}>
+                    <button className="btn btn-primary btn-sm" onClick={() => { setProfileOpen(false); handleLogout(); }}>Sign out</button>
+                  </div>
+                </div>
               </div>
-              <div className="topbar-dropdown-divider" />
-              <button className="topbar-dropdown-item" onClick={() => { setDropOpen(false); navigate("/profile"); }}>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
-                Profile
-              </button>
-              <button className="topbar-dropdown-item topbar-dropdown-signout" onClick={handleLogout}>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-                Sign out
-              </button>
             </div>
           )}
         </div>
@@ -117,8 +146,9 @@ export default function App() {
         <Route path="/upload" element={<ProtectedRoute><Upload /></ProtectedRoute>} />
         <Route path="/search" element={<ProtectedRoute><Search /></ProtectedRoute>} />
         <Route path="/documents/:id" element={<ProtectedRoute><DocumentView /></ProtectedRoute>} />
-        <Route path="/admin" element={<ProtectedRoute role="admin"><Admin /></ProtectedRoute>} />
         <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+        <Route path="/admin" element={<ProtectedRoute role="admin"><Admin /></ProtectedRoute>} />
+        <Route path="/resend-verification" element={<ResendVerification />} />
         <Route path="*" element={<Navigate to="/home" />} />
       </Routes>
     </>

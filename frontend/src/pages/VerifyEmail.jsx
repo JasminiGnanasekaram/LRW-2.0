@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { verifyEmail } from "../api";
 
@@ -7,13 +7,39 @@ export default function VerifyEmail() {
   const [status, setStatus] = useState("verifying");
   const [error, setError] = useState("");
   const token = params.get("token");
+  const redirectStatus = params.get("status");
+  const verificationStarted = useRef(false);
 
   useEffect(() => {
-    if (!token) { setStatus("error"); setError("Missing token."); return; }
+    if (redirectStatus === "success") {
+      setStatus("ok");
+      return;
+    }
+    if (redirectStatus === "invalid") {
+      setStatus("error");
+      setError("Invalid or expired verification link.");
+      return;
+    }
+    if (!token) {
+      setStatus("error");
+      setError("Missing token.");
+      return;
+    }
+    if (verificationStarted.current) {
+      return;
+    }
+
+    verificationStarted.current = true;
     verifyEmail(token)
-      .then(() => setStatus("ok"))
-      .catch((e) => { setStatus("error"); setError(e.response?.data?.detail || "Verification failed."); });
-  }, [token]);
+      .then(() => {
+        setStatus("ok");
+        window.history.replaceState(null, "", "/verify-email?status=success");
+      })
+      .catch((e) => {
+        setStatus("error");
+        setError(e.response?.data?.detail || "Verification failed.");
+      });
+  }, [token, redirectStatus]);
 
   return (
     <div className="auth-shell">

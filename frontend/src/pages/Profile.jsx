@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+﻿import React, { useState, useRef } from "react";
 import { currentUser } from "../api";
 import { useNavigate } from "react-router-dom";
 
@@ -21,7 +21,7 @@ export default function Profile() {
     // Persist locally; backend update can be wired later
     const updated = { ...u, name: form.name, email: form.email, dob: form.dob, bio: form.bio, image: form.image };
     localStorage.setItem("lrw_user", JSON.stringify(updated));
-    try { window.dispatchEvent(new CustomEvent('lrw_user_updated', { detail: updated })); } catch (e) { }
+    try { window.dispatchEvent(new CustomEvent('lrw_user_updated', { detail: updated })); } catch (e) {}
     setEditing(false);
     alert("Profile saved locally.");
   };
@@ -48,33 +48,18 @@ export default function Profile() {
       <div className="row">
         <div style={{ flex: "0 0 320px" }}>
           <div className="card">
-            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-              <img
-                onClick={() => fileRef.current && fileRef.current.click()}
-                src={form.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(form.name || "User")}&background=4a7c59&color=fff`}
-                alt="avatar"
-                style={{ width: 96, height: 96, borderRadius: '50%', objectFit: "cover", cursor: 'pointer' }}
-              />
+              <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+              <img onClick={() => fileRef.current && fileRef.current.click()} src={form.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(form.name || "User")}&background=4a7c59&color=fff`} alt="avatar" style={{ width: 96, height: 96, borderRadius: '50%', objectFit: "cover", cursor: 'pointer' }} />
               <div>
-                <div style={{ fontWeight: 700, fontSize: 18 }}>{form.name || "—"}</div>
-                <div className="muted">{form.email || "—"}</div>
-                <div style={{ marginTop: 8 }} className="badge">
-                  {u.role ? u.role.charAt(0).toUpperCase() + u.role.slice(1) : "User"}
-                </div>
+                <div style={{ fontWeight: 700, fontSize: 18 }}>{form.name || "ÔÇö"}</div>
+                <div className="muted">{form.email || "ÔÇö"}</div>
+                <div style={{ marginTop: 8 }} className="badge">{u.role ? u.role.charAt(0).toUpperCase() + u.role.slice(1) : "User"}</div>
               </div>
             </div>
             <div style={{ marginTop: 12 }}>
-              <button className="btn btn-ghost" onClick={() => setEditing(!editing)}>
-                {editing ? "Cancel" : "Edit"}
-              </button>
+              <button className="btn btn-ghost" onClick={() => setEditing(!editing)}>{editing ? "Cancel" : "Edit"}</button>
             </div>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              style={{ display: 'none' }}
-              onChange={(e) => onFile(e.target.files && e.target.files[0])}
-            />
+            <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => onFile(e.target.files && e.target.files[0])} />
           </div>
         </div>
 
@@ -83,15 +68,10 @@ export default function Profile() {
             <div className="card-title">Basic information</div>
             {!editing && (
               <div>
-                <div style={{ marginBottom: 8 }}><strong>Name:</strong> {form.name || '—'}</div>
-                <div style={{ marginBottom: 8 }}><strong>Email:</strong> {form.email || '—'}</div>
-                <div style={{ marginBottom: 8 }}>
-                  <strong>Date of birth:</strong> {form.dob ? new Date(form.dob).toLocaleDateString() : '—'}
-                </div>
-                <div style={{ marginBottom: 8 }}>
-                  <strong>Additional information:</strong>
-                  <div className="muted">{form.bio || '—'}</div>
-                </div>
+                <div style={{ marginBottom: 8 }}><strong>Name:</strong> {form.name || 'ÔÇö'}</div>
+                <div style={{ marginBottom: 8 }}><strong>Email:</strong> {form.email || 'ÔÇö'}</div>
+                <div style={{ marginBottom: 8 }}><strong>Date of birth:</strong> {form.dob ? new Date(form.dob).toLocaleDateString() : 'ÔÇö'}</div>
+                <div style={{ marginBottom: 8 }}><strong>Additional information:</strong><div className="muted">{form.bio || 'ÔÇö'}</div></div>
               </div>
             )}
 

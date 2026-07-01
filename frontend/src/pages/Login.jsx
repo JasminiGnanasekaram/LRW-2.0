@@ -14,6 +14,7 @@ export default function Login() {
     setError(""); setLoading(true);
     try {
       await login(email, password);
+      window.dispatchEvent(new CustomEvent('lrw_user_updated'));
       navigate("/");
     } catch (err) {
       setError(err.response?.data?.detail || "Login failed. Please check your credentials.");

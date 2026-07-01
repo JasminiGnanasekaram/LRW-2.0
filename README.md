@@ -24,6 +24,7 @@ admin dashboard, charts, CSV/JSON export, and optional async processing via Cele
    - Windows: https://github.com/UB-Mannheim/tesseract/wiki
    - macOS: `brew install tesseract`
    - Linux: `sudo apt install tesseract-ocr`
+   - If Tesseract is installed but not on PATH, set `TESSERACT_CMD` in `backend/.env` to the full executable path.
 4. **ffmpeg** (for audio uploads via Whisper):
    - Windows: https://www.gyan.dev/ffmpeg/builds/ (add to PATH)
    - macOS: `brew install ffmpeg`
@@ -42,10 +43,10 @@ python -m spacy download en_core_web_sm
 
 cp .env.example .env   # edit secrets/SMTP if you have them
 
-uvicorn main:app --reload --port 8000
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-API at `http://localhost:8000`. Swagger UI at `http://localhost:8000/docs`.
+API at `http://localhost:8000` or `http://<your-ip>:8000` when accessed from the local network. Swagger UI at `http://localhost:8000/docs`.
 
 ### Optional: Celery worker (async processing)
 

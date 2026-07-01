@@ -12,6 +12,10 @@ python-multipart>=0.0.12
 PyJWT>=2.9.0
 bcrypt>=4.2.0
 
+# Gmail integration
+google-auth>=2.18.0
+google-api-python-client>=2.100.0
+
 # Text extraction
 pdfplumber>=0.11.0
 Pillow>=11.0.0

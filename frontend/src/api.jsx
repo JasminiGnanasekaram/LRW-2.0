@@ -1,8 +1,6 @@
 import axios from "axios";
 
-// Use a relative path in Vite dev so the local proxy forwards requests to the backend.
-// In static preview/production, default to the same hostname on port 8000.
-const API_BASE = import.meta.env.VITE_API_BASE || (import.meta.env.DEV ? "" : `http://${window.location.hostname}:8000`);
+const API_BASE = `http://${window.location.hostname}:8000`;
 
 export const api = axios.create({ baseURL: API_BASE });
 
@@ -27,16 +25,19 @@ api.interceptors.response.use(
 );
 
 // ---- Auth ----
-export async function register(name, email, password, role = "student") {
-  const { data } = await api.post("/auth/register", { name, email, password, role });
-  return data; // { message, email } — user must verify before logging in
-}
 
-export async function verifyEmail(token) {
-  const { data } = await api.get("/auth/verify-email", { params: { token } });
+// FIX: default was "student" which backend rejects → changed to "guest"
+export async function register(name, email, password, role = "guest") {
+  const { data } = await api.post("/auth/register", { name, email, password, role });
   return data;
 }
 
+export async function verifyEmail(token) {
+  const { data } = await api.post("/auth/verify-email", null, { params: { token } });
+  return data;
+}
+
+// FIX: use params object instead of string (handles + and special chars in email safely)
 export async function resendVerification(email) {
   const { data } = await api.post("/auth/resend-verification", null, { params: { email } });
   return data;
@@ -65,7 +66,7 @@ export async function login(email, password) {
 }
 
 export async function logout() {
-  try { await api.post("/auth/logout"); } catch { }
+  try { await api.post("/auth/logout"); } catch {}
   localStorage.removeItem("lrw_token");
   localStorage.removeItem("lrw_user");
 }
@@ -91,72 +92,22 @@ export async function listDocuments() {
   return data;
 }
 
-export async function deleteDocument(id) {
-  const { data } = await api.delete(`/documents/${id}`);
-  return data;
-}
-
 export async function getDocument(id) {
   const { data } = await api.get(`/documents/${id}`);
   return data;
 }
 
-export async function downloadDocumentFile(id, format = "json") {
-  const response = await api.get(`/documents/${id}/export`, {
-    params: { format },
-    responseType: "blob",
-  });
-
-  const disposition = response.headers["content-disposition"] || "";
-  const filenameMatch = disposition.match(/filename\*=UTF-8''([^;]+)|filename=\"?([^;\"]+)\"?/i);
-  let filename = filenameMatch?.[1] || filenameMatch?.[2] || `${id}.${format}`;
-  try {
-    filename = decodeURIComponent(filename);
-  } catch (e) {
-    // ignore decode errors
-  }
-
-  const blobUrl = window.URL.createObjectURL(response.data);
-  const anchor = document.createElement("a");
-  anchor.href = blobUrl;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  window.URL.revokeObjectURL(blobUrl);
-}
-
-export async function downloadAllDocumentsFile(format = "csv") {
-  const response = await api.get("/documents/export/all", {
-    params: { format },
-    responseType: "blob",
-  });
-
-  const disposition = response.headers["content-disposition"] || "";
-  const filenameMatch = disposition.match(/filename\*=UTF-8''([^;]+)|filename=\"?([^;\"]+)\"?/i);
-  let filename = filenameMatch?.[1] || filenameMatch?.[2] || `lrw_documents.${format}`;
-  try {
-    filename = decodeURIComponent(filename);
-  } catch (e) {
-    // ignore decode errors
-  }
-
-  const blobUrl = window.URL.createObjectURL(response.data);
-  const anchor = document.createElement("a");
-  anchor.href = blobUrl;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  window.URL.revokeObjectURL(blobUrl);
-}
-
-export function exportAllURL(format = "csv") {
-  return `${API_BASE}/documents/export/all?format=${format}`;
+export async function deleteDocument(id) {
+  const { data } = await api.delete(`/documents/${id}`);
+  return data;
 }
 
 export function exportDocumentURL(id, format = "json") {
   return `${API_BASE}/documents/${id}/export?format=${format}`;
+}
+
+export function exportAllURL(format = "csv") {
+  return `${API_BASE}/documents/export/all?format=${format}`;
 }
 
 // ---- Search ----
