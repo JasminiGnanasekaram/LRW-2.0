@@ -1,17 +1,39 @@
 """NLP analysis: tokenization, POS, NER, sentiment, language detection, classification."""
 from functools import lru_cache
 from collections import Counter
+import numpy as np
+
+
+# ─── Numpy → Python converter ─────────────────────────────────────────
+
+def _to_python(obj):
+    """Recursively convert numpy types to native Python types for MongoDB."""
+    if isinstance(obj, dict):
+        return {k: _to_python(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_to_python(v) for v in obj]
+    if isinstance(obj, tuple):
+        return tuple(_to_python(v) for v in obj)
+    if isinstance(obj, np.floating):
+        return float(obj)
+    if isinstance(obj, np.integer):
+        return int(obj)
+    if isinstance(obj, np.ndarray):
+        return [_to_python(v) for v in obj.tolist()]
+    if isinstance(obj, np.generic):
+        return _to_python(obj.item())
+    return obj
 
 
 # ─── Language Detection ───────────────────────────────────────────────
 
 def _detect_language(text: str) -> str:
     sample = text[:10000]
-    tamil_chars = sum(1 for c in sample if "\u0B80" <= c <= "\u0BFF")
+    tamil_chars   = sum(1 for c in sample if "\u0B80" <= c <= "\u0BFF")
     sinhala_chars = sum(1 for c in sample if "\u0D80" <= c <= "\u0DFF")
-    letters = sum(1 for c in sample if c.isalpha())
+    letters       = sum(1 for c in sample if c.isalpha())
     if letters > 0:
-        if tamil_chars / letters > 0.3:
+        if tamil_chars   / letters > 0.3:
             return "Tamil"
         if sinhala_chars / letters > 0.3:
             return "Sinhala"
@@ -85,35 +107,38 @@ def _get_classification_pipeline():
 # ─── POS Label Maps ───────────────────────────────────────────────────
 
 TAMIL_POS_LABELS = {
-    "NOUN": "பெயர்ச்சொல்", "VERB": "வினைச்சொல்", "ADJ": "பெயரடை",
-    "ADV": "வினையடை", "PROPN": "சிறப்புப் பெயர்ச்சொல்", "PRON": "பிறவிப்பெயர்",
-    "DET": "சுட்டு", "ADP": "வேற்றுமை உருபு", "CCONJ": "இணைப்பு இடைச்சொல்",
-    "SCONJ": "சார்பு இடைச்சொல்", "PART": "இடைச்சொல்", "AUX": "துணை வினை",
-    "NUM": "எண்", "PUNCT": "நிறுத்தற்குறி", "SYM": "சின்னம்",
-    "INTJ": "உணர்ச்சிச்சொல்", "X": "மற்றவை",
+    "NOUN": "பெயர்ச்சொல்",  "VERB": "வினைச்சொல்",       "ADJ":   "பெயரடை",
+    "ADV":  "வினையடை",       "PROPN": "சிறப்புப் பெயர்ச்சொல்", "PRON": "பிறவிப்பெயர்",
+    "DET":  "சுட்டு",         "ADP":  "வேற்றுமை உருபு",   "CCONJ": "இணைப்பு இடைச்சொல்",
+    "SCONJ":"சார்பு இடைச்சொல்","PART":"இடைச்சொல்",        "AUX":   "துணை வினை",
+    "NUM":  "எண்",             "PUNCT":"நிறுத்தற்குறி",    "SYM":   "சின்னம்",
+    "INTJ": "உணர்ச்சிச்சொல்","X":    "மற்றவை",
 }
 
 SINHALA_POS_LABELS = {
-    "NOUN": "නාමපදය", "VERB": "ක්‍රියාපදය", "ADJ": "විශේෂණය",
-    "ADV": "ක්‍රියා විශේෂණය", "PROPN": "විශේෂ නාමය", "PRON": "සර්වනාමය",
-    "DET": "නිශ්චායකය", "ADP": "පරිසර්ගය", "CCONJ": "සම්බන්ධක",
-    "SCONJ": "අශ්‍රිත සම්බන්ධක", "PART": "ඛණ්ඩය", "AUX": "සහායක ක්‍රියාව",
-    "NUM": "සංඛ්‍යාව", "PUNCT": "විරාම ලකුණ", "SYM": "සංකේතය",
-    "INTJ": "විස්මය පදය", "X": "වෙනත්",
+    "NOUN": "නාමපදය",         "VERB": "ක්‍රියාපදය",       "ADJ":   "විශේෂණය",
+    "ADV":  "ක්‍රියා විශේෂණය","PROPN":"විශේෂ නාමය",        "PRON":  "සර්වනාමය",
+    "DET":  "නිශ්චායකය",      "ADP":  "පරිසර්ගය",          "CCONJ": "සම්බන්ධක",
+    "SCONJ":"අශ්‍රිත සම්බන්ධක","PART":"ඛණ්ඩය",             "AUX":   "සහායක ක්‍රියාව",
+    "NUM":  "සංඛ්‍යාව",        "PUNCT":"විරාම ලකුණ",        "SYM":   "සංකේතය",
+    "INTJ": "විස්මය පදය",     "X":    "වෙනත්",
 }
 
 EN_POS_LABELS = {
-    "NOUN": "Noun", "VERB": "Verb", "ADJ": "Adjective", "ADV": "Adverb",
-    "PROPN": "Proper Noun", "PRON": "Pronoun", "DET": "Determiner",
-    "ADP": "Preposition", "CCONJ": "Conjunction", "SCONJ": "Subordinating Conjunction",
-    "PART": "Particle", "AUX": "Auxiliary Verb", "NUM": "Number",
-    "PUNCT": "Punctuation", "SYM": "Symbol", "INTJ": "Interjection", "X": "Other",
+    "NOUN": "Noun",      "VERB":  "Verb",         "ADJ":   "Adjective",
+    "ADV":  "Adverb",    "PROPN": "Proper Noun",  "PRON":  "Pronoun",
+    "DET":  "Determiner","ADP":   "Preposition",  "CCONJ": "Conjunction",
+    "SCONJ":"Subordinating Conjunction",           "PART":  "Particle",
+    "AUX":  "Auxiliary Verb",                      "NUM":   "Number",
+    "PUNCT":"Punctuation","SYM":  "Symbol",        "INTJ":  "Interjection",
+    "X":    "Other",
 }
 
 
 # ─── Shared Helpers ───────────────────────────────────────────────────
 
 def _safe_truncate(text: str, max_chars: int = 400) -> str:
+    """Truncate at word boundary, safe for Unicode text."""
     if len(text) <= max_chars:
         return text
     truncated = text[:max_chars]
@@ -125,18 +150,18 @@ def _safe_truncate(text: str, max_chars: int = 400) -> str:
 
 def _get_sentiment(text: str, lang: str) -> dict:
     try:
-        clf = _get_sentiment_pipeline()
+        clf    = _get_sentiment_pipeline()
         result = clf(_safe_truncate(text))[0]
-        label = result["label"].lower()
+        label  = result["label"].lower()
         label_map = {
-            "positive": {"English": "Positive", "Tamil": "நேர்மறை", "Sinhala": "ධනාත්මක"},
+            "positive": {"English": "Positive", "Tamil": "நேர்மறை",  "Sinhala": "ධනාත්මක"},
             "negative": {"English": "Negative", "Tamil": "எதிர்மறை", "Sinhala": "ඍණාත්මක"},
             "neutral":  {"English": "Neutral",  "Tamil": "நடுநிலை",  "Sinhala": "උදාසීන"},
         }
         return {
             "label":    label_map.get(label, {}).get(lang, result["label"]),
             "label_en": result["label"],
-            "score":    round(result["score"], 3),
+            "score":    float(round(float(result["score"]), 3)),  # force native float
         }
     except Exception as e:
         print(f"[Sentiment] Failed: {e}", flush=True)
@@ -159,7 +184,7 @@ def _get_ner(text: str, lang: str) -> list:
                 "text":     ent["word"],
                 "label":    NER_MAP.get(group, {}).get(lang, group),
                 "label_en": group,
-                "score":    round(ent["score"], 3),
+                "score":    float(round(float(ent["score"]), 3)),  # force native float
             })
     except Exception as e:
         print(f"[NER] Failed: {e}", flush=True)
@@ -172,20 +197,20 @@ def _get_classification(text: str, lang: str) -> dict:
         "Tamil":   ["அரசியல்", "விளையாட்டு", "தொழில்நுட்பம்", "சுகாதாரம்", "கல்வி", "வணிகம்", "பொழுதுபோக்கு", "அறிவியல்"],
         "Sinhala": ["දේශපාලනය", "ක්‍රීඩා", "තාක්ෂණය", "සෞඛ්‍යය", "අධ්‍යාපනය", "ව්‍යාපාරය", "විනෝදාස්වාදය", "විද්‍යාව"],
     }
-    en_labels = labels_map["English"]
+    en_labels     = labels_map["English"]
     native_labels = labels_map.get(lang, en_labels)
     try:
-        clf = _get_classification_pipeline()
+        clf    = _get_classification_pipeline()
         result = clf(_safe_truncate(text), candidate_labels=en_labels)
         return {
             "label":    native_labels[en_labels.index(result["labels"][0])],
             "label_en": result["labels"][0],
-            "score":    round(result["scores"][0], 3),
+            "score":    float(round(float(result["scores"][0]), 3)),  # force native float
             "all": [
                 {
                     "label":    native_labels[en_labels.index(l)],
                     "label_en": l,
-                    "score":    round(s, 3),
+                    "score":    float(round(float(s), 3)),  # force native float
                 }
                 for l, s in zip(result["labels"], result["scores"])
             ],
@@ -209,7 +234,7 @@ def _analyze_tamil(text: str, max_chars: int = 100_000) -> dict:
     for sentence in doc.sentences:
         sentences.append(sentence.text.strip())
         for word in sentence.words:
-            pos = word.upos or "X"
+            pos       = word.upos or "X"
             pos_label = TAMIL_POS_LABELS.get(pos, pos)
             if pos != "PUNCT":
                 token_texts.append(word.text)
@@ -255,7 +280,7 @@ def _sinhala_pos(word: str) -> str:
     if word in pronouns:
         return "PRON"
     verb_suffixes = ["කරයි", "කරනවා", "කළා", "යයි", "යනවා", "ගියා", "නවා", "වෙනවා", "වුණා"]
-    adj_suffixes = ["වූ", "ඇති", "නැති", "හොඳ", "ලොකු", "කුඩා"]
+    adj_suffixes  = ["වූ", "ඇති", "නැති", "හොඳ", "ලොකු", "කුඩා"]
     noun_suffixes = ["යා", "යන්", "වල", "ගේ", "ට", "ම", "ක්", "කම"]
     for s in verb_suffixes:
         if word.endswith(s):
@@ -279,7 +304,7 @@ def _analyze_sinhala(text: str, max_chars: int = 100_000) -> dict:
         token = token.strip()
         if not token:
             continue
-        pos = _sinhala_pos(token)
+        pos       = _sinhala_pos(token)
         pos_label = SINHALA_POS_LABELS.get(pos, pos)
         if pos != "PUNCT":
             token_texts.append(token)
@@ -287,7 +312,7 @@ def _analyze_sinhala(text: str, max_chars: int = 100_000) -> dict:
         pos_counter[pos_label] += 1
         token_details.append({
             "text": token, "lemma": token, "pos": pos,
-            "tag": pos_label, "is_stop": False, "morph": "",
+            "tag":  pos_label, "is_stop": False, "morph": "",
         })
 
     return {
@@ -344,19 +369,19 @@ def _analyze_english(text: str, max_chars: int = 100_000) -> dict:
         sentences.append(sent.text.strip())
 
     NER_LABELS = {
-        "PERSON": "Person", "ORG": "Organization", "GPE": "Country/City",
-        "LOC": "Location", "DATE": "Date", "TIME": "Time",
-        "MONEY": "Money", "PERCENT": "Percentage", "PRODUCT": "Product",
-        "EVENT": "Event", "LAW": "Law", "LANGUAGE": "Language",
-        "NORP": "Nationality/Group", "CARDINAL": "Number",
+        "PERSON": "Person",       "ORG":      "Organization", "GPE":  "Country/City",
+        "LOC":    "Location",     "DATE":     "Date",         "TIME": "Time",
+        "MONEY":  "Money",        "PERCENT":  "Percentage",   "PRODUCT": "Product",
+        "EVENT":  "Event",        "LAW":      "Law",          "LANGUAGE": "Language",
+        "NORP":   "Nationality/Group",        "CARDINAL": "Number",
     }
     entities = [
         {
-            "text": ent.text,
-            "label": NER_LABELS.get(ent.label_, ent.label_),
+            "text":     ent.text,
+            "label":    NER_LABELS.get(ent.label_, ent.label_),
             "label_en": ent.label_,
-            "start": ent.start_char,
-            "end": ent.end_char,
+            "start":    ent.start_char,
+            "end":      ent.end_char,
         }
         for ent in doc.ents
     ]
@@ -385,6 +410,7 @@ def _analyze_english(text: str, max_chars: int = 100_000) -> dict:
 # ─── Main Entry Point ─────────────────────────────────────────────────
 
 def analyze(text: str, max_chars: int = 100_000) -> dict:
+    """Auto-detect language and run full NLP pipeline."""
     if not text or not text.strip():
         return {
             "language": "unknown", "language_display": "Unknown",
@@ -394,10 +420,15 @@ def analyze(text: str, max_chars: int = 100_000) -> dict:
             "sentiment": {}, "entities": [], "classification": {},
             "spelling_corrections": [],
         }
+
     lang = _detect_language(text)
     print(f"[NLP] Detected language: {lang}", flush=True)
+
     if lang == "Tamil":
-        return _analyze_tamil(text, max_chars)
-    if lang == "Sinhala":
-        return _analyze_sinhala(text, max_chars)
-    return _analyze_english(text, max_chars)
+        result = _analyze_tamil(text, max_chars)
+    elif lang == "Sinhala":
+        result = _analyze_sinhala(text, max_chars)
+    else:
+        result = _analyze_english(text, max_chars)
+
+    return _to_python(result)  # ← converts ALL numpy types before MongoDB insert
