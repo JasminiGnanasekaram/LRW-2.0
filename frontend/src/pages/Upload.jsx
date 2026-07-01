@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { uploadDocument } from "../api";
 
@@ -12,19 +12,24 @@ export default function Upload() {
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // ── NEW: summary states ──
   const [summary, setSummary] = useState("");
   const [summaryLoading, setSummaryLoading] = useState(false);
+
   const navigate = useNavigate();
 
   const getAcceptAttribute = () => {
-    if (fileType === "pdf") return ".pdf";
+    if (fileType === "pdf")   return ".pdf";
     if (fileType === "image") return ".jpg,.jpeg,.png,.webp,.bmp,.pdf";
     if (fileType === "audio") return ".mp3,.wav,.m4a,.ogg";
-    if (fileType === "text") return ".txt";
+    if (fileType === "text")  return ".txt";
     return "*";
   };
 
+  // ── NEW: fetch AI summary from backend ──
   const fetchSummary = async (selectedFile, selectedType, selectedUrl) => {
+    console.log("fetchSummary called!", selectedType);
     setSummaryLoading(true);
     setSummary("");
 
@@ -39,11 +44,12 @@ export default function Upload() {
         });
         const data = await res.json();
         setSummary(data.summary);
+
       } else {
         formData.append("file", selectedFile);
         const endpoint = {
-          text: "text",
-          pdf: "pdf",
+          text:  "text",
+          pdf:   "pdf",
           image: "image",
           audio: "audio",
         }[selectedType];
@@ -55,6 +61,7 @@ export default function Upload() {
         const data = await res.json();
         setSummary(data.summary);
       }
+
     } catch (err) {
       setSummary("Could not generate summary. Please try again.");
     } finally {
@@ -66,16 +73,9 @@ export default function Upload() {
     e.preventDefault();
     setError("");
 
-    if (fileType === "url") {
-      if (!url.trim()) return setError("URL is required for URL uploads.");
-    } else {
-      if (!file) return setError("Please choose a file to upload.");
-    }
-
-    // Manual validation for required metadata fields
     if (!meta.source.trim()) return setError("Source is required.");
-    if (!meta.domain.trim()) return setError("Domain is required.");
-    if (!meta.license) return setError("License is required.");
+    if (!meta.domain.trim())  return setError("Domain is required.");
+    if (!meta.license)        return setError("License is required.");
 
     setLoading(true);
     try {
@@ -85,13 +85,7 @@ export default function Upload() {
         url: fileType === "url" ? url : undefined,
         metadata: meta,
       });
-
-      const documentId = result?.id || result?.raw_document_id;
-      if (documentId) {
-        navigate(`/documents/${documentId}`);
-      } else {
-        navigate("/dashboard");
-      }
+      navigate(`/documents/${result.id}`);
     } catch (err) {
       setError(err.response?.data?.detail || "Upload failed. Please try again.");
     } finally {
@@ -100,11 +94,11 @@ export default function Upload() {
   };
 
   const FILE_TYPES = [
-    { value: "text", label: "Text file", desc: ".txt" },
-    { value: "pdf", label: "PDF", desc: ".pdf" },
-    { value: "image", label: "Image", desc: ".jpg, .jpeg, .png, .webp" },
-    { value: "audio", label: "Audio", desc: ".mp3, .wav, .m4a, .ogg" },
-    { value: "url", label: "URL", desc: "web page" },
+    { value: "text",  label: "Text file", desc: ".txt" },
+    { value: "pdf",   label: "PDF",       desc: ".pdf" },
+    { value: "image", label: "Image",     desc: ".jpg, .png, .pdf" },
+    { value: "audio", label: "Audio",     desc: ".mp3, .wav, .m4a" },
+    { value: "url",   label: "URL",       desc: "web page" },
   ];
 
   return (
@@ -118,9 +112,11 @@ export default function Upload() {
 
       <form onSubmit={submit}>
 
-        {/* ÔöÇÔöÇ Source type card ÔöÇÔöÇ */}
+        {/* ── Source type card ── */}
         <div className="card fade-up fade-up-1">
           <div className="card-title">Source type</div>
+
+          {/* File type selector buttons */}
           <div style={{
             display: "grid",
             gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))",
@@ -148,7 +144,7 @@ export default function Upload() {
                   onChange={() => {
                     setFileType(value);
                     setFile(null);
-                    setSummary("");
+                    setSummary("");      // ← reset summary on type change
                   }}
                   style={{ display: "none" }}
                 />
@@ -160,6 +156,7 @@ export default function Upload() {
             ))}
           </div>
 
+          {/* File / URL input */}
           <div style={{ marginTop: 20 }}>
             {fileType === "url" ? (
               <div className="field">
@@ -171,6 +168,7 @@ export default function Upload() {
                     setUrl(e.target.value);
                     setSummary("");
                   }}
+                  // ← trigger summary when user finishes typing URL
                   onBlur={(e) => {
                     if (e.target.value.trim()) {
                       fetchSummary(null, "url", e.target.value.trim());
@@ -197,26 +195,24 @@ export default function Upload() {
                       const selected = e.target.files[0];
                       setFile(selected);
                       setSummary("");
+                      // ← trigger summary as soon as file is chosen
                       if (selected) fetchSummary(selected, fileType, null);
                     }}
                     required
                   />
-                  <div style={{ fontSize: 28, marginBottom: 8 }}>{fileType === "audio" ? "­ƒÄº" : "­ƒôé"}</div>
+                  <div style={{ fontSize: 28, marginBottom: 8 }}>📂</div>
                   <div style={{ fontWeight: 600, fontSize: 14, color: "var(--ink-mid)" }}>
                     {file ? file.name : "Click to choose a file"}
                   </div>
                   {!file && (
-                    <p className="muted" style={{ marginTop: 4 }}>
-                      {fileType === "audio"
-                        ? "Upload an audio file for speech-to-text transcription. Supported: mp3, wav, m4a, ogg."
-                        : "or drag and drop"}
-                    </p>
+                    <p className="muted" style={{ marginTop: 4 }}>or drag and drop</p>
                   )}
                 </div>
               </div>
             )}
           </div>
 
+          {/* ── NEW: AI Summary block ── */}
           {summaryLoading && (
             <div style={{
               marginTop: 16,
@@ -229,8 +225,8 @@ export default function Upload() {
               alignItems: "center",
               gap: 8,
             }}>
-              <span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>ÔÅ│</span>
-              Generating content summaryÔÇª
+              <span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>⏳</span>
+              Generating content summary…
             </div>
           )}
 
@@ -254,14 +250,15 @@ export default function Upload() {
                 fontSize: 13,
                 color: "var(--forest)",
               }}>
-                ­ƒôï Content Summary
+                📋 Content Summary
               </div>
               <p style={{ margin: 0, color: "var(--ink)" }}>{summary}</p>
             </div>
           )}
+
         </div>
 
-        {/* ÔöÇÔöÇ Metadata card ÔöÇÔöÇ */}
+        {/* ── Metadata card ── */}
         <div className="card fade-up fade-up-2" style={{ marginTop: 20 }}>
           <div className="card-title">
             Metadata{" "}
@@ -285,15 +282,38 @@ export default function Upload() {
                 />
               </div>
               <div className="field">
-                <label>DOMAIN <span style={{ color: "red" }}>*</span></label>
-                <input
-                  type="text"
-                  value={meta.domain}
-                  onChange={(e) => setMeta({ ...meta, domain: e.target.value })}
-                  placeholder="news, science, law..."
-                  required
-                />
-              </div>
+                  <label>DOMAIN <span style={{ color: "red" }}>*</span></label>
+                  <select
+                    value={meta.domain}
+                    onChange={(e) => setMeta({ ...meta, domain: e.target.value })}
+                    required
+                    style={{
+                      width: "100%",
+                      padding: "8px 12px",
+                      border: "1px solid var(--border)",
+                      borderRadius: "var(--radius)",
+                      background: "var(--paper)",
+                      color: meta.domain ? "var(--ink)" : "var(--ink-lt)",
+                      fontSize: 14,
+                      height: 38,
+                    }}
+                  >
+                    <option value="">Select domain...</option>
+                    <option value="news">News</option>
+                    <option value="science">Science</option>
+                    <option value="law">Law</option>
+                    <option value="technology">Technology</option>
+                    <option value="health">Health</option>
+                    <option value="education">Education</option>
+                    <option value="finance">Finance</option>
+                    <option value="business">Business</option>
+                    <option value="sports">Sports</option>
+                    <option value="entertainment">Entertainment</option>
+                    <option value="government">Government</option>
+                    <option value="research">Research</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
               <div className="field">
                 <label>PUBLICATION DATE</label>
                 <input
@@ -326,34 +346,44 @@ export default function Upload() {
                 />
               </div>
               <div className="field">
-                <label>LICENSE <span style={{ color: "red" }}>*</span></label>
-                <select
-                  value={meta.license}
-                  onChange={(e) => setMeta({ ...meta, license: e.target.value })}
-                  required
-                  style={{
-                    width: "100%",
-                    padding: "8px 12px",
-                    border: "1px solid var(--border)",
-                    borderRadius: "var(--radius)",
-                    background: "var(--paper)",
-                    color: meta.license ? "var(--ink)" : "var(--ink-lt)",
-                    fontSize: 14,
-                    height: 38,
-                  }}
-                >
-                  <option value="">Select license...</option>
-                  <option value="open">Open</option>
-                  <option value="restricted">Restricted</option>
-                </select>
-              </div>
+                  <label>LICENSE <span style={{ color: "red" }}>*</span></label>
+                  <select
+                    value={meta.license}
+                    onChange={(e) => setMeta({ ...meta, license: e.target.value })}
+                    required
+                    style={{
+                      width: "100%",
+                      padding: "8px 12px",
+                      border: "1px solid var(--border)",
+                      borderRadius: "var(--radius)",
+                      background: "var(--paper)",
+                      color: meta.license ? "var(--ink)" : "var(--ink-lt)",
+                      fontSize: 14,
+                      height: 38,
+                    }}
+                  >
+                    <option value="">Select license...</option>
+                    <option value="public-domain">Public Domain</option>
+                    <option value="cc0">CC0</option>
+                    <option value="cc-by">CC BY</option>
+                    <option value="cc-by-sa">CC BY-SA</option>
+                    <option value="cc-by-nc">CC BY-NC</option>
+                    <option value="cc-by-nd">CC BY-ND</option>
+                    <option value="mit">MIT</option>
+                    <option value="apache-2.0">Apache 2.0</option>
+                    <option value="gpl-3.0">GPL 3.0</option>
+                    <option value="proprietary">Proprietary</option>
+                    <option value="restricted">Restricted</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
             </div>
           </div>
         </div>
 
         {error && <div className="alert-error fade-up">{error}</div>}
 
-        {/* ÔöÇÔöÇ Action buttons ÔöÇÔöÇ */}
+        {/* ── Action buttons ── */}
         <div
           className="fade-up fade-up-3"
           style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 20 }}
@@ -367,7 +397,7 @@ export default function Upload() {
             className="btn btn-primary"
             style={{ minWidth: 160 }}
           >
-            {loading ? "ProcessingÔÇª" : "Upload & Process ÔåÆ"}
+            {loading ? "Processing…" : "Upload & Process →"}
           </button>
         </div>
 

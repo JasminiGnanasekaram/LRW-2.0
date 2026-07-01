@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { verifyEmail } from "../api";
 
@@ -7,39 +7,20 @@ export default function VerifyEmail() {
   const [status, setStatus] = useState("verifying");
   const [error, setError] = useState("");
   const token = params.get("token");
-  const redirectStatus = params.get("status");
-  const verificationStarted = useRef(false);
+  const called = useRef(false);
 
   useEffect(() => {
-    if (redirectStatus === "success") {
-      setStatus("ok");
-      return;
-    }
-    if (redirectStatus === "invalid") {
-      setStatus("error");
-      setError("Invalid or expired verification link.");
-      return;
-    }
-    if (!token) {
-      setStatus("error");
-      setError("Missing token.");
-      return;
-    }
-    if (verificationStarted.current) {
-      return;
-    }
+    if (!token) { setStatus("error"); setError("Missing token."); return; }
+    if (called.current) return;
+    called.current = true;
 
-    verificationStarted.current = true;
     verifyEmail(token)
-      .then(() => {
-        setStatus("ok");
-        window.history.replaceState(null, "", "/verify-email?status=success");
-      })
+      .then(() => setStatus("ok"))
       .catch((e) => {
         setStatus("error");
         setError(e.response?.data?.detail || "Verification failed.");
       });
-  }, [token, redirectStatus]);
+  }, [token]);
 
   return (
     <div className="auth-shell">
@@ -63,6 +44,9 @@ export default function VerifyEmail() {
             <div style={{ fontSize: 48, marginBottom: 16 }}>❌</div>
             <h2 style={{ fontFamily: "var(--font-head)", color: "var(--forest)", marginBottom: 8 }}>Verification failed</h2>
             <div className="alert-error" style={{ textAlign: "left" }}>{error}</div>
+            <Link to="/resend-verification" className="btn btn-primary btn-full" style={{ marginTop: 8 }}>
+              Resend verification link
+            </Link>
             <Link to="/login" className="btn btn-ghost btn-full" style={{ marginTop: 8 }}>Back to sign in</Link>
           </>
         )}

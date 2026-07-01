@@ -6,18 +6,23 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [unverified, setUnverified] = useState(false);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   const submit = async (e) => {
     e.preventDefault();
-    setError(""); setLoading(true);
+    setError(""); setUnverified(false); setLoading(true);
     try {
       await login(email, password);
-      window.dispatchEvent(new CustomEvent('lrw_user_updated'));
       navigate("/");
     } catch (err) {
-      setError(err.response?.data?.detail || "Login failed. Please check your credentials.");
+      const detail = err.response?.data?.detail || "Login failed. Please check your credentials.";
+      const isUnverified =
+        err.response?.status === 403 &&
+        /not.verified|unverified|verify/i.test(detail);
+      if (isUnverified) setUnverified(true);
+      setError(detail);
     } finally {
       setLoading(false);
     }
@@ -54,6 +59,17 @@ export default function Login() {
           </div>
 
           {error && <div className="alert-error">{error}</div>}
+
+          {unverified && (
+            <div style={{ marginTop: 8, textAlign: "center", fontSize: 13 }}>
+              <Link
+                to={`/resend-verification${email ? `?email=${encodeURIComponent(email)}` : ""}`}
+                style={{ color: "var(--forest)", fontWeight: 600 }}
+              >
+                Resend verification email →
+              </Link>
+            </div>
+          )}
 
           <button
             disabled={loading}

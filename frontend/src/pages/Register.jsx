@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { register } from "../api";
 
@@ -46,9 +46,8 @@ export default function Register() {
       await register(name, email, password, role);
       setDone(true);
     } catch (err) {
-      const detail = err.response?.data?.detail || err.response?.data || err.message || "Registration failed. Please try again.";
-      setError(detail);
-    } finally {
+      setError(err.response?.data?.detail || "Registration failed. Please try again.");
+    }finally {
       setLoading(false);
     }
   };
@@ -57,7 +56,7 @@ export default function Register() {
     return (
       <div className="auth-shell">
         <div className="auth-card fade-up" style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>­ƒô¼</div>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>📬</div>
           <h2 style={{ fontFamily: "var(--font-head)", color: "var(--forest)", marginBottom: 8 }}>
             Check your inbox
           </h2>
@@ -85,9 +84,9 @@ export default function Register() {
         </p>
         <div style={{ marginTop: 48, display: "flex", flexDirection: "column", gap: 16 }}>
           {[
-            { icon: "­ƒôä", label: "Multi-format support", desc: "Text, PDF, images, audio, URLs" },
-            { icon: "­ƒöì", label: "Full-text search", desc: "Filter by POS, type, date, domain" },
-            { icon: "­ƒôè", label: "NLP insights", desc: "Token counts, POS distribution, top words" },
+            { icon: "📄", label: "Multi-format support", desc: "Text, PDF, images, audio, URLs" },
+            { icon: "🔍", label: "Full-text search", desc: "Filter by POS, type, date, domain" },
+            { icon: "📊", label: "NLP insights", desc: "Token counts, POS distribution, top words" },
           ].map(f => (
             <div key={f.label} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
               <span style={{ fontSize: 20, marginTop: 2 }}>{f.icon}</span>
@@ -158,7 +157,7 @@ export default function Register() {
               className="btn btn-primary btn-full"
               style={{ marginTop: 8 }}
             >
-              {loading ? "Creating accountÔÇª" : "Create account ÔåÆ"}
+              {loading ? "Creating account…" : "Create account →"}
             </button>
           </form>
 
