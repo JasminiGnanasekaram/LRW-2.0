@@ -1,4 +1,4 @@
-from motor.motor_asyncio import AsyncIOMotorClient
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorGridFSBucket
 from config import get_settings
 
 settings = get_settings()
@@ -21,6 +21,11 @@ processing_jobs_col = db["processing_jobs"]
 outputs_col = db["outputs"]
 email_verifications_col = db["email_verifications"]
 password_resets_col = db["password_resets"]
+
+
+def get_gridfs_bucket():
+    """Create GridFS bucket lazily (must be called inside async context)."""
+    return AsyncIOMotorGridFSBucket(db)
 
 
 async def init_indexes():

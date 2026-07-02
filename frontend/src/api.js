@@ -102,6 +102,49 @@ export async function deleteDocument(id) {
   return data;
 }
 
+function triggerBlobDownload(blobData, filename) {
+  const blob = blobData instanceof Blob ? blobData : new Blob([blobData]);
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+}
+
+async function downloadExport(url, filename) {
+  const token = localStorage.getItem("lrw_token");
+  const requestUrl = new URL(url, window.location.origin);
+  requestUrl.searchParams.set("t", Date.now().toString());
+
+  const response = await fetch(requestUrl.toString(), {
+    headers: token
+      ? { Authorization: `Bearer ${token}`, "Cache-Control": "no-cache" }
+      : { "Cache-Control": "no-cache" },
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText || "Download failed");
+  }
+
+  const blob = await response.blob();
+  triggerBlobDownload(blob, filename);
+}
+
+export async function exportDocument(id, format = "json", filename = "document") {
+  const ext = format === "csv" ? "csv" : "json";
+  await downloadExport(`${API_BASE}/documents/${id}/export?format=${format}`, `${filename}.${ext}`);
+}
+
+export async function exportAll(format = "csv") {
+  const ext = format === "csv" ? "csv" : "json";
+  await downloadExport(`${API_BASE}/documents/export/all?format=${format}`, `lrw_documents.${ext}`);
+}
+
 export function exportDocumentURL(id, format = "json") {
   return `${API_BASE}/documents/${id}/export?format=${format}`;
 }

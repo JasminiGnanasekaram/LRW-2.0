@@ -12,6 +12,8 @@ from database import (
     nlp_analysis_col,
     sources_col,
 )
+# 1. Correct import statement: import from services directory
+from services.summarizer import get_text_summary
 from services import extraction, cleaning, nlp
 from services.csv_export import document_to_csv, documents_summary_csv
 from utils.security import get_current_user
@@ -28,6 +30,7 @@ def _doc_out(raw, cleaned=None, meta=None, analysis=None):
         "filename": raw.get("filename"),
         "file_type": raw.get("file_type"),
         "raw_text": raw.get("raw_text"),
+        "summary": raw.get("summary"), 
         "cleaned_text": cleaned.get("text") if cleaned else None,
         "metadata": meta.get("data") if meta else None,
         "nlp": analysis.get("data") if analysis else None,
@@ -44,8 +47,8 @@ async def upload(
     user: dict = Depends(get_current_user),
 ):
     """Upload a document or URL. Runs extraction + cleaning + NLP synchronously (MVP)."""
-    #if user["role"] == "guest":
-        #raise HTTPException(status_code=403, detail="Guests cannot upload")
+    # if user["role"] == "guest":
+    #     raise HTTPException(status_code=403, detail="Guests cannot upload")
 
     settings = get_settings()
     if settings.USE_CELERY:
@@ -96,7 +99,7 @@ async def upload(
             raise HTTPException(status_code=400, detail="file required")
         content = await file.read()
         try:
-            raw_text = extraction.extract(file_type, content=content)
+            raw_text = extraction.extract(file_type, content=content, filename=file.filename)
         except NotImplementedError as e:
             raise HTTPException(status_code=501, detail=str(e))
         except Exception as e:
@@ -116,6 +119,7 @@ async def upload(
         "filename": filename,
         "file_type": file_type,
         "raw_text": raw_text,
+        "summary": get_text_summary(raw_text),
         "created_at": datetime.utcnow(),
     }
     raw_res = await raw_documents_col.insert_one(raw_doc)
@@ -186,6 +190,7 @@ async def get_document(doc_id: str, user: dict = Depends(get_current_user)):
         analysis = await nlp_analysis_col.find_one({"cleaned_document_id": cleaned["_id"]})
     return _doc_out(raw, cleaned, meta, analysis)
 
+
 @router.delete("/{doc_id}")
 async def delete_document(doc_id: str, user: dict = Depends(get_current_user)):
     # Find the document
@@ -208,6 +213,8 @@ async def delete_document(doc_id: str, user: dict = Depends(get_current_user)):
         await nlp_analysis_col.delete_one({"cleaned_document_id": cleaned["_id"]})
 
     return {"detail": "Deleted successfully"}
+
+
 @router.get("/{doc_id}/export")
 async def export_document(doc_id: str, format: str = "json", user: dict = Depends(get_current_user)):
     """Export a processed document. format = json | csv."""
