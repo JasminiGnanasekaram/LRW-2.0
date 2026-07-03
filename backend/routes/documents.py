@@ -215,7 +215,12 @@ async def export_document(doc_id: str, format: str = "json", user: dict = Depend
     safe_doc = json.loads(json.dumps(doc, default=str))
 
     if format == "json":
-        return JSONResponse(content=safe_doc)
+        json_text = json.dumps(safe_doc, indent=2, ensure_ascii=False)
+        return PlainTextResponse(
+            json_text,
+            media_type="application/json",
+            headers={"Content-Disposition": f'attachment; filename="{(doc.get("filename") or "document").rsplit(".", 1)[0]}.json"'},
+        )
     if format == "csv":
         csv_text = document_to_csv(safe_doc)
         filename = (doc.get("filename") or "document").rsplit(".", 1)[0] + ".csv"
