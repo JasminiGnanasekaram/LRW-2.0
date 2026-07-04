@@ -8,11 +8,14 @@ from bs4 import BeautifulSoup
 import fitz  # pymupdf
 from PIL import Image
 
+from config import get_settings
+
 router = APIRouter(prefix="/summarize", tags=["summarize"])
 
+settings = get_settings()
+
 # ── Groq setup ────────────────────────────────────────
-client = Groq(api_key="..................")  # ← paste your real key here
-# Groq client configured elsewhere
+client = Groq(api_key=settings.GROQ_API_KEY)
 MODEL = "llama-3.3-70b-versatile"
 
 PROMPT = "Summarize the following content in 2 informative sentences. Each sentence must be under 20 words. Stop after 2 sentences:\n\n"
