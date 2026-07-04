@@ -15,7 +15,15 @@ router = APIRouter(prefix="/summarize", tags=["summarize"])
 settings = get_settings()
 
 # ── Groq setup ────────────────────────────────────────
-client = Groq(api_key=settings.GROQ_API_KEY)
+def get_groq_client():
+    if not settings.GROQ_API_KEY:
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=500,
+            detail="Groq API key is not configured. Please set GROQ_API_KEY in your backend/.env file."
+        )
+    return Groq(api_key=settings.GROQ_API_KEY)
+
 MODEL = "llama-3.3-70b-versatile"
 
 PROMPT = "Summarize the following content in 2 informative sentences. Each sentence must be under 20 words. Stop after 2 sentences:\n\n"
@@ -37,6 +45,7 @@ def compress_image(image_bytes: bytes, mime_type: str = None) -> str:
 
 # ── Helper: summarize text ────────────────────────────
 def summarize(text: str) -> str:
+    client = get_groq_client()
     response = client.chat.completions.create(
         model=MODEL,
         messages=[
@@ -57,6 +66,7 @@ def summarize(text: str) -> str:
 
 # ── Helper: summarize image (base64) ─────────────────
 def summarize_image_b64(b64: str) -> str:
+    client = get_groq_client()
     response = client.chat.completions.create(
         model="meta-llama/llama-4-scout-17b-16e-instruct",
         messages=[
@@ -165,6 +175,7 @@ async def summarize_image(file: UploadFile = File(...)):
 @router.post("/audio")
 async def summarize_audio(file: UploadFile = File(...)):
     content = await file.read()
+    client = get_groq_client()
 
     # Transcribe audio using Whisper
     transcription = client.audio.transcriptions.create(
