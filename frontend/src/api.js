@@ -16,6 +16,7 @@ api.interceptors.response.use(
     if (err.response?.status === 401) {
       localStorage.removeItem("lrw_token");
       localStorage.removeItem("lrw_user");
+      window.dispatchEvent(new CustomEvent("lrw_user_updated", { detail: null }));
       if (!window.location.pathname.includes("/login")) {
         window.location.href = "/login";
       }
@@ -62,6 +63,7 @@ export async function login(email, password) {
   });
   localStorage.setItem("lrw_token", data.access_token);
   localStorage.setItem("lrw_user", JSON.stringify(data.user));
+  window.dispatchEvent(new CustomEvent("lrw_user_updated", { detail: data.user }));
   return data;
 }
 
@@ -69,6 +71,7 @@ export async function logout() {
   try { await api.post("/auth/logout"); } catch { }
   localStorage.removeItem("lrw_token");
   localStorage.removeItem("lrw_user");
+  window.dispatchEvent(new CustomEvent("lrw_user_updated", { detail: null }));
 }
 
 export function currentUser() {
