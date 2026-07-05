@@ -117,6 +117,27 @@ a:hover { text-decoration: underline; }
   background: rgba(255,255,255,0.08) !important;
 }
 
+/* Dropdown & Avatar Upload styling */
+.topbar-dropdown-item:hover {
+  background: var(--ivory) !important;
+  color: var(--forest) !important;
+  text-decoration: none !important;
+}
+
+.topbar-dropdown-logout-item:hover {
+  background: #fdecea !important;
+  color: var(--danger) !important;
+  text-decoration: none !important;
+}
+
+.avatar-hover-container:hover .avatar-overlay {
+  opacity: 1 !important;
+}
+
+.avatar-hover-container:hover {
+  transform: scale(1.02);
+}
+
 /* ── Page Layout ─────────────────────────────────────────── */
 .page {
   max-width: 960px;

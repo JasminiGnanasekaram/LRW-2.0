@@ -1,16 +1,26 @@
 """NLP analysis: tokenization, POS tagging, morphological analysis."""
 from functools import lru_cache
 from collections import Counter
-
+import re
 
 
 def _detect_language(text: str) -> str:
+    # Check Unicode blocks first for Sinhala and Tamil as standard langdetect lacks Sinhala support
+    sinhala_chars = sum(1 for char in text[:10000] if '\u0d80' <= char <= '\u0dff')
+    tamil_chars = sum(1 for char in text[:10000] if '\u0b80' <= char <= '\u0bff')
+    
+    if sinhala_chars > 0 and sinhala_chars > tamil_chars:
+        return "Sinhala"
+    if tamil_chars > 0 and tamil_chars > sinhala_chars:
+        return "Tamil"
+
     try:
         from langdetect import detect
         code = detect(text[:10000])
         return {
             "en": "English",
             "ta": "Tamil",
+            "si": "Sinhala",
             "es": "Spanish",
             "fr": "French",
             "de": "German",
@@ -140,12 +150,15 @@ def _analyze_tamil(text: str, max_chars: int = 100_000) -> dict:
 
         pos_counter[pos] += 1
         token_details.append({
-            "text": token,        # ✅ original word preserved
+            "text": token,
             "lemma": token,
             "pos": pos,
             "tag": POS_LABELS.get(pos, pos),
             "is_stop": False,
         })
+
+    sentences = [s.strip() for s in re.split(r'[.!।?]\s*', text) if s.strip()]
+    sentence_count = len(sentences)
 
     unique_tokens = len({t.lower() for t in token_texts})
     top_keywords = [word for word, _ in word_freq.most_common(5)]
@@ -160,7 +173,133 @@ def _analyze_tamil(text: str, max_chars: int = 100_000) -> dict:
         "token_details": token_details[:5000],
         "pos_distribution": dict(pos_counter),
         "top_words": word_freq.most_common(50),
+        "sentences": sentences,
+        "sentence_count": sentence_count,
     }
+
+
+def _analyze_sinhala(text: str, max_chars: int = 100_000) -> dict:
+    """Sinhala NLP using simple whitespace tokenization + suffix-based POS."""
+    print("DEBUG: _analyze_sinhala called")
+    print("DEBUG: first 100 chars:", text[:100])
+
+    raw_tokens = text[:max_chars].split()
+
+    def get_sinhala_pos(word: str) -> str:
+        # Punctuation
+        if all(c in '.,!?;:।॥\'"()[]{}' for c in word):
+            return "PUNCT"
+        # Numbers
+        if word.isdigit():
+            return "NUM"
+
+        # Pronouns
+        pronouns = [
+            "මම", "අපි", "ඔයා", "ඔබ", "ඔහු", "ඇය", "එයා", "එය", "ඔවුන්",
+            "මේ", "මෙය", "මෙයා", "ඒ", "එය", "අර", "මොකක්ද", "කවුද", "කුමක්ද"
+        ]
+        if word in pronouns:
+            return "PRON"
+
+        # Verb suffixes (longest first)
+        verb_suffixes = [
+            "නවා", "නෙවා", "න්නම්", "න්නෙමු", "න්නෙමි", "න්නෙහිය",
+            "නවාය", "නවාද", "න්නට", "න්න", "ති", "තී", "තෙමු", "තෙමි",
+            "ගත්තා", "ගත්තෙමි", "ගත්තෙමු", "කළා", "කරන", "කරපු", "කරලා",
+            "ලැබේ", "ලැබූ", "වෙයි", "වෙන්න", "යයි", "යති", "යමු", "යමි"
+        ]
+        for s in verb_suffixes:
+            if word.endswith(s) and len(word) > len(s):
+                return "VERB"
+
+        # Adjective suffixes or words
+        adjectives = [
+            "ලස්සන", "හොඳ", "නරක", "අලුත්", "පරණ", "ලොකු", "කුඩා", "මහත්",
+            "දුප්පත්", "පොහොසත්", "ලෙහෙසි", "අමාරු", "ප්‍රධාන", "විශේෂ"
+        ]
+        if word in adjectives:
+            return "ADJ"
+            
+        adj_suffixes = ["සහගත", "ශීලී", "පූර්ණ", "මය"]
+        for s in adj_suffixes:
+            if word.endswith(s) and len(word) > len(s):
+                return "ADJ"
+
+        # Adverb suffixes or words
+        adverbs = [
+            "ඉක්මනින්", "හොඳින්", "සෙමින්", "ලෙස", "නිතරම", "කවදාවත්",
+            "පමණක්", "නැවත", "දැන්", "පසුව", "එතැන", "මෙතැන"
+        ]
+        if word in adverbs:
+            return "ADV"
+
+        adv_suffixes = ["ලෙස", "ආකාරයෙන්"]
+        for s in adv_suffixes:
+            if word.endswith(s) and len(word) > len(s):
+                return "ADV"
+
+        # Noun suffixes
+        noun_suffixes = [
+            "වල්", "වල්වල", "වල්වලට", "වල්වලින්", "ගේ", "ට", "ගෙන්",
+            "මෙන්", "ක්", "ක", "කු", "ගැන", "ළඟ", "සමඟ", "මත", "තුළ"
+        ]
+        for s in noun_suffixes:
+            if word.endswith(s) and len(word) > len(s):
+                return "NOUN"
+
+        return "NOUN"  # default
+
+    token_details = []
+    token_texts = []
+    pos_counter = Counter()
+    word_freq = Counter()
+
+    POS_LABELS = {
+        "NOUN": "නාමපද", "VERB": "ක්‍රියාපද", "ADJ": "නාමවිශේෂණ",
+        "ADV": "ක්‍රියාවිශේෂණ", "PRON": "සර්වනාම", "NUM": "සංඛ්‍යා",
+        "PUNCT": "ලකුණු",
+    }
+
+    for token in raw_tokens:
+        token = token.strip()
+        if not token:
+            continue
+
+        pos = get_sinhala_pos(token)
+
+        if pos != "PUNCT":
+            token_texts.append(token)
+            word_freq[token.lower()] += 1
+
+        pos_counter[pos] += 1
+        token_details.append({
+            "text": token,
+            "lemma": token,
+            "pos": pos,
+            "tag": POS_LABELS.get(pos, pos),
+            "is_stop": False,
+        })
+
+    sentences = [s.strip() for s in re.split(r'[.!।?]\s*', text) if s.strip()]
+    sentence_count = len(sentences)
+
+    unique_tokens = len({t.lower() for t in token_texts})
+    top_keywords = [word for word, _ in word_freq.most_common(5)]
+
+    return {
+        "language": "Sinhala",
+        "tokens": token_texts,
+        "token_count": len(token_texts),
+        "unique_tokens": unique_tokens,
+        "lemmas": token_texts,
+        "top_keywords": top_keywords,
+        "token_details": token_details[:5000],
+        "pos_distribution": dict(pos_counter),
+        "top_words": word_freq.most_common(50),
+        "sentences": sentences,
+        "sentence_count": sentence_count,
+    }
+
 
 def _analyze_english(text: str, max_chars: int = 100_000) -> dict:
     """English NLP using spaCy."""
@@ -190,6 +329,9 @@ def _analyze_english(text: str, max_chars: int = 100_000) -> dict:
         pos_counter[pos_value] += 1
         word_freq[(token.lemma_ or token.text).lower()] += 1
 
+    sentences = [sent.text.strip() for sent in doc.sents if sent.text.strip()]
+    sentence_count = len(sentences)
+
     unique_tokens = len({t.lower() for t in token_texts})
     top_keywords = [word for word, _ in word_freq.most_common(5)]
 
@@ -203,6 +345,8 @@ def _analyze_english(text: str, max_chars: int = 100_000) -> dict:
         "token_details": token_details[:5000],
         "pos_distribution": dict(pos_counter),
         "top_words": word_freq.most_common(50),
+        "sentences": sentences,
+        "sentence_count": sentence_count,
     }
 
 
@@ -212,4 +356,6 @@ def analyze(text: str, max_chars: int = 100_000) -> dict:
     print("DEBUG: detected language:", lang)  # ← add this line
     if lang == "Tamil":
         return _analyze_tamil(text, max_chars)
+    if lang == "Sinhala":
+        return _analyze_sinhala(text, max_chars)
     return _analyze_english(text, max_chars)

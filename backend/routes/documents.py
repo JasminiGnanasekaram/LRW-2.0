@@ -28,6 +28,7 @@ def _doc_out(raw, cleaned=None, meta=None, analysis=None):
         "filename": raw.get("filename"),
         "file_type": raw.get("file_type"),
         "raw_text": raw.get("raw_text"),
+        "summary": raw.get("summary"),
         "cleaned_text": cleaned.get("text") if cleaned else None,
         "metadata": meta.get("data") if meta else None,
         "nlp": analysis.get("data") if analysis else None,
@@ -155,6 +156,23 @@ async def upload(
     }
     await nlp_analysis_col.insert_one(analysis_doc)
 
+    # 6. Generate Summary (non-blocking thread pool execution)
+    summary = ""
+    try:
+        from fastapi.concurrency import run_in_threadpool
+        from routes.summarize import summarize
+        summary = await run_in_threadpool(summarize, cleaned_text[:5000])
+    except Exception as e:
+        import logging
+        logging.getLogger("uvicorn.error").warning(f"Failed to generate summary during upload: {e}")
+        summary = ""
+
+    await raw_documents_col.update_one(
+        {"_id": raw_res.inserted_id},
+        {"$set": {"summary": summary}}
+    )
+    raw_doc["summary"] = summary
+
     return _doc_out(raw_doc, cleaned_doc, meta_doc, analysis_doc)
 
 
@@ -184,6 +202,26 @@ async def get_document(doc_id: str, user: dict = Depends(get_current_user)):
     analysis = None
     if cleaned:
         analysis = await nlp_analysis_col.find_one({"cleaned_document_id": cleaned["_id"]})
+
+    # Auto-generate summary if missing and cleaned text is available
+    if not raw.get("summary") and cleaned and cleaned.get("text"):
+        summary = ""
+        try:
+            from fastapi.concurrency import run_in_threadpool
+            from routes.summarize import summarize
+            summary = await run_in_threadpool(summarize, cleaned.get("text")[:5000])
+        except Exception as e:
+            import logging
+            logging.getLogger("uvicorn.error").warning(f"Failed to auto-generate missing summary: {e}")
+            summary = ""
+        
+        if summary:
+            await raw_documents_col.update_one(
+                {"_id": raw["_id"]},
+                {"$set": {"summary": summary}}
+            )
+            raw["summary"] = summary
+
     return _doc_out(raw, cleaned, meta, analysis)
 
 @router.delete("/{doc_id}")

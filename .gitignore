@@ -28,3 +28,10 @@ dist/
 .idea/
 backend/gmail_credentials.json
 backend/gmail_token.pickle
+
+# Environment files
+.env
+*.env
+
+backend/.env
+frontend/.env

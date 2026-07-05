@@ -43,6 +43,7 @@ def _public_user(user_doc: dict, base_url: str | None = None) -> dict:
         "address": user_doc.get("address"),
         "date_of_birth": user_doc.get("date_of_birth"),
         "gender": user_doc.get("gender"),
+        "bio": user_doc.get("bio"),
         "profile_image": profile_image,
         "avatar_url": avatar_url,
         "created_at": user_doc.get("created_at"),
@@ -56,6 +57,7 @@ class ProfileUpdateRequest(BaseModel):
     date_of_birth: Optional[str] = None
     address: Optional[str] = None
     gender: Optional[str] = None
+    bio: Optional[str] = None
 
 
 class ChangePasswordRequest(BaseModel):

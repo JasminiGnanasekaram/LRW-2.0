@@ -66,7 +66,7 @@ export async function login(email, password) {
 }
 
 export async function logout() {
-  try { await api.post("/auth/logout"); } catch {}
+  try { await api.post("/auth/logout"); } catch { }
   localStorage.removeItem("lrw_token");
   localStorage.removeItem("lrw_user");
 }
@@ -74,6 +74,22 @@ export async function logout() {
 export function currentUser() {
   const u = localStorage.getItem("lrw_user");
   return u ? JSON.parse(u) : null;
+}
+
+export async function updateProfile(patch) {
+  const { data } = await api.patch("/auth/me", patch);
+  localStorage.setItem("lrw_user", JSON.stringify(data));
+  return data;
+}
+
+export async function uploadAvatar(file) {
+  const form = new FormData();
+  form.append("avatar", file);
+  const { data } = await api.post("/auth/me/avatar", form, {
+    headers: { "Content-Type": "multipart/form-data" }
+  });
+  localStorage.setItem("lrw_user", JSON.stringify(data.user));
+  return data.user;
 }
 
 // ---- Documents ----

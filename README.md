@@ -42,10 +42,11 @@ python -m spacy download en_core_web_sm
 
 cp .env.example .env   # edit secrets/SMTP if you have them
 
-uvicorn main:app --reload --port 8000
+python main.py
+# or: uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-API at `http://localhost:8000`. Swagger UI at `http://localhost:8000/docs`.
+API at `http://localhost:8000` (or `http://<your-ip>:8000` for network devices). Swagger UI at `/docs`.
 
 ### Optional: Celery worker (async processing)
 

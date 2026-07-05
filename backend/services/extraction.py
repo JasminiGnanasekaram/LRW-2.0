@@ -14,9 +14,13 @@ try:
 except ImportError:  # pragma: no cover - optional dependency
     pytesseract = None
 
-# Prefer the common Windows Tesseract installation if present.
-if pytesseract is not None and os.path.exists(r"C:\Program Files\Tesseract-OCR\tesseract.exe"):
-    pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+# Prefer configured tesseract path, falling back to common Windows path if present.
+if pytesseract is not None:
+    settings = get_settings()
+    if getattr(settings, "TESSERACT_CMD", None):
+        pytesseract.pytesseract.tesseract_cmd = settings.TESSERACT_CMD
+    elif os.path.exists(r"C:\Program Files\Tesseract-OCR\tesseract.exe"):
+        pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
 
 def extract_from_text(content: bytes, encoding: str = "utf-8") -> str:

@@ -42,6 +42,7 @@ class DocumentOut(BaseModel):
     file_type: str  # text | pdf | image | audio | url
     raw_text: Optional[str] = None
     cleaned_text: Optional[str] = None
+    summary: Optional[str] = None
     metadata: Optional[dict] = None
     nlp: Optional[dict] = None
     created_at: datetime
