@@ -335,14 +335,14 @@ export default function DocumentView() {
                   (e.label_en==="PER"||e.label==="Person")        ? "#eff6ff" :
                   (e.label_en==="ORG"||e.label==="Organization")   ? "#fff7ed" :
                   (e.label_en==="LOC"||e.label==="Location"||e.label==="Country/City") ? "#f0fdf4" :
-                  (e.label==="Date"||e.label==="Time")             ? "#fefce8" :
-                  (e.label==="Money")                              ? "#fdf4ff" : "#f4f4f4";
+                  (e.label_en==="DATE"||e.label==="Date"||e.label==="Time")             ? "#fefce8" :
+                  (e.label_en==="MONEY"||e.label==="Money")                              ? "#fdf4ff" : "#f4f4f4";
                 const dot =
                   (e.label_en==="PER"||e.label==="Person")        ? "#3b82f6" :
                   (e.label_en==="ORG"||e.label==="Organization")   ? "#f97316" :
                   (e.label_en==="LOC"||e.label==="Location"||e.label==="Country/City") ? "#22c55e" :
-                  (e.label==="Date"||e.label==="Time")             ? "#eab308" :
-                  (e.label==="Money")                              ? "#a855f7" : "#a8a29e";
+                  (e.label_en==="DATE"||e.label==="Date"||e.label==="Time")             ? "#eab308" :
+                  (e.label_en==="MONEY"||e.label==="Money")                              ? "#a855f7" : "#a8a29e";
                 return (
                   <span key={i} title={`Score: ${e.score}`} style={{
                     display:"inline-flex", alignItems:"center", gap:6,

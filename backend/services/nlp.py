@@ -350,12 +350,174 @@ def _analyze_english(text: str, max_chars: int = 100_000) -> dict:
     }
 
 
+def _get_sentiment(text: str, lang: str) -> dict:
+    try:
+        from routes.summarize import get_groq_client, MODEL
+        client = get_groq_client()
+        
+        system_content = (
+            "You are a sentiment analysis assistant. Analyze the sentiment of the provided text. "
+            "Determine if it is positive, negative, or neutral. "
+            "Respond ONLY with a JSON object containing these keys:\n"
+            "- 'label_en': 'positive' or 'negative' or 'neutral'\n"
+            "- 'label': The label translated to the text's language (Tamil: 'நேர்மறை'/'எதிர்மறை'/'நடுநிலை', Sinhala: 'ධනාත්මක'/'සෘණාත්මක'/'මධ්‍යස්ථ', English: 'Positive'/'Negative'/'Neutral')\n"
+            "- 'score': A float between 0.0 and 1.0 representing confidence."
+        )
+        
+        response = client.chat.completions.create(
+            model=MODEL,
+            messages=[
+                {"role": "system", "content": system_content},
+                {"role": "user", "content": text[:2000]}
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.1,
+            max_tokens=100
+        )
+        
+        import json
+        res = json.loads(response.choices[0].message.content)
+        return {
+            "label_en": res.get("label_en", "neutral"),
+            "label": res.get("label", "Neutral"),
+            "score": float(res.get("score", 0.5))
+        }
+    except Exception as e:
+        import logging
+        logging.getLogger("uvicorn.error").warning(f"Error in sentiment analysis: {e}")
+        # Fallback to a neutral dictionary
+        lbl = "Neutral"
+        if lang == "Tamil":
+            lbl = "நடுநிலை"
+        elif lang == "Sinhala":
+            lbl = "මධ්‍යස්ථ"
+        return {
+            "label_en": "neutral",
+            "label": lbl,
+            "score": 0.5
+        }
+
+
+def _get_classification(text: str, lang: str) -> dict:
+    try:
+        from routes.summarize import get_groq_client, MODEL
+        client = get_groq_client()
+        
+        system_content = (
+            "You are a text classification assistant. Analyze the provided text and classify it into 3-5 relevant categories or topics. "
+            "Respond ONLY with a JSON object containing a single key 'all', which is a list of objects. "
+            "Each object must have:\n"
+            "- 'label': The name of the category/topic, translated to the text's language (Tamil: e.g. 'தொழில்நுட்பம்', Sinhala: e.g. 'තාක්ෂණය', English: e.g. 'Technology').\n"
+            "- 'score': A float between 0.0 and 1.0 representing confidence. "
+            "Sort the list in descending order of score."
+        )
+        
+        response = client.chat.completions.create(
+            model=MODEL,
+            messages=[
+                {"role": "system", "content": system_content},
+                {"role": "user", "content": text[:2000]}
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.1,
+            max_tokens=150
+        )
+        
+        import json
+        res = json.loads(response.choices[0].message.content)
+        items = res.get("all", [])
+        processed = []
+        for item in items:
+            if isinstance(item, dict) and "label" in item:
+                processed.append({
+                    "label": str(item["label"]),
+                    "score": float(item.get("score", 0.5))
+                })
+        if not processed:
+            lbl = "General"
+            if lang == "Tamil":
+                lbl = "பொதுவானது"
+            elif lang == "Sinhala":
+                lbl = "පොදු"
+            processed = [{"label": lbl, "score": 1.0}]
+            
+        return {"all": processed}
+    except Exception as e:
+        import logging
+        logging.getLogger("uvicorn.error").warning(f"Error in text classification: {e}")
+        lbl = "General"
+        if lang == "Tamil":
+            lbl = "பொதுவானது"
+        elif lang == "Sinhala":
+            lbl = "පොදු"
+        return {"all": [{"label": lbl, "score": 1.0}]}
+
+
+def _get_entities(text: str, lang: str) -> list:
+    try:
+        from routes.summarize import get_groq_client, MODEL
+        client = get_groq_client()
+        
+        system_content = (
+            "You are a named entity recognition (NER) assistant. Extract all named entities from the text. "
+            "Respond ONLY with a JSON object containing a single key 'entities', which is a list of objects. "
+            "Each object must have:\n"
+            "- 'text': The exact entity text from the source text (e.g. 'Colombo', 'John Doe').\n"
+            "- 'label_en': The category code: 'PER' (Person), 'ORG' (Organization), 'LOC' (Location), 'DATE' (Date/Time), 'MONEY' (Money), or 'MISC' (Other).\n"
+            "- 'label': The category name translated to the text's language:\n"
+            "  * English: 'Person'/'Organization'/'Location'/'Date'/'Money'/'Other'\n"
+            "  * Tamil: 'நபர்'/'நிறுவனம்'/'இடம்'/'தேதி'/'பணம்'/'மற்றவை'\n"
+            "  * Sinhala: 'පුද්ගල'/'සංවිධාන'/'ස්ථාන'/'දිනය'/'මුදල්'/'වෙනත්'\n"
+            "- 'score': 1.0 (confidence score).\n"
+            "Do not include any explanation or markdown formatting."
+        )
+        
+        response = client.chat.completions.create(
+            model=MODEL,
+            messages=[
+                {"role": "system", "content": system_content},
+                {"role": "user", "content": text[:2000]}
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.1,
+            max_tokens=250
+        )
+        
+        import json
+        res = json.loads(response.choices[0].message.content)
+        items = res.get("entities", [])
+        processed = []
+        for item in items:
+            if isinstance(item, dict) and "text" in item and "label_en" in item:
+                processed.append({
+                    "text": str(item["text"]),
+                    "label_en": str(item["label_en"]),
+                    "label": str(item.get("label", "Other")),
+                    "score": float(item.get("score", 1.0))
+                })
+        return processed
+    except Exception as e:
+        import logging
+        logging.getLogger("uvicorn.error").warning(f"Error in NER extraction: {e}")
+        return []
+
+
 def analyze(text: str, max_chars: int = 100_000) -> dict:
     """Auto-detect language and run appropriate NLP pipeline."""
     lang = _detect_language(text)
-    print("DEBUG: detected language:", lang)  # ← add this line
+    print("DEBUG: detected language:", lang)
+    
     if lang == "Tamil":
-        return _analyze_tamil(text, max_chars)
-    if lang == "Sinhala":
-        return _analyze_sinhala(text, max_chars)
-    return _analyze_english(text, max_chars)
+        res = _analyze_tamil(text, max_chars)
+    elif lang == "Sinhala":
+        res = _analyze_sinhala(text, max_chars)
+    else:
+        res = _analyze_english(text, max_chars)
+        
+    # Inject sentiment analysis
+    res["sentiment"] = _get_sentiment(text, lang)
+    # Inject text classification
+    res["classification"] = _get_classification(text, lang)
+    # Inject named entities
+    res["entities"] = _get_entities(text, lang)
+    return res

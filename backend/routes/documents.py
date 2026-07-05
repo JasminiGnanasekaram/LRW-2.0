@@ -202,6 +202,28 @@ async def get_document(doc_id: str, user: dict = Depends(get_current_user)):
     analysis = None
     if cleaned:
         analysis = await nlp_analysis_col.find_one({"cleaned_document_id": cleaned["_id"]})
+        if not analysis or "sentiment" not in analysis.get("data", {}) or "classification" not in analysis.get("data", {}) or "entities" not in analysis.get("data", {}):
+            try:
+                from fastapi.concurrency import run_in_threadpool
+                analysis_data = await run_in_threadpool(nlp.analyze, cleaned.get("text") or "")
+                if analysis:
+                    await nlp_analysis_col.update_one(
+                        {"_id": analysis["_id"]},
+                        {"$set": {"data": analysis_data}}
+                    )
+                    analysis["data"] = analysis_data
+                else:
+                    analysis_doc = {
+                        "cleaned_document_id": cleaned["_id"],
+                        "data": analysis_data,
+                        "created_at": datetime.utcnow(),
+                    }
+                    res = await nlp_analysis_col.insert_one(analysis_doc)
+                    analysis_doc["_id"] = res.inserted_id
+                    analysis = analysis_doc
+            except Exception as e:
+                import logging
+                logging.getLogger("uvicorn.error").warning(f"Failed to lazily compute NLP data: {e}")
 
     # Auto-generate summary if missing and cleaned text is available
     if not raw.get("summary") and cleaned and cleaned.get("text"):
