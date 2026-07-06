@@ -46,6 +46,38 @@ def extract_from_pdf(content: bytes) -> str:
     return "\n\n".join(text_parts)
 
 
+def detect_pdf_type(content: bytes) -> str:
+    """Analyze PDF to determine its type: text_only, text_image, or image_only."""
+    import fitz  # PyMuPDF
+    
+    MIN_CHARS_PER_PAGE = 20  # Threshold for considering a page as having text
+    
+    doc = fitz.open(stream=content, filetype="pdf")
+    text_page_count = 0
+    image_page_count = 0
+    
+    for page in doc:
+        page_text = page.get_text().strip()
+        if len(page_text) >= MIN_CHARS_PER_PAGE:
+            text_page_count += 1
+        else:
+            image_page_count += 1
+    
+    doc.close()
+    
+    total_pages = text_page_count + image_page_count
+    if total_pages == 0:
+        return "text_only"  # Default to text_only if no pages
+    
+    # Determine type based on page composition
+    if image_page_count == 0:
+        return "text_only"  # All pages have text
+    elif text_page_count == 0:
+        return "image_only"  # All pages are images (scanned)
+    else:
+        return "text_image"  # Mixed: both text and image pages
+
+
 def extract_from_image(content: bytes) -> str:
     """OCR using Tesseract (supports English, Tamil, and Sinhala)."""
     from PIL import Image

@@ -16,6 +16,8 @@ from database import (
 )
 from services import extraction, cleaning, nlp
 from services.csv_export import document_to_csv, documents_summary_csv
+from services.summarizer import get_text_summary
+from services.extraction import detect_pdf_type
 from utils.security import get_current_user
 from config import get_settings
 from database import processing_jobs_col
@@ -56,15 +58,20 @@ async def _doc_out(raw, cleaned=None, meta=None, analysis=None):
     if not raw_text and raw.get("gridfs_id"):
         raw_text = await _fetch_text_gridfs(raw["gridfs_id"])
 
+    # Generate summary from raw text
+    summary = get_text_summary(raw_text) if raw_text else None
+
     return {
         "id":           str(raw["_id"]),
         "user_id":      str(raw["user_id"]),
         "filename":     raw.get("filename"),
         "file_type":    raw.get("file_type"),
+        "pdf_type":     raw.get("pdf_type"),
         "raw_text":     raw_text,
         "cleaned_text": cleaned.get("text") if cleaned else None,
         "metadata":     meta.get("data") if meta else None,
         "nlp":          analysis.get("data") if analysis else None,
+        "summary":      summary,
         "created_at":   raw.get("created_at"),
     }
 
@@ -119,6 +126,9 @@ async def upload(
         }
 
     # 1. Extract raw text (sync path)
+    pdf_type = None
+    content = None
+    
     if file_type == "url":
         if not url:
             raise HTTPException(status_code=400, detail="url field required for url uploads")
@@ -138,6 +148,13 @@ async def upload(
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Extraction failed: {e}")
         filename = file.filename
+        
+        # Detect PDF type if applicable
+        if file_type == "pdf":
+            try:
+                pdf_type = detect_pdf_type(content)
+            except Exception:
+                pdf_type = None  # If detection fails, leave it as None
 
     # 2. Save source
     src = await sources_col.insert_one({
@@ -166,6 +183,9 @@ async def upload(
         "gridfs_id":  gridfs_id,
         "created_at": datetime.utcnow(),
     }
+    if pdf_type:
+        raw_doc["pdf_type"] = pdf_type
+    
     raw_res        = await raw_documents_col.insert_one(raw_doc)
     raw_doc["_id"] = raw_res.inserted_id
 
