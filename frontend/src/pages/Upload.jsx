@@ -13,7 +13,7 @@ export default function Upload() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // ── NEW: summary states ──
+  // ── Summary states ──
   const [summary, setSummary] = useState("");
   const [summaryLoading, setSummaryLoading] = useState(false);
 
@@ -27,9 +27,8 @@ export default function Upload() {
     return "*";
   };
 
-  // ── NEW: fetch AI summary from backend ──
+  // ── Fetch summary from local backend ──
   const fetchSummary = async (selectedFile, selectedType, selectedUrl) => {
-    console.log("fetchSummary called!", selectedType);
     setSummaryLoading(true);
     setSummary("");
 
@@ -77,17 +76,25 @@ export default function Upload() {
     if (!meta.domain.trim())  return setError("Domain is required.");
     if (!meta.license)        return setError("License is required.");
 
+    if (fileType === "url") {
+      if (!url.trim()) return setError("URL is required for URL uploads.");
+    } else {
+      if (!file) return setError("Please choose a file to upload.");
+    }
+
     setLoading(true);
     try {
       const result = await uploadDocument({
         file,
         fileType,
-        url: fileType === "url" ? url : undefined,
+        url: fileType === "url" ? url.trim() : undefined,
         metadata: meta,
       });
       navigate(`/documents/${result.id}`);
     } catch (err) {
-      setError(err.response?.data?.detail || "Upload failed. Please try again.");
+      setError(
+        err.response?.data?.detail || err.message || "Upload failed. Please try again."
+      );
     } finally {
       setLoading(false);
     }
@@ -144,7 +151,7 @@ export default function Upload() {
                   onChange={() => {
                     setFileType(value);
                     setFile(null);
-                    setSummary("");      // ← reset summary on type change
+                    setSummary("");
                   }}
                   style={{ display: "none" }}
                 />
@@ -168,7 +175,6 @@ export default function Upload() {
                     setUrl(e.target.value);
                     setSummary("");
                   }}
-                  // ← trigger summary when user finishes typing URL
                   onBlur={(e) => {
                     if (e.target.value.trim()) {
                       fetchSummary(null, "url", e.target.value.trim());
@@ -195,7 +201,6 @@ export default function Upload() {
                       const selected = e.target.files[0];
                       setFile(selected);
                       setSummary("");
-                      // ← trigger summary as soon as file is chosen
                       if (selected) fetchSummary(selected, fileType, null);
                     }}
                     required
@@ -212,7 +217,7 @@ export default function Upload() {
             )}
           </div>
 
-          {/* ── NEW: AI Summary block ── */}
+          {/* ── Summary Loading indicator ── */}
           {summaryLoading && (
             <div style={{
               marginTop: 16,
@@ -230,6 +235,7 @@ export default function Upload() {
             </div>
           )}
 
+          {/* ── Summary Result block ── */}
           {summary && !summaryLoading && (
             <div style={{
               marginTop: 16,
