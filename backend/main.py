@@ -4,8 +4,8 @@ from contextlib import asynccontextmanager
 
 from config import get_settings
 from database import init_indexes
-from routes import auth, documents, search, admin, jobs
-from routes import summarize  
+# 1. Add summarize to imports
+from routes import auth, documents, search, admin, jobs, summarize 
 
 settings = get_settings()
 
@@ -36,7 +36,8 @@ app.include_router(documents.router)
 app.include_router(search.router)
 app.include_router(admin.router)
 app.include_router(jobs.router)
-app.include_router(summarize.router)  
+# 2. Register the summarize router
+app.include_router(summarize.router) 
 
 
 @app.get("/")

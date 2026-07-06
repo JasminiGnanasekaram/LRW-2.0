@@ -139,6 +139,7 @@ EN_POS_LABELS = {
 
 def _safe_truncate(text: str, max_chars: int = 400) -> str:
     """Truncate at word boundary, safe for Unicode text."""
+    text = (text or "").strip()
     if len(text) <= max_chars:
         return text
     truncated = text[:max_chars]
@@ -148,11 +149,25 @@ def _safe_truncate(text: str, max_chars: int = 400) -> str:
     return truncated
 
 
+def _has_meaningful_text(text: str) -> bool:
+    if not text or not text.strip():
+        return False
+    return any(ch.isalnum() for ch in text)
+
+
 def _get_sentiment(text: str, lang: str) -> dict:
+    if not _has_meaningful_text(text):
+        return {}
     try:
         clf    = _get_sentiment_pipeline()
-        result = clf(_safe_truncate(text))[0]
-        label  = result["label"].lower()
+        result = clf(_safe_truncate(text))
+        if not result:
+            return {}
+        if isinstance(result, list):
+            result = result[0] if result else {}
+        if not result or not result.get("label"):
+            return {}
+        label  = str(result["label"]).lower()
         label_map = {
             "positive": {"English": "Positive", "Tamil": "நேர்மறை",  "Sinhala": "ධනාත්මක"},
             "negative": {"English": "Negative", "Tamil": "எதிர்மறை", "Sinhala": "ඍණාත්මක"},
@@ -161,7 +176,7 @@ def _get_sentiment(text: str, lang: str) -> dict:
         return {
             "label":    label_map.get(label, {}).get(lang, result["label"]),
             "label_en": result["label"],
-            "score":    float(round(float(result["score"]), 3)),  # force native float
+            "score":    float(round(float(result.get("score", 0.0)), 3)),  # force native float
         }
     except Exception as e:
         print(f"[Sentiment] Failed: {e}", flush=True)
@@ -192,6 +207,8 @@ def _get_ner(text: str, lang: str) -> list:
 
 
 def _get_classification(text: str, lang: str) -> dict:
+    if not _has_meaningful_text(text):
+        return {}
     labels_map = {
         "English": ["Politics", "Sports", "Technology", "Health", "Education", "Business", "Entertainment", "Science"],
         "Tamil":   ["அரசியல்", "விளையாட்டு", "தொழில்நுட்பம்", "சுகாதாரம்", "கல்வி", "வணிகம்", "பொழுதுபோக்கு", "அறிவியல்"],
@@ -202,13 +219,17 @@ def _get_classification(text: str, lang: str) -> dict:
     try:
         clf    = _get_classification_pipeline()
         result = clf(_safe_truncate(text), candidate_labels=en_labels)
+        if not result or not result.get("labels") or not result.get("scores"):
+            return {}
+        top_label = result["labels"][0]
+        top_score = result["scores"][0]
         return {
-            "label":    native_labels[en_labels.index(result["labels"][0])],
-            "label_en": result["labels"][0],
-            "score":    float(round(float(result["scores"][0]), 3)),  # force native float
+            "label":    native_labels[en_labels.index(top_label)] if top_label in en_labels else top_label,
+            "label_en": top_label,
+            "score":    float(round(float(top_score), 3)),  # force native float
             "all": [
                 {
-                    "label":    native_labels[en_labels.index(l)],
+                    "label":    native_labels[en_labels.index(l)] if l in en_labels else l,
                     "label_en": l,
                     "score":    float(round(float(s), 3)),  # force native float
                 }
