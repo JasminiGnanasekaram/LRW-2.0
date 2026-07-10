@@ -30,8 +30,8 @@ settings = get_settings()
 def _public_user(user_doc: dict, base_url: str | None = None) -> dict:
     profile_image = user_doc.get("profile_image")
     avatar_url = None
-    if profile_image and base_url:
-        avatar_url = f"{base_url.rstrip('/')}/uploads/avatars/{profile_image}"
+    if profile_image:
+        avatar_url = f"/uploads/avatars/{profile_image}"
 
     return {
         "id": str(user_doc["_id"]),

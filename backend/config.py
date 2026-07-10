@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     WHISPER_MODEL: str = "base"
     REDIS_URL: str = "redis://localhost:6379/0"
     USE_CELERY: bool = False
+    DEV_SKIP_EMAIL_VERIFICATION: bool = False
 
     SMTP_HOST: str = ""
     SMTP_PORT: int = 587
