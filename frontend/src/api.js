@@ -16,9 +16,9 @@ api.interceptors.response.use(
     if (err.response?.status === 401) {
       localStorage.removeItem("lrw_token");
       localStorage.removeItem("lrw_user");
-      window.dispatchEvent(new CustomEvent("lrw_user_updated", { detail: null }));
       if (!window.location.pathname.includes("/login")) {
         window.location.href = "/login";
+        
       }
     }
     return Promise.reject(err);
@@ -63,36 +63,18 @@ export async function login(email, password) {
   });
   localStorage.setItem("lrw_token", data.access_token);
   localStorage.setItem("lrw_user", JSON.stringify(data.user));
-  window.dispatchEvent(new CustomEvent("lrw_user_updated", { detail: data.user }));
   return data;
 }
 
 export async function logout() {
-  try { await api.post("/auth/logout"); } catch { }
+  try { await api.post("/auth/logout"); } catch {}
   localStorage.removeItem("lrw_token");
   localStorage.removeItem("lrw_user");
-  window.dispatchEvent(new CustomEvent("lrw_user_updated", { detail: null }));
 }
 
 export function currentUser() {
   const u = localStorage.getItem("lrw_user");
   return u ? JSON.parse(u) : null;
-}
-
-export async function updateProfile(patch) {
-  const { data } = await api.patch("/auth/me", patch);
-  localStorage.setItem("lrw_user", JSON.stringify(data));
-  return data;
-}
-
-export async function uploadAvatar(file) {
-  const form = new FormData();
-  form.append("avatar", file);
-  const { data } = await api.post("/auth/me/avatar", form, {
-    headers: { "Content-Type": "multipart/form-data" }
-  });
-  localStorage.setItem("lrw_user", JSON.stringify(data.user));
-  return data.user;
 }
 
 // ---- Documents ----
@@ -122,7 +104,7 @@ export async function deleteDocument(id) {
 }
 
 function triggerBlobDownload(blobData, filename) {
-  const blob = blobData instanceof Blob ? blobData : new Blob([blobData]);
+  const blob = new Blob([blobData]);
   const url = window.URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -133,35 +115,22 @@ function triggerBlobDownload(blobData, filename) {
   window.URL.revokeObjectURL(url);
 }
 
-async function downloadExport(url, filename) {
-  const token = localStorage.getItem("lrw_token");
-  const requestUrl = new URL(url, window.location.origin);
-  requestUrl.searchParams.set("t", Date.now().toString());
-
-  const response = await fetch(requestUrl.toString(), {
-    headers: token
-      ? { Authorization: `Bearer ${token}`, "Cache-Control": "no-cache" }
-      : { "Cache-Control": "no-cache" },
-    cache: "no-store",
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(errorText || "Download failed");
-  }
-
-  const blob = await response.blob();
-  triggerBlobDownload(blob, filename);
-}
-
 export async function exportDocument(id, format = "json", filename = "document") {
+  const response = await api.get(`/documents/${id}/export`, {
+    params: { format },
+    responseType: "blob",
+  });
   const ext = format === "csv" ? "csv" : "json";
-  await downloadExport(`${API_BASE}/documents/${id}/export?format=${format}`, `${filename}.${ext}`);
+  triggerBlobDownload(response.data, `${filename}.${ext}`);
 }
 
 export async function exportAll(format = "csv") {
+  const response = await api.get("/documents/export/all", {
+    params: { format },
+    responseType: "blob",
+  });
   const ext = format === "csv" ? "csv" : "json";
-  await downloadExport(`${API_BASE}/documents/export/all?format=${format}`, `lrw_documents.${ext}`);
+  triggerBlobDownload(response.data, `lrw_documents.${ext}`);
 }
 
 // ---- Search ----
@@ -185,6 +154,14 @@ export async function adminUpdateUser(id, patch) {
 }
 export async function adminDeleteUser(id) {
   const { data } = await api.delete(`/admin/users/${id}`);
+  return data;
+}
+export async function adminListDocuments() {
+  const { data } = await api.get("/admin/documents");
+  return data;
+}
+export async function adminDeleteDocument(id) {
+  const { data } = await api.delete(`/admin/documents/${id}`);
   return data;
 }
 

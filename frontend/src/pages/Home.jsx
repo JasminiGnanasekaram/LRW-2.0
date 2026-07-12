@@ -5,7 +5,7 @@ const FEATURES = [
   { icon: "📊", title: "NLP analysis", desc: "Automatic tokenization, POS tagging, frequency counts, and distribution charts.", color: "#e6f1fb" },
   { icon: "🔍", title: "Full-text search", desc: "Filter across your corpus by keyword, POS, domain, date, license, and file type.", color: "#ede7f6" },
   { icon: "💾", title: "Flexible export", desc: "Download individual documents or your entire corpus as JSON or CSV.", color: "#fff4e0" },
-  { icon: "👥", title: "Role-based access", desc: "Admin, researcher, student, and guest roles with fine-grained permissions.", color: "#e1f5ee" },
+  { icon: "👥", title: "Role-based access", desc: "Guest and Researcher/ NLP Developer roles with fine-grained permissions.", color: "#e1f5ee" },
   { icon: "🔒", title: "License tagging", desc: "Mark every document as open, research-only, or restricted — searchable by license.", color: "#fce8e0" },
 ];
 
@@ -25,10 +25,35 @@ const SOURCES = [
 ];
 
 const ROLES = [
-  { name: "Admin", color: "#185FA5", desc: "Full access — manage users, system stats, and export everything." },
-  { name: "Researcher", color: "#3B6D11", desc: "Upload, analyze, search, and export. Full corpus access." },
-  { name: "Student", color: "#854F0B", desc: "Upload personal documents and explore the corpus for coursework." },
   { name: "Guest", color: "#5F5E5A", desc: "Read-only browsing of open-licensed documents without an account." },
+  { name: "Researcher/ NLP Developer", color: "#3B6D11", desc: "Upload, analyze, search, and export. Full corpus access." },
+];
+
+const FOOTER_COLUMNS = [
+  {
+    heading: "Product",
+    links: [
+      { label: "Upload", to: "/upload" },
+      { label: "Search", to: "/search" },
+      { label: "Sign in", to: "/login" },
+      { label: "Get started", to: "/register" },
+    ],
+  },
+  {
+    heading: "Company",
+    links: [
+      { label: "About", to: "/about" },
+      { label: "Contact", to: "/contact" },
+    ],
+  },
+  {
+    heading: "Legal",
+    links: [
+      { label: "Terms of Service", to: "/terms" },
+      { label: "Privacy Policy", to: "/privacy" },
+      { label: "Licenses", to: "/licenses" },
+    ],
+  },
 ];
 
 export default function Home() {
@@ -43,7 +68,7 @@ export default function Home() {
           borderRadius: 20, padding: "4px 16px", fontSize: 12,
           color: "rgba(255,255,255,0.75)", marginBottom: 28,
         }}>
-          Language Resource Workspace
+          Language Resource Workbench
         </div>
 
         <h1 style={{
@@ -85,7 +110,7 @@ export default function Home() {
           display: "flex", justifyContent: "center", gap: 48, marginTop: 56,
           paddingTop: 40, borderTop: "1px solid rgba(255,255,255,0.12)", flexWrap: "wrap",
         }}>
-          {[["5+", "Source formats"], ["NLP", "POS & tokenization"], ["CSV", "Export ready"], ["4", "User roles"]].map(([val, lbl]) => (
+          {[["5+", "Source formats"], ["NLP", "POS & tokenization"], ["CSV", "Export ready"], ["2", "User roles"]].map(([val, lbl]) => (
             <div key={lbl} style={{ textAlign: "center" }}>
               <div style={{ fontSize: 28, fontWeight: 700, color: "#fff", fontFamily: "var(--font-head)" }}>{val}</div>
               <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginTop: 3 }}>{lbl}</div>
@@ -178,7 +203,7 @@ export default function Home() {
             Built for every member of your team
           </h2>
           <p style={{ fontSize: 14, color: "var(--ink-lt)", maxWidth: 440, marginBottom: 32, lineHeight: 1.65 }}>
-            Four roles with the right level of access — from full system control to read-only corpus browsing.
+            Three roles with the right level of access — from full system control to read-only corpus browsing.
           </p>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14 }}>
             {ROLES.map(({ name, color, desc }) => (
@@ -229,17 +254,53 @@ export default function Home() {
       </section>
 
       {/* ── Footer ────────────────────────────────────────── */}
-      <footer style={{
-        background: "#111d16", padding: "24px 32px",
-        display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12,
-      }}>
-        <span style={{ fontFamily: "var(--font-head)", fontSize: 16, fontWeight: 700, color: "rgba(255,255,255,0.4)" }}>LRW</span>
-        <div style={{ display: "flex", gap: 20 }}>
-          {["Privacy", "Terms", "Contact"].map(l => (
-            <span key={l} style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", cursor: "pointer" }}>{l}</span>
+      <footer style={{ background: "#111d16", padding: "56px 32px 0" }}>
+        <div style={{
+          maxWidth: 960, margin: "0 auto", display: "grid",
+          gridTemplateColumns: "1.4fr repeat(3, 1fr)", gap: 32,
+          paddingBottom: 40, borderBottom: "1px solid rgba(255,255,255,0.08)",
+        }}>
+          <div>
+            <span style={{ fontFamily: "var(--font-head)", fontSize: 20, fontWeight: 700, color: "#fff" }}>
+              LR<span style={{ color: "var(--sage)" }}>W</span>
+            </span>
+            <p style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", marginTop: 12, lineHeight: 1.6, maxWidth: 240 }}>
+              A corpus management platform for uploading, processing, and analyzing language data.
+            </p>
+          </div>
+
+          {FOOTER_COLUMNS.map(({ heading, links }) => (
+            <div key={heading}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.55)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 16 }}>
+                {heading}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {links.map(({ label, to }) => (
+                  <Link
+                    key={label}
+                    to={to}
+                    style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}
+                  >
+                    {label}
+                  </Link>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
-        <span style={{ fontSize: 12, color: "rgba(255,255,255,0.2)" }}>Language Resource Workspace</span>
+
+        <div style={{
+          maxWidth: 960, margin: "0 auto", padding: "20px 0",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          flexWrap: "wrap", gap: 10,
+        }}>
+          <span style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>
+            © 2026 Language Resource Workbench. All rights reserved.
+          </span>
+          <span style={{ fontSize: 12, color: "rgba(255,255,255,0.25)" }}>
+            Built with FastAPI, React &amp; MongoDB
+          </span>
+        </div>
       </footer>
     </div>
   );

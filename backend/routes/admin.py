@@ -1,8 +1,9 @@
-"""Admin-only endpoints: user management, system stats, license catalog."""
+"""Admin-only endpoints: user management, system stats, license catalog, upload history."""
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from datetime import datetime
 from bson import ObjectId
+from bson.errors import InvalidId
 
 from database import (
     users_col, sessions_col, raw_documents_col,
@@ -71,6 +72,55 @@ async def delete_user(user_id: str, _: dict = Depends(admin_only)):
     if res.deleted_count == 0:
         raise HTTPException(status_code=404, detail="User not found")
     await sessions_col.delete_many({"user_id": ObjectId(user_id)})
+    return {"message": "Deleted"}
+
+
+# ----- Upload history -----
+def _to_object_id(value):
+    """user_id may be stored as ObjectId or string depending on the upload route — handle both."""
+    if isinstance(value, ObjectId):
+        return value
+    try:
+        return ObjectId(value)
+    except (InvalidId, TypeError):
+        return None
+
+
+@router.get("/documents")
+async def list_documents(limit: int = 200, _: dict = Depends(admin_only)):
+    cursor = raw_documents_col.find({}).sort("created_at", -1).limit(limit)
+    docs = [d async for d in cursor]
+
+    # Batch-fetch uploader info to avoid an N+1 query per document
+    user_oids = {oid for d in docs if (oid := _to_object_id(d.get("user_id"))) is not None}
+    users_by_id = {}
+    if user_oids:
+        async for u in users_col.find({"_id": {"$in": list(user_oids)}}):
+            users_by_id[str(u["_id"])] = {"name": u.get("name"), "email": u.get("email")}
+
+    result = []
+    for d in docs:
+        uid = str(d.get("user_id")) if d.get("user_id") else None
+        uploader = users_by_id.get(uid, {"name": "Unknown user", "email": "—"})
+        meta = d.get("metadata") or {}
+        result.append({
+            "id": str(d["_id"]),
+            "filename": d.get("filename", "—"),
+            "file_type": d.get("file_type", "—"),
+            "license": meta.get("license", "—"),
+            "domain": meta.get("domain", "—"),
+            "uploader_name": uploader["name"],
+            "uploader_email": uploader["email"],
+            "created_at": d.get("created_at"),
+        })
+    return result
+
+
+@router.delete("/documents/{document_id}")
+async def delete_document(document_id: str, _: dict = Depends(admin_only)):
+    res = await raw_documents_col.delete_one({"_id": ObjectId(document_id)})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Document not found")
     return {"message": "Deleted"}
 
 
