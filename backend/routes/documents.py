@@ -202,7 +202,13 @@ async def get_document(doc_id: str, user: dict = Depends(get_current_user)):
     analysis = None
     if cleaned:
         analysis = await nlp_analysis_col.find_one({"cleaned_document_id": cleaned["_id"]})
-        if not analysis or "sentiment" not in analysis.get("data", {}) or "classification" not in analysis.get("data", {}) or "entities" not in analysis.get("data", {}):
+        if (
+            not analysis
+            or "sentiment" not in analysis.get("data", {})
+            or "classification" not in analysis.get("data", {})
+            or "entities" not in analysis.get("data", {})
+            or "sentences" not in analysis.get("data", {})
+        ):
             try:
                 from fastapi.concurrency import run_in_threadpool
                 analysis_data = await run_in_threadpool(nlp.analyze, cleaned.get("text") or "")

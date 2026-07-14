@@ -157,7 +157,7 @@ def _analyze_tamil(text: str, max_chars: int = 100_000) -> dict:
             "is_stop": False,
         })
 
-    sentences = [s.strip() for s in re.split(r'[.!।?]\s*', text) if s.strip()]
+    sentences = [s.strip() for s in re.split(r'(?<=[.!।?\n\r])\s*', text) if s.strip()]
     sentence_count = len(sentences)
 
     unique_tokens = len({t.lower() for t in token_texts})
@@ -280,7 +280,7 @@ def _analyze_sinhala(text: str, max_chars: int = 100_000) -> dict:
             "is_stop": False,
         })
 
-    sentences = [s.strip() for s in re.split(r'[.!।?]\s*', text) if s.strip()]
+    sentences = [s.strip() for s in re.split(r'(?<=[.!।?\n\r])\s*', text) if s.strip()]
     sentence_count = len(sentences)
 
     unique_tokens = len({t.lower() for t in token_texts})
