@@ -14,6 +14,9 @@ import ResetPassword from "./pages/ResetPassword.jsx";
 import Home from "./pages/Home.jsx";
 import ResendVerification from "./pages/ResendVerification.jsx";
 import Profile from "./pages/Profile.jsx";
+import Privacy from "./pages/Privacy.jsx";
+import Terms from "./pages/Terms.jsx";
+import Contact from "./pages/Contact.jsx";
 
 function ProtectedRoute({ children, role }) {
   const u = currentUser();
@@ -50,7 +53,7 @@ function TopBar() {
   const isActive = (path) => location.pathname === path ? "active" : "";
 
   if (!user) {
-    const publicPages = ["/home", "/login", "/register", "/forgot-password", "/reset-password", "/verify-email"];
+    const publicPages = ["/home", "/login", "/register", "/forgot-password", "/reset-password", "/verify-email", "/privacy", "/terms", "/contact"];
     const isPublic = publicPages.some(p => location.pathname.startsWith(p));
     if (!isPublic) return null;
     if (["/login", "/register"].includes(location.pathname)) return null;
@@ -257,6 +260,9 @@ export default function App() {
       <TopBar />
       <Routes>
         <Route path="/home" element={<Home />} />
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/terms" element={<Terms />} />
+        <Route path="/contact" element={<Contact />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/verify-email" element={<VerifyEmail />} />

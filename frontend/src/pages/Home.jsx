@@ -425,11 +425,15 @@ export default function Home() {
       }}>
         <span style={{ fontFamily: "var(--font-head)", fontSize: 18, fontWeight: 700, color: "rgba(255,255,255,0.5)", letterSpacing: "-0.01em" }}>LRW</span>
         <div style={{ display: "flex", gap: 24 }}>
-          {["Privacy Policy", "Terms of Service", "Contact Support"].map(l => (
-            <span key={l} style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", cursor: "pointer", transition: "color 0.2s" }}
+          {[
+            { label: "Privacy Policy", path: "/privacy" },
+            { label: "Terms of Service", path: "/terms" },
+            { label: "Contact Support", path: "/contact" }
+          ].map(l => (
+            <Link key={l.label} to={l.path} style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", textDecoration: "none", transition: "color 0.2s" }}
             onMouseEnter={(e) => e.currentTarget.style.color = "#fff"}
             onMouseLeave={(e) => e.currentTarget.style.color = "rgba(255,255,255,0.4)"}
-            >{l}</span>
+            >{l.label}</Link>
           ))}
         </div>
         <span style={{ fontSize: 13, color: "rgba(255,255,255,0.3)" }}>&copy; {new Date().getFullYear()} Language Resource Workspace</span>
