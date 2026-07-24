@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_BASE = `http://${window.location.hostname}:8000`;
+const API_BASE = "/api";
 
 export const api = axios.create({ baseURL: API_BASE });
 
@@ -16,6 +16,7 @@ api.interceptors.response.use(
     if (err.response?.status === 401) {
       localStorage.removeItem("lrw_token");
       localStorage.removeItem("lrw_user");
+      window.dispatchEvent(new CustomEvent("lrw_user_updated", { detail: null }));
       if (!window.location.pathname.includes("/login")) {
         window.location.href = "/login";
       }
@@ -62,18 +63,36 @@ export async function login(email, password) {
   });
   localStorage.setItem("lrw_token", data.access_token);
   localStorage.setItem("lrw_user", JSON.stringify(data.user));
+  window.dispatchEvent(new CustomEvent("lrw_user_updated", { detail: data.user }));
   return data;
 }
 
 export async function logout() {
-  try { await api.post("/auth/logout"); } catch {}
+  try { await api.post("/auth/logout"); } catch { }
   localStorage.removeItem("lrw_token");
   localStorage.removeItem("lrw_user");
+  window.dispatchEvent(new CustomEvent("lrw_user_updated", { detail: null }));
 }
 
 export function currentUser() {
   const u = localStorage.getItem("lrw_user");
   return u ? JSON.parse(u) : null;
+}
+
+export async function updateProfile(patch) {
+  const { data } = await api.patch("/auth/me", patch);
+  localStorage.setItem("lrw_user", JSON.stringify(data));
+  return data;
+}
+
+export async function uploadAvatar(file) {
+  const form = new FormData();
+  form.append("avatar", file);
+  const { data } = await api.post("/auth/me/avatar", form, {
+    headers: { "Content-Type": "multipart/form-data" }
+  });
+  localStorage.setItem("lrw_user", JSON.stringify(data.user));
+  return data.user;
 }
 
 // ---- Documents ----

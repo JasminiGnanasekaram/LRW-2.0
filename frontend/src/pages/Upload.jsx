@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { uploadDocument } from "../api";
+import { uploadDocument, api } from "../api";
 
 export default function Upload() {
   const [fileType, setFileType] = useState("text");
@@ -37,11 +37,7 @@ export default function Upload() {
 
       if (selectedType === "url") {
         formData.append("url", selectedUrl);
-        const res = await fetch("http://localhost:8000/summarize/url", {
-          method: "POST",
-          body: formData,
-        });
-        const data = await res.json();
+        const { data } = await api.post("/summarize/url", formData);
         setSummary(data.summary);
 
       } else {
@@ -53,11 +49,7 @@ export default function Upload() {
           audio: "audio",
         }[selectedType];
 
-        const res = await fetch(`http://localhost:8000/summarize/${endpoint}`, {
-          method: "POST",
-          body: formData,
-        });
-        const data = await res.json();
+        const { data } = await api.post(`/summarize/${endpoint}`, formData);
         setSummary(data.summary);
       }
 

@@ -43,6 +43,7 @@ class DocumentOut(BaseModel):
     pdf_type: Optional[str] = None  # text_only | text_image | image_only (only for PDFs)
     raw_text: Optional[str] = None
     cleaned_text: Optional[str] = None
+    summary: Optional[str] = None
     metadata: Optional[dict] = None
     nlp: Optional[dict] = None
     summary: Optional[str] = None

@@ -84,16 +84,13 @@ export default function Register() {
         </p>
         <div style={{ marginTop: 48, display: "flex", flexDirection: "column", gap: 16 }}>
           {[
-            { icon: "📄", label: "Multi-format support", desc: "Text, PDF, images, audio, URLs" },
-            { icon: "🔍", label: "Full-text search", desc: "Filter by POS, type, date, domain" },
-            { icon: "📊", label: "NLP insights", desc: "Token counts, POS distribution, top words" },
+            { label: "Multi-format support", desc: "Text, PDF, images, audio, URLs" },
+            { label: "Full-text search", desc: "Filter by POS, type, date, domain" },
+            { label: "NLP insights", desc: "Token counts, POS distribution, top words" },
           ].map(f => (
-            <div key={f.label} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-              <span style={{ fontSize: 20, marginTop: 2 }}>{f.icon}</span>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: 14 }}>{f.label}</div>
-                <div style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", marginTop: 2 }}>{f.desc}</div>
-              </div>
+            <div key={f.label} style={{ display: "flex", flexDirection: "column" }}>
+              <div style={{ fontWeight: 600, fontSize: 14 }}>{f.label}</div>
+              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", marginTop: 2 }}>{f.desc}</div>
             </div>
           ))}
         </div>

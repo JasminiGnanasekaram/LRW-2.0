@@ -3,31 +3,31 @@ import sys
 import pickle
 import base64
 import os
+import ssl
+import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
-
-from google.auth.transport.requests import Request
-from googleapiclient.discovery import build
 
 from config import get_settings
 
 settings = get_settings()
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
-TOKEN_FILE = os.path.join(os.path.dirname(__file__), "..", "gmail_token.pickle")
-CREDS_FILE = os.path.join(os.path.dirname(__file__), "..", "gmail_credentials.json")
+GMAIL_DIR = os.path.join(os.path.dirname(__file__), "..", "gmail")
+TOKEN_FILE = os.path.join(GMAIL_DIR, "gmail_token.pickle")
+CREDS_FILE = os.path.join(GMAIL_DIR, "gmail_credentials.json")
 
 
 def generate_token(nbytes: int = 32) -> str:
     return secrets.token_urlsafe(nbytes)
 
 
-def expiry(minutes: int = 5) -> datetime:
+def expiry(minutes: int = 60) -> datetime:
     return datetime.utcnow() + timedelta(minutes=minutes)
 
 
-def _get_gmail_service():
+def _get_gmail_service(Request, build):
     creds = None
     if os.path.exists(TOKEN_FILE):
         with open(TOKEN_FILE, "rb") as f:
@@ -41,21 +41,37 @@ def _get_gmail_service():
     return build("gmail", "v1", credentials=creds)
 
 
-def send_email(to: str, subject: str, body: str) -> None:
-    if not os.path.exists(TOKEN_FILE):
-        print("\n" + "="*50, flush=True)
-        print("📧  DEV EMAIL — copy the link below", flush=True)
-        print("="*50, flush=True)
-        print(f"To:      {to}", flush=True)
-        print(f"Subject: {subject}", flush=True)
-        print("-"*50, flush=True)
-        print(body, flush=True)
-        print("="*50 + "\n", flush=True)
-        sys.stdout.flush()
-        return
+def _send_via_smtp(to: str, msg: MIMEMultipart) -> None:
+    smtp_host = settings.SMTP_HOST.strip()
+    smtp_port = settings.SMTP_PORT
+    smtp_user = settings.SMTP_USER.strip()
+    smtp_password = settings.SMTP_PASSWORD
+    from_addr = settings.SMTP_FROM or smtp_user or "no-reply@lrw.local"
 
-    try:
-        html_body = f"""
+    msg["From"] = f"Language Resource Workbench <{from_addr}>"
+    msg["To"] = to
+
+    context = ssl.create_default_context()
+    if smtp_port == 465:
+        with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context, timeout=10) as server:
+            if smtp_user and smtp_password:
+                server.login(smtp_user, smtp_password)
+            server.sendmail(from_addr, [to], msg.as_string())
+    else:
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
+            server.ehlo()
+            if smtp_port == 587:
+                server.starttls(context=context)
+                server.ehlo()
+            if smtp_user and smtp_password:
+                server.login(smtp_user, smtp_password)
+            server.sendmail(from_addr, [to], msg.as_string())
+
+    print(f"[email] ✅ Sent via SMTP to {to}", flush=True)
+
+
+def send_email(to: str, subject: str, body: str) -> None:
+    html_body = f"""
         <html>
         <body style="font-family: Arial, sans-serif; background: #f4f4f4; padding: 40px;">
           <div style="max-width: 480px; margin: 0 auto; background: #ffffff;
@@ -76,25 +92,46 @@ def send_email(to: str, subject: str, body: str) -> None:
         </html>
         """
 
-        msg = MIMEMultipart("alternative")
-        msg["From"] = f"Language Resource Workbench <{settings.SMTP_FROM}>"
-        msg["To"] = to
-        msg["Subject"] = subject
-        msg.attach(MIMEText(body, "plain"))
-        msg.attach(MIMEText(html_body, "html"))
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg.attach(MIMEText(body, "plain"))
+    msg.attach(MIMEText(html_body, "html"))
 
-        raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+    if settings.SMTP_HOST:
+        try:
+            _send_via_smtp(to, msg)
+            return
+        except Exception as e:
+            print(f"[email SMTP ERROR] ❌ {e}", flush=True)
 
-        service = _get_gmail_service()
-        service.users().messages().send(
-            userId="me",
-            body={"raw": raw}
-        ).execute()
+    if os.path.exists(TOKEN_FILE):
+        try:
+            from google.auth.transport.requests import Request
+            from googleapiclient.discovery import build
 
-        print(f"[email] ✅ Sent '{subject}' to {to}", flush=True)
+            msg["From"] = f"Language Resource Workbench <{settings.SMTP_FROM}>"
+            msg["To"] = to
+            msg["Subject"] = subject
+            raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+            service = _get_gmail_service(Request, build)
+            service.users().messages().send(
+                userId="me",
+                body={"raw": raw}
+            ).execute()
+            print(f"[email] ✅ Sent '{subject}' to {to}", flush=True)
+            return
+        except Exception as e:
+            print(f"[email GMAIL ERROR] ❌ {e}", flush=True)
 
-    except Exception as e:
-        print(f"[email ERROR] ❌ {e}", flush=True)
+    print("\n" + "="*50, flush=True)
+    print("📧  DEV EMAIL — copy the link below", flush=True)
+    print("="*50, flush=True)
+    print(f"To:      {to}", flush=True)
+    print(f"Subject: {subject}", flush=True)
+    print("-"*50, flush=True)
+    print(body, flush=True)
+    print("="*50 + "\n", flush=True)
+    sys.stdout.flush()
 
 
 def send_verification_email(to: str, token: str, base_url: str = None) -> None:

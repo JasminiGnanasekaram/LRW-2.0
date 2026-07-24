@@ -4,11 +4,10 @@ import unicodedata
 
 
 def normalize_unicode(text: str) -> str:
-    # NFC normalization composes Tamil/Sinhala clusters correctly when done ONCE, first.
+    """NFC normalize and strip control characters."""
     text = unicodedata.normalize("NFC", text)
-    # Remove only true control characters (category Cc), keep \n and \t.
-    # Using regex instead of a per-char loop avoids breaking grapheme clusters.
-    text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", text)
+    # Remove control chars except newline + tab
+    text = "".join(ch for ch in text if ch == "\n" or ch == "\t" or not unicodedata.category(ch).startswith("C"))
     return text
 
 
@@ -29,23 +28,16 @@ def remove_emojis(text: str) -> str:
 
 
 def remove_unwanted_chars(text: str) -> str:
-    """
-    Keep letters, numbers, combining marks, and a small set of sentence punctuation.
-    Other symbols, brackets, quotes, and visual noise are removed to make cleaned
-    text much more readable and easier to analyze.
-    """
-    allowed = []
+    cleaned = []
     for ch in text:
         if ch in "\n\t ":
-            allowed.append(ch)
+            cleaned.append(ch)
             continue
         cat = unicodedata.category(ch)
+        # ✅ Added "M" (marks) to preserve Tamil/Indian vowel signs & diacritics
         if cat.startswith(("L", "N", "M")):
-            allowed.append(ch)
-        elif ch in ".,!?:;":
-            allowed.append(ch)
-    return "".join(allowed)
-
+            cleaned.append(ch)
+    return "".join(cleaned)
 
 def collapse_whitespace(text: str) -> str:
     text = re.sub(r"[ \t]+", " ", text)
@@ -53,30 +45,12 @@ def collapse_whitespace(text: str) -> str:
     return text.strip()
 
 
-def remove_redundant_punctuation(text: str) -> str:
-    # Replace repeated punctuation with a single instance and remove visual noise.
-    text = re.sub(r"[“”«»„‟˝`´]+", '"', text)
-    text = re.sub(r"[‘’‛‚]+", "'", text)
-    text = re.sub(r"[–—]+", "-", text)
-    text = re.sub(r"[•●▪◆◦◾◽◼★☆✓✔✕✖✗✘✙✚✜✠]+", " ", text)
-    text = re.sub(r"[=*_~^\\/|]+", " ", text)
-    text = re.sub(r"([.,!?;:]){2,}", r"\1", text)
-    text = re.sub(r"\s*([.,!?;:])\s*", r"\1 ", text)
-    return text
-
-
-def remove_hyphenated_line_breaks(text: str) -> str:
-    return re.sub(r"-\s*\n\s*", "", text)
-
-
 def remove_duplicate_lines(text: str) -> str:
     seen = set()
     out_lines = []
     for line in text.split("\n"):
         key = line.strip()
-        if not key:
-            continue
-        if key in seen:
+        if key and key in seen:
             continue
         seen.add(key)
         out_lines.append(line)
@@ -84,14 +58,15 @@ def remove_duplicate_lines(text: str) -> str:
 
 
 def clean(text: str) -> str:
-    text = normalize_unicode(text)        # NFC composes clusters correctly — do this FIRST and ONLY ONCE
+    """Run the full cleaning pipeline."""
+    text = normalize_unicode(text)
     text = remove_urls(text)
     text = remove_html_tags(text)
     text = remove_emojis(text)
-    text = remove_hyphenated_line_breaks(text)
-    text = remove_redundant_punctuation(text)
-    text = remove_unwanted_chars(text)    # safe now because text is already NFC-composed
+    text = remove_unwanted_chars(text)
+    # ✅ Only lowercase ASCII, preserve Tamil characters
     text = ''.join(ch.lower() if ch.isascii() else ch for ch in text)
     text = collapse_whitespace(text)
     text = remove_duplicate_lines(text)
     return text
+    
