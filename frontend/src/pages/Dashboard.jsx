@@ -10,7 +10,14 @@ export default function Dashboard() {
   useEffect(() => {
     listDocuments()
       .then(setDocs)
-      .catch((e) => setError(e.response?.data?.detail || "Failed to load documents."))
+      .catch((e) => {
+        let msg = "Failed to load documents.";
+        const detail = e.response?.data?.detail;
+        if (detail) {
+          msg = typeof detail === "string" ? detail : JSON.stringify(detail);
+        }
+        setError(msg);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -21,7 +28,12 @@ export default function Dashboard() {
       await deleteDocument(id);
       setDocs((prev) => prev.filter((d) => d.id !== id));
     } catch (err) {
-      setError(err.response?.data?.detail || "Delete failed. Please try again.");
+      let msg = "Delete failed. Please try again.";
+      const detail = err.response?.data?.detail;
+      if (detail) {
+        msg = typeof detail === "string" ? detail : JSON.stringify(detail);
+      }
+      setError(msg);
     } finally {
       setDeletingId(null);
     }
@@ -107,7 +119,7 @@ export default function Dashboard() {
                           onClick={() => handleDelete(d.id)}
                           disabled={deletingId === d.id}
                           style={{
-                            background: "#c0392b",
+                            background: "var(--danger)",
                             color: "#fff",
                             border: "none",
                             opacity: deletingId === d.id ? 0.6 : 1,

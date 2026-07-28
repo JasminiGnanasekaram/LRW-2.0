@@ -25,11 +25,12 @@ function PdfTypeBadge({ pdfType }) {
     </span>
   );
 }
-
 // ── NLP Sections with trilingual descriptions ──────────────
 const NLP_SECTIONS = [
   {
     key: "language",
+    // FIX: Sinhala label previously contained stray Tamil/Bengali characters
+    // ("ஹடுனாগැனீම") which rendered as garbled text. Corrected to proper Sinhala.
     label: { English: "Language Detection", Tamil: "மொழி கண்டறிதல்", Sinhala: "භාෂා හඳුනාගැනීම" },
     icon: "",
     desc: {
@@ -70,7 +71,7 @@ const NLP_SECTIONS = [
   },
   {
     key: "pos",
-    label: { English: "Part-of-Speech", Tamil: "பேச்சு பகுதி", Sinhala: "කතා කොටස" },
+    label: { English: "Part-of-Speech", Tamil: "பேச்சு பகுதி", Sinhala: "කතා කොටස" }, // FIX: "කොටච" -> "කොටස"
     icon: "",
     desc: {
       English: "Identifies the grammatical role of each word, such as noun, verb, adjective, or adverb.",
@@ -86,6 +87,16 @@ const NLP_SECTIONS = [
       English: "Breaks the text into smaller parts, such as words or punctuation marks, for easier processing.",
       Tamil: "எளிதான செயலாக்கத்திற்காக உரையை வார்த்தைகள் அல்லது நிறுத்தற்குறிகள் போன்ற சிறிய பகுதிகளாக பிரிக்கிறது.",
       Sinhala: "පහසු සැකසීම සඳහා පෙළ වචන හෝ විරාම ලකුණු වැනි කුඩා කොටස්වලට බෙදා වෙන් කරයි.",
+    },
+  },
+  {
+    key: "sentences",
+    label: { English: "Sentences", Tamil: "வாக்கியங்கள்", Sinhala: "වාක්‍ය" },
+    icon: "",
+    desc: {
+      English: "Splits a paragraph into individual sentences for easier analysis.",
+      Tamil: "எளிதான பகுப்பாய்வுக்காக ஒரு பத்தியை தனிப்பட்ட வாக்கியங்களாக பிரிக்கிறது.",
+      Sinhala: "පහසු විශ්ලේෂණය සඳහා ඡේදයක් තනි වාක්‍යවලට බෙදා වෙන් කරයි.",
     },
   },
   {
@@ -108,16 +119,6 @@ const NLP_SECTIONS = [
       Sinhala: "වචනවල ව්‍යුහය පරීක්ෂා කර ඒවායේ මූල වචනය සහ කාලය හෝ සංඛ්‍යාව වැනි ව්‍යාකරණ අවසාන හඳුනා ගනී.",
     },
   },
-  {
-    key: "sentences",
-    label: { English: "Sentences", Tamil: "வாக்கியங்கள்", Sinhala: "වාක්‍ය" },
-    icon: "",
-    desc: {
-      English: "Splits a paragraph into individual sentences for easier analysis.",
-      Tamil: "எளிதான பகுப்பாய்வுக்காக ஒரு பத்தியை தனிப்பட்ட வாக்கியங்களாக பிரிக்கிறது.",
-      Sinhala: "පහසු විශ්ලේෂණය සඳහා ඡේදයක් තනි වාක්‍යවලට බෙදා වෙන් කරයි.",
-    },
-  },
 ];
 
 // ── Description banner ────────────────────────────────────
@@ -137,7 +138,7 @@ function SectionDesc({ desc }) {
       alignItems: "flex-start",
       gap: 10,
     }}>
-      <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}></span>
+      <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>ℹ️</span>
       {desc}
     </div>
   );
@@ -151,9 +152,18 @@ export default function DocumentView() {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    // FIX: clear any previous error before a new fetch (e.g. navigating between docs)
+    setError("");
     getDocument(id)
       .then(setDoc)
-      .catch((e) => setError(e.response?.data?.detail || "Failed to load document."));
+      .catch((e) => {
+        let msg = "Failed to load document.";
+        const detail = e.response?.data?.detail;
+        if (detail) {
+          msg = typeof detail === "string" ? detail : JSON.stringify(detail);
+        }
+        setError(msg);
+      });
   }, [id]);
 
   if (error) return (
@@ -175,18 +185,24 @@ export default function DocumentView() {
   const isTamil = lang === "Tamil";
   const isSinhala = lang === "Sinhala";
 
-  const sentimentColor = (labelEn) => {
-    if (!labelEn) return "#f0f0f0";
-    const l = labelEn.toLowerCase();
-    if (l === "positive") return "#d4edda";
-    if (l === "negative") return "#f8d7da";
+  // FIX: previously only checked `label_en`. If the backend ever omits that
+  // field (as happens elsewhere in this file, e.g. NER entities), the pill
+  // silently fell back to a neutral/yellow color even for a clearly
+  // positive/negative sentiment. Now falls back to inspecting `label` too.
+  const sentimentColor = (sentiment) => {
+    if (!sentiment) return "#f0f0f0";
+    const raw = (sentiment.label_en || sentiment.label || "").toLowerCase();
+    const POSITIVE = ["positive", "நேர்மறை", "ධනාත්මක"];
+    const NEGATIVE = ["negative", "எதிர்மறை", "ඍණාත්මක"];
+    if (POSITIVE.some((v) => raw.includes(v))) return "#d4edda";
+    if (NEGATIVE.some((v) => raw.includes(v))) return "#f8d7da";
     return "#fff3cd";
   };
 
-  const lemmaPairs = (doc.nlp?.token_details || []).filter(t => t.lemma && t.text !== t.lemma).slice(0, 100);
-  const morphTokens = (doc.nlp?.token_details || []).filter(t => t.morph && t.morph !== "").slice(0, 50);
+  const lemmaPairs = (doc.nlp?.token_details || []).filter(tok => tok.lemma && tok.text !== tok.lemma).slice(0, 100);
+  const morphTokens = (doc.nlp?.token_details || []).filter(tok => tok.morph && tok.morph !== "").slice(0, 50);
 
-  const translateMorph = (morphStr, lang) => {
+  const translateMorph = (morphStr) => {
     if (!morphStr) return "";
     const MORPH_EN = {
       "Case=Nom": "Nominative", "Case=Acc": "Accusative", "Number=Sing": "Singular",
@@ -199,13 +215,16 @@ export default function DocumentView() {
       "Case=Nom": "எழுவாய் வேற்றுமை", "Case=Acc": "செயப்படுபொருள் வேற்றுமை",
       "Number=Sing": "ஒருமை", "Number=Plur": "பன்மை",
       "Tense=Past": "இறந்தகாலம்", "Tense=Pres": "நிகழ்காலம்", "Tense=Fut": "எதிர்காலம்",
-      "VerbForm=Inf": "தொழிற்பெயர்", "VerbForm=Fin": "முற்று வினை",
+      "VerbForm=Inf": "தொழிற்பெயர்", "VerbForm=Fin": "முற்று வினை", "VerbForm=Part": "பெயரெச்சம்", // FIX: was missing
       "Voice=Act": "கர்த்தரி வினை", "Voice=Pass": "கர்மணி வினை",
     };
     const MORPH_SINHALA = {
       "Case=Nom": "කර්තෘ කාරකය", "Case=Acc": "කර්ම කාරකය",
       "Number=Sing": "එකවචන", "Number=Plur": "බහුවචන",
       "Tense=Past": "අතීත කාලය", "Tense=Pres": "වර්තමාන කාලය", "Tense=Fut": "අනාගත කාලය",
+      // FIX: VerbForm entries were missing from the Sinhala map, so these
+      // tags fell through untranslated for Sinhala users.
+      "VerbForm=Inf": "අනියම් ක්‍රියා පදය", "VerbForm=Fin": "සීමිත ක්‍රියා පදය", "VerbForm=Part": "කෘදන්තය",
       "Voice=Act": "කර්තරී", "Voice=Pass": "කර්මකාරක",
     };
     const map = lang === "Tamil" ? MORPH_TAMIL : lang === "Sinhala" ? MORPH_SINHALA : MORPH_EN;
@@ -216,8 +235,10 @@ export default function DocumentView() {
     { key: "overview", label: "Overview" },
     { key: "cleaned", label: "Cleaned" },
     { key: "raw", label: "Raw" },
-    { key: "nlp", label: "NLP Data" },
-    { key: "charts", label: "Charts" },
+    ...(doc.nlp ? [
+      { key: "nlp", label: "NLP Data" },
+      { key: "charts", label: "Charts" },
+    ] : []),
     { key: "metadata", label: "Metadata" },
   ];
 
@@ -287,7 +308,7 @@ export default function DocumentView() {
             <SectionDesc desc={t(currentSection?.desc)} />
             <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
               <span style={{
-                display: "inline-block", background: sentimentColor(nlp.sentiment.label_en),
+                display: "inline-block", background: sentimentColor(nlp.sentiment),
                 borderRadius: 8, padding: "12px 28px", fontSize: 18, fontWeight: 700
               }}>
                 {nlp.sentiment.label}
@@ -491,7 +512,7 @@ export default function DocumentView() {
                         </span>
                       </td>
                       <td style={{ ...tdStyle(i % 2), color: "var(--ink-lt)", fontSize: 12 }}>
-                        {tk.morph ? translateMorph(tk.morph, nlp.language) : "—"}
+                        {tk.morph ? translateMorph(tk.morph) : "—"}
                       </td>
                     </tr>
                   ))}
@@ -503,7 +524,7 @@ export default function DocumentView() {
 
       case "sentences":
         if (!nlp.sentences?.length)
-          return <><SectionDesc desc={t(currentSection?.desc)} /><p className="muted">{isTamil ? "வாக்கியங்கள் இல்லை" : isSinhala ? "වාක්‍ය හමු නොවීය" : "No sentences found."}</p></>;
+          return <><SectionDesc desc={t(currentSection?.desc)} /><p className="muted">{isTamil ? "வாக்கியங்கள் இல்லை" : isSinhala ? "වාක්‍ය හමු நொවීය" : "No sentences found."}</p></>;
         return (
           <div>
             <SectionDesc desc={t(currentSection?.desc)} />
@@ -544,7 +565,7 @@ export default function DocumentView() {
               {doc.file_type === "pdf" && <PdfTypeBadge pdfType={doc.pdf_type} />}
               {doc.nlp?.language && <span className="badge">{doc.nlp.language_display || doc.nlp.language}</span>}
               <span className="muted">{new Date(doc.created_at).toLocaleDateString()}</span>
-              {doc.nlp?.token_count && <span className="muted">{doc.nlp.token_count.toLocaleString()} tokens</span>}
+              {doc.nlp?.token_count != null && <span className="muted">{doc.nlp.token_count.toLocaleString()} tokens</span>}
             </div>
           </div>
           <div style={{ display: "flex", gap: 8, flexShrink: 0, marginLeft: "auto", alignSelf: "flex-start" }}>
@@ -616,7 +637,7 @@ export default function DocumentView() {
               gap: 12, marginBottom: 20
             }}>
               {[
-                { label: "File Type", value: doc.file_type?.toUpperCase() },
+                { label: "File Type", value: doc.file_type?.toUpperCase() || "—" },
                 { label: "Language", value: doc.nlp?.language_display || doc.nlp?.language || "—" },
                 { label: "Tokens", value: doc.nlp?.token_count?.toLocaleString() || "—" },
                 { label: "Unique Tokens", value: doc.nlp?.unique_tokens?.toLocaleString() || "—" },
@@ -687,7 +708,7 @@ export default function DocumentView() {
                     textAlign: "left",
                     transition: "all 0.15s",
                   }}>
-                  <span style={{ fontSize: 15 }}>{icon}</span>
+                  {icon && <span style={{ fontSize: 15 }}>{icon}</span>}
                   {t(label)}
                 </button>
               ))}

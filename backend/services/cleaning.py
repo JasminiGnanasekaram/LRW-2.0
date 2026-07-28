@@ -28,16 +28,24 @@ def remove_emojis(text: str) -> str:
 
 
 def remove_unwanted_chars(text: str) -> str:
-    cleaned = []
+    """
+    Keep letters, numbers, combining marks, and a small set of sentence punctuation.
+    Other symbols, brackets, quotes, and visual noise are removed to make cleaned
+    text much more readable and easier to analyze.
+    """
+    allowed = []
     for ch in text:
         if ch in "\n\t ":
-            cleaned.append(ch)
+            allowed.append(ch)
             continue
         cat = unicodedata.category(ch)
         # ✅ Added "M" (marks) to preserve Tamil/Indian vowel signs & diacritics
         if cat.startswith(("L", "N", "M")):
-            cleaned.append(ch)
-    return "".join(cleaned)
+            allowed.append(ch)
+        elif ch in ".,!?:;":
+            allowed.append(ch)
+    return "".join(allowed)
+
 
 def collapse_whitespace(text: str) -> str:
     text = re.sub(r"[ \t]+", " ", text)
@@ -45,12 +53,30 @@ def collapse_whitespace(text: str) -> str:
     return text.strip()
 
 
+def remove_redundant_punctuation(text: str) -> str:
+    # Replace repeated punctuation with a single instance and remove visual noise.
+    text = re.sub(r"[“”«»„‟˝`´]+", '"', text)
+    text = re.sub(r"[‘’‛‚]+", "'", text)
+    text = re.sub(r"[–—]+", "-", text)
+    text = re.sub(r"[•●▪◆◦◾◽◼★☆✓✔✕✖✗✘✙✚✜✠]+", " ", text)
+    text = re.sub(r"[=*_~^\\/|]+", " ", text)
+    text = re.sub(r"([.,!?;:]){2,}", r"\1", text)
+    text = re.sub(r"\s*([.,!?;:])\s*", r"\1 ", text)
+    return text
+
+
+def remove_hyphenated_line_breaks(text: str) -> str:
+    return re.sub(r"-\s*\n\s*", "", text)
+
+
 def remove_duplicate_lines(text: str) -> str:
     seen = set()
     out_lines = []
     for line in text.split("\n"):
         key = line.strip()
-        if key and key in seen:
+        if not key:
+            continue
+        if key in seen:
             continue
         seen.add(key)
         out_lines.append(line)
@@ -63,6 +89,8 @@ def clean(text: str) -> str:
     text = remove_urls(text)
     text = remove_html_tags(text)
     text = remove_emojis(text)
+    text = remove_hyphenated_line_breaks(text)
+    text = remove_redundant_punctuation(text)
     text = remove_unwanted_chars(text)
     # ✅ Only lowercase ASCII, preserve Tamil characters
     text = ''.join(ch.lower() if ch.isascii() else ch for ch in text)

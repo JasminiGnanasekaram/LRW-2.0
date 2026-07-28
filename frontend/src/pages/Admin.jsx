@@ -145,7 +145,7 @@ export default function Admin() {
                   ]}
                   dataKey="value" cx="50%" cy="50%" outerRadius={60} label
                 >
-                  {[["#1a3a2a"], ["#c0392b"], ["#e67e22"]].map(([c], i) => <Cell key={i} fill={c} />)}
+                  {[["var(--forest)"], ["var(--danger)"], ["var(--warn)"]].map(([c], i) => <Cell key={i} fill={c} />)}
                 </Pie>
                 <Tooltip />
                 <Legend iconSize={10} wrapperStyle={{ fontSize: 12 }} />
