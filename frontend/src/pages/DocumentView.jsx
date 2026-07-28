@@ -150,6 +150,7 @@ export default function DocumentView() {
   const [tab, setTab] = useState("overview");
   const [nlpSec, setNlpSec] = useState("language");
   const [error, setError] = useState("");
+  const [appLang, setAppLang] = useState(localStorage.getItem("lrw_lang") || "");
 
   useEffect(() => {
     // FIX: clear any previous error before a new fetch (e.g. navigating between docs)
@@ -166,6 +167,18 @@ export default function DocumentView() {
       });
   }, [id]);
 
+  useEffect(() => {
+    const handleLang = (e) => setAppLang(e.detail);
+    window.addEventListener("lrw_lang_changed", handleLang);
+    return () => window.removeEventListener("lrw_lang_changed", handleLang);
+  }, []);
+
+  useEffect(() => {
+    if (doc?.nlp?.language && !localStorage.getItem("lrw_lang")) {
+      setAppLang(doc.nlp.language);
+    }
+  }, [doc]);
+
   if (error) return (
     <div className="page" style={{ maxWidth: 720 }}>
       <div className="alert-error">{error}</div>
@@ -174,7 +187,7 @@ export default function DocumentView() {
   );
   if (!doc) return <div className="page"><p className="muted">Loading…</p></div>;
 
-  const lang = doc?.nlp?.language || "English"; // "English" | "Tamil" | "Sinhala"
+  const lang = appLang || doc?.nlp?.language || "English"; // "English" | "Tamil" | "Sinhala"
 
   // helper: pick right language string from a {English, Tamil, Sinhala} object
   const t = (obj) => (obj && (obj[lang] || obj["English"])) || "";
