@@ -1,0 +1,12 @@
+﻿.venv/
+venv/
+node_modules/
+__pycache__/
+*.pyc
+*.pickle
+.env
+*.env
+gmail_credentials.json
+gmail_token.pickle
+uploads/
+*.zip
