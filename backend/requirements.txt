@@ -1,0 +1,32 @@
+# Core — works on Python 3.10 – 3.14
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+motor>=3.6.0
+pymongo>=4.10.0
+pydantic>=2.9.0
+pydantic-settings>=2.6.0
+email-validator>=2.2.0
+python-multipart>=0.0.12
+
+# Auth (replaces python-jose + passlib — both have issues on Python 3.14)
+PyJWT>=2.9.0
+bcrypt>=4.2.0
+
+# Text extraction
+pdfplumber>=0.11.0
+Pillow>=11.0.0
+pytesseract>=0.3.13
+beautifulsoup4>=4.12.3
+requests>=2.32.0
+
+# NLP
+spacy>=3.8.0
+
+# --- Optional (comment out the line below if install fails on Python 3.14) ---
+# Audio Speech-to-Text — depends on ctranslate2 which may not yet have 3.14 wheels.
+# If install fails, comment this out; audio uploads will return 501 but everything else works.
+faster-whisper>=1.0.3
+
+# Background jobs (only needed if USE_CELERY=true)
+celery>=5.4.0
+redis>=5.2.0
