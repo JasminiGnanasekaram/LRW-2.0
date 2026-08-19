@@ -31,7 +31,7 @@ const NLP_SECTIONS = [
   {
     key: "language",
     label: { English: "Language Detection", Tamil: "மொழி கண்டறிதல்", Sinhala: "භාෂා හඳුනාගැනීම" },
-    icon: "🌐",
+    
     desc: {
       English: "Detects which language the given text is written in, such as English, Tamil, or Sinhala.",
       Tamil: "கொடுக்கப்பட்ட உரை எந்த மொழியில் எழுதப்பட்டுள்ளது என்பதை கண்டறிகிறது — தமிழ், ஆங்கிலம் அல்லது சிங்களம்.",
@@ -41,7 +41,7 @@ const NLP_SECTIONS = [
   {
     key: "sentiment",
     label: { English: "Sentiment Analysis", Tamil: "உணர்வு பகுப்பாய்வு", Sinhala: "හැඟීම් විශ්ලේෂණය" },
-    icon: "😊",
+    
     desc: {
       English: "Finds out whether the text expresses a positive, negative, or neutral feeling.",
       Tamil: "உரை நேர்மறை, எதிர்மறை அல்லது நடுநிலையான உணர்வை வெளிப்படுத்துகிறதா என்று கண்டறிகிறது.",
@@ -51,7 +51,7 @@ const NLP_SECTIONS = [
   {
     key: "classification",
     label: { English: "Text Classification", Tamil: "உரை வகைப்பாடு", Sinhala: "පෙළ වර්ගීකරණය" },
-    icon: "🏷️",
+    
     desc: {
       English: "Groups the text into a category based on its content, such as sports, education, or politics.",
       Tamil: "விளையாட்டு, கல்வி அல்லது அரசியல் போன்ற அதன் உள்ளடக்கத்தின் அடிப்படையில் உரையை ஒரு வகையில் தொகுக்கிறது.",
@@ -61,7 +61,7 @@ const NLP_SECTIONS = [
   {
     key: "ner",
     label: { English: "Named Entities", Tamil: "பெயரிடப்பட்ட நிறுவனங்கள்", Sinhala: "නම් කළ ආයතන" },
-    icon: "📍",
+    
     desc: {
       English: "Identifies important names in the text, such as people, places, organizations, dates, and locations.",
       Tamil: "உரையில் உள்ள முக்கியமான பெயர்களை அடையாளம் காண்கிறது — நபர்கள், இடங்கள், நிறுவனங்கள், தேதிகள் மற்றும் இருப்பிடங்கள்.",
@@ -71,7 +71,7 @@ const NLP_SECTIONS = [
   {
     key: "pos",
     label: { English: "Part-of-Speech", Tamil: "பேச்சு பகுதி", Sinhala: "කතා කොටස" },
-    icon: "🔤",
+    
     desc: {
       English: "Identifies the grammatical role of each word, such as noun, verb, adjective, or adverb.",
       Tamil: "ஒவ்வொரு வார்த்தையின் இலக்கண பாத்திரத்தை அடையாளம் காண்கிறது — பெயர்ச்சொல், வினைச்சொல், பெயரடை அல்லது வினையடை.",
@@ -81,7 +81,7 @@ const NLP_SECTIONS = [
   {
     key: "tokens",
     label: { English: "Tokenization", Tamil: "சொல் பிரித்தல்", Sinhala: "ටෝකනීකරණය" },
-    icon: "✂️",
+    
     desc: {
       English: "Breaks the text into smaller parts, such as words or punctuation marks, for easier processing.",
       Tamil: "எளிதான செயலாக்கத்திற்காக உரையை வார்த்தைகள் அல்லது நிறுத்தற்குறிகள் போன்ற சிறிய பகுதிகளாக பிரிக்கிறது.",
@@ -91,7 +91,7 @@ const NLP_SECTIONS = [
   {
     key: "lemma",
     label: { English: "Lemmatization", Tamil: "அடிவடிவ சுருக்கம்", Sinhala: "ලේමටීකරණය" },
-    icon: "📖",
+    
     desc: {
       English: 'Converts words to their basic dictionary form without changing their meaning. For example, "running" becomes "run".',
       Tamil: 'வார்த்தைகளின் அர்த்தத்தை மாற்றாமல் அவற்றின் அடிப்படை அகராதி வடிவத்திற்கு மாற்றுகிறது. உதாரணமாக "ஓடுகிறது" என்பது "ஓடு" ஆகும்.',
@@ -101,7 +101,7 @@ const NLP_SECTIONS = [
   {
     key: "morph",
     label: { English: "Morphological Analysis", Tamil: "உருபியல் பகுப்பாய்வு", Sinhala: "රූප විද්‍යාත්මක විශ්ලේෂණය" },
-    icon: "🔬",
+    
     desc: {
       English: "Examines the structure of words to identify their root word and grammatical endings, such as tense or number.",
       Tamil: "வார்த்தைகளின் அமைப்பை ஆய்வு செய்து அவற்றின் வேர் வார்த்தை மற்றும் காலம் அல்லது எண் போன்ற இலக்கண விகுதிகளை அடையாளம் காண்கிறது.",
@@ -111,7 +111,7 @@ const NLP_SECTIONS = [
   {
     key: "sentences",
     label: { English: "Sentences", Tamil: "வாக்கியங்கள்", Sinhala: "වාක්‍ය" },
-    icon: "📝",
+    
     desc: {
       English: "Splits a paragraph into individual sentences for easier analysis.",
       Tamil: "எளிதான பகுப்பாய்வுக்காக ஒரு பத்தியை தனிப்பட்ட வாக்கியங்களாக பிரிக்கிறது.",
