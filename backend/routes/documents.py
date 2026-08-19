@@ -376,10 +376,10 @@ async def export_document(
     name     = _safe_filename(doc.get("filename") or "document")
 
     if format == "json":
-        json_text = json.dumps(safe_doc, indent=2, ensure_ascii=True)
+        json_text = json.dumps(safe_doc, indent=2, ensure_ascii=False)
         return PlainTextResponse(
             json_text,
-            media_type="application/json",
+            media_type="application/json; charset=utf-8",
             headers={"Content-Disposition": f'attachment; filename="{name}.json"'},
         )
 
@@ -387,7 +387,7 @@ async def export_document(
         csv_text = document_to_csv(safe_doc)
         return PlainTextResponse(
             csv_text,
-            media_type="text/csv",
+            media_type="text/csv; charset=utf-8",
             headers={"Content-Disposition": f'attachment; filename="{name}.csv"'},
         )
 
@@ -404,8 +404,11 @@ async def export_all(format: str = "csv", user: dict = Depends(get_current_user)
     if format == "csv":
         return PlainTextResponse(
             documents_summary_csv(safe_docs),
-            media_type="text/csv",
+            media_type="text/csv; charset=utf-8",
             headers={"Content-Disposition": 'attachment; filename="lrw_documents.csv"'},
         )
 
-    return JSONResponse(content=safe_docs)
+    return JSONResponse(
+        content=safe_docs,
+        media_type="application/json; charset=utf-8"
+    )
