@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse, PlainTextResponse, Response
 from datetime import datetime
 from bson import ObjectId
+from bson.errors import InvalidId
 import json
 import re
 
@@ -14,16 +16,14 @@ from database import (
     nlp_analysis_col,
     sources_col,
     processing_jobs_col,
+    get_gridfs_bucket,
 )
 from services import extraction, cleaning, nlp
 from services.csv_export import document_to_csv, documents_summary_csv
+from services.summarizer import get_text_summary
+from services.extraction import detect_pdf_type
 from utils.security import get_current_user
 from config import get_settings
-
-# TODO: verify these import paths match where these functions actually live in your project
-from utils.gridfs import get_gridfs_bucket        # adjust path if needed
-from services.pdf_utils import detect_pdf_type    # adjust path if needed
-from services.summarize_utils import get_text_summary  # adjust path if needed
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -79,6 +79,93 @@ async def _doc_out(raw, cleaned=None, meta=None, analysis=None):
     }
 
 
+def _document_id(value: str) -> ObjectId:
+    try:
+        return ObjectId(value)
+    except (InvalidId, TypeError):
+        raise HTTPException(status_code=404, detail="Document not found")
+
+
+async def _owned_raw_document(document_id: str, user: dict) -> dict:
+    raw = await raw_documents_col.find_one({"_id": _document_id(document_id)})
+    if not raw or (user["role"] != "admin" and raw.get("user_id") != ObjectId(user["id"])):
+        raise HTTPException(status_code=404, detail="Document not found")
+    return raw
+
+
+@router.get("/")
+async def list_documents(user: dict = Depends(get_current_user)):
+    """List the current user's documents for the dashboard."""
+    query = {} if user["role"] == "admin" else {"user_id": ObjectId(user["id"])}
+    result = []
+    async for raw in raw_documents_col.find(query).sort("created_at", -1):
+        cleaned = await cleaned_documents_col.find_one({"raw_document_id": raw["_id"]})
+        meta = await document_metadata_col.find_one({"raw_document_id": raw["_id"]})
+        analysis = await nlp_analysis_col.find_one(
+            {"cleaned_document_id": cleaned["_id"]}
+        ) if cleaned else None
+        result.append(await _doc_out(raw, cleaned, meta, analysis))
+    return result
+
+
+@router.get("/{document_id}")
+async def get_document(document_id: str, user: dict = Depends(get_current_user)):
+    raw = await _owned_raw_document(document_id, user)
+    cleaned = await cleaned_documents_col.find_one({"raw_document_id": raw["_id"]})
+    meta = await document_metadata_col.find_one({"raw_document_id": raw["_id"]})
+    analysis = await nlp_analysis_col.find_one(
+        {"cleaned_document_id": cleaned["_id"]}
+    ) if cleaned else None
+    return await _doc_out(raw, cleaned, meta, analysis)
+
+
+@router.get("/{document_id}/export")
+async def export_document(
+    document_id: str,
+    format: str = "json",
+    user: dict = Depends(get_current_user),
+):
+    """Download a document with its raw, cleaned, metadata, and NLP data."""
+    raw = await _owned_raw_document(document_id, user)
+    cleaned = await cleaned_documents_col.find_one({"raw_document_id": raw["_id"]})
+    meta = await document_metadata_col.find_one({"raw_document_id": raw["_id"]})
+    analysis = await nlp_analysis_col.find_one(
+        {"cleaned_document_id": cleaned["_id"]}
+    ) if cleaned else None
+    document = await _doc_out(raw, cleaned, meta, analysis)
+    filename = _safe_filename(raw.get("filename") or "document")
+
+    if format.lower() == "json":
+        formatted_json = json.dumps(
+            jsonable_encoder(document),
+            ensure_ascii=False,
+            indent=2,
+            default=str,
+        )
+        return Response(
+            content=formatted_json,
+            media_type="application/json; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{filename}.json"'},
+        )
+    if format.lower() == "csv":
+        csv_data = document_to_csv(document)
+        return Response(
+            content=csv_data,
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{filename}.csv"'},
+        )
+    raise HTTPException(status_code=400, detail="format must be json or csv")
+
+
+@router.delete("/{document_id}")
+async def delete_document(document_id: str, user: dict = Depends(get_current_user)):
+    raw = await _owned_raw_document(document_id, user)
+    await cleaned_documents_col.delete_many({"raw_document_id": raw["_id"]})
+    await document_metadata_col.delete_many({"raw_document_id": raw["_id"]})
+    await raw_documents_col.delete_one({"_id": raw["_id"]})
+    return {"message": "Document deleted"}
+
+
 @router.post("/upload")
 async def upload(
     file: Optional[UploadFile] = File(None),
@@ -121,7 +208,12 @@ async def upload(
             "lrw.process_document",
             args=[str(job_res.inserted_id), str(raw_res.inserted_id), file_type, content_b64, url],
         )
-        return {"async": True, "job_id": str(job_res.inserted_id), "raw_document_id": str(raw_res.inserted_id)}
+        return {
+            "async": True,
+            "id": str(raw_res.inserted_id),
+            "job_id": str(job_res.inserted_id),
+            "raw_document_id": str(raw_res.inserted_id),
+        }
 
     # 1. Extract raw text (sync path)
     pdf_type = None
@@ -203,4 +295,6 @@ async def upload(
         "data": analysis_data,
         "created_at": datetime.utcnow(),
     }
-    await nlp_analysis_col.insert_one(analysis_doc
+    await nlp_analysis_col.insert_one(analysis_doc)
+
+    return {"async": False, "id": str(raw_res.inserted_id)}

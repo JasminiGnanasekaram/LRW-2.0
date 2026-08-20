@@ -77,6 +77,14 @@ export function currentUser() {
   return u ? JSON.parse(u) : null;
 }
 
+export async function updateProfile() {
+  throw new Error("Profile updates are not available from the current API.");
+}
+
+export async function uploadAvatar() {
+  throw new Error("Avatar uploads are not available from the current API.");
+}
+
 // ---- Documents ----
 export async function uploadDocument({ file, fileType, url, metadata }) {
   const form = new FormData();

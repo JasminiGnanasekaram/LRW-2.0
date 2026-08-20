@@ -5,16 +5,6 @@ from typing import List
 
 
 def document_to_csv(doc: dict) -> str:
-<<<<<<< HEAD
-    """Export a single document's tokens (text, lemma, pos, tag) as CSV."""
-    buf = io.StringIO()
-    writer = csv.writer(buf)
-    writer.writerow(["token_index", "text", "lemma", "pos", "tag", "is_stop"])
-    nlp = doc.get("nlp") or {}
-    tokens = nlp.get("token_details") or []
-    for i, t in enumerate(tokens):
-        writer.writerow([i, t.get("text"), t.get("lemma"), t.get("pos"), t.get("tag"), t.get("is_stop")])
-=======
     """Export a single document as a structured, spreadsheet-friendly CSV."""
     buf    = io.StringIO()
     writer = csv.writer(buf)
@@ -134,7 +124,6 @@ def document_to_csv(doc: dict) -> str:
             else:
                 writer.writerow([i, str(token), "", "", "", "", ""])
 
->>>>>>> origin/kirupaN
     return buf.getvalue()
 
 
@@ -158,8 +147,4 @@ def documents_summary_csv(docs: List[dict]) -> str:
             meta.get("category", ""), meta.get("license", ""),
             d.get("created_at", ""),
         ])
-<<<<<<< HEAD
-=======
-
->>>>>>> origin/kirupaN
     return buf.getvalue()

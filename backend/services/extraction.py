@@ -8,12 +8,9 @@ import requests
 import urllib3
 from bs4 import BeautifulSoup
 
-<<<<<<< HEAD
-=======
 # Suppress certificate verification warning when calling requests.get with verify=False
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
->>>>>>> origin/kirupaN
 from config import get_settings
 
 try:
@@ -35,13 +32,6 @@ def extract_from_text(content: bytes, encoding: str = "utf-8") -> str:
 
 
 def extract_from_pdf(content: bytes) -> str:
-<<<<<<< HEAD
-    """PDF extraction using PyMuPDF with OCR fallback for scanned pages."""
-    import fitz  # PyMuPDF
-    from PIL import Image
-
-    MIN_CHARS_PER_PAGE = 20
-=======
     """PDF extraction using PyMuPDF (fitz).
     Each page is checked for a real text layer; pages with one are
     extracted directly, pages without one (scans/photos) are rendered
@@ -49,21 +39,12 @@ def extract_from_pdf(content: bytes) -> str:
     import fitz  # PyMuPDF
     from PIL import Image
 
-    MIN_CHARS_PER_PAGE = 20  # below this, treat the page as "no real text"
-
->>>>>>> origin/kirupaN
+    MIN_CHARS_PER_PAGE = 20
     doc = fitz.open(stream=content, filetype="pdf")
     text_parts = []
 
     for page in doc:
         page_text = page.get_text().strip()
-<<<<<<< HEAD
-        if len(page_text) >= MIN_CHARS_PER_PAGE:
-            text_parts.append(page_text)
-        else:
-            pix = page.get_pixmap(dpi=300)
-=======
-
         if len(page_text) >= MIN_CHARS_PER_PAGE:
             text_parts.append(page_text)
         else:
@@ -73,15 +54,12 @@ def extract_from_pdf(content: bytes) -> str:
             pix = page.get_pixmap(matrix=mat)
             
             # 2. Convert to bytes and open with Pillow
->>>>>>> origin/kirupaN
             img = Image.open(io.BytesIO(pix.tobytes("png")))
             ocr_text = pytesseract.image_to_string(img, lang="eng+tam+sin") if pytesseract else ""
             text_parts.append(ocr_text.strip())
 
     doc.close()
     return "\n\n".join(text_parts)
-<<<<<<< HEAD
-=======
 
 
 def detect_pdf_type(content: bytes) -> str:
@@ -114,7 +92,6 @@ def detect_pdf_type(content: bytes) -> str:
         return "image_only"  # All pages are images (scanned)
     else:
         return "text_image"  # Mixed: both text and image pages
->>>>>>> origin/kirupaN
 
 
 def extract_from_image(content: bytes) -> str:
@@ -143,27 +120,8 @@ def extract_from_image(content: bytes) -> str:
         ) from exc
     except Exception as exc:
         raise RuntimeError(f"OCR extraction failed: {exc}") from exc
-<<<<<<< HEAD
-=======
 
 
-def extract_from_url(url: str, timeout: int = 20) -> str:
-    """Scrape visible text from a webpage."""
-    url = url.strip()
-    if not url.startswith(("http://", "https://")):
-        url = "https://" + url
-
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-    }
-
-    try:
-        resp = requests.get(url, headers=headers, timeout=timeout, verify=False)
-        resp.raise_for_status()
->>>>>>> origin/kirupaN
-
-
-<<<<<<< HEAD
 def extract_from_url(url: str, timeout: int = 15) -> str:
     """Scrape visible text from a webpage."""
     headers = {"User-Agent": "Mozilla/5.0 (LRW Bot)"}
@@ -173,16 +131,6 @@ def extract_from_url(url: str, timeout: int = 15) -> str:
     for tag in soup(["script", "style", "nav", "footer", "header"]):
         tag.decompose()
     return soup.get_text(separator="\n", strip=True)
-=======
-        text = soup.get_text(separator="\n", strip=True)
-        if not text.strip():
-            raise ValueError("No readable text found on that page.")
-        return text
-    except requests.exceptions.Timeout:
-        raise ValueError(f"Request to {url} timed out. The site may be slow or blocking requests.")
-    except requests.exceptions.RequestException as e:
-        raise ValueError(f"Could not fetch the page: {e}")
->>>>>>> origin/kirupaN
 
 
 _whisper_model = None
@@ -202,10 +150,6 @@ def _get_whisper():
 def extract_from_audio(content: bytes) -> str:
     """Speech-to-Text via faster-whisper. Requires ffmpeg on PATH."""
     model = _get_whisper()
-<<<<<<< HEAD
-
-=======
->>>>>>> origin/kirupaN
     with tempfile.NamedTemporaryFile(suffix=".audio", delete=False) as tmp:
         tmp.write(content)
         tmp_path = tmp.name
@@ -229,14 +173,7 @@ def _pdf_is_mostly_text(content: bytes, min_chars_per_page: int = 20, text_ratio
         doc.close()
         return False
 
-<<<<<<< HEAD
     text_pages = sum(1 for page in doc if len(page.get_text().strip()) >= min_chars_per_page)
-=======
-    text_pages = sum(
-        1 for page in doc
-        if len(page.get_text().strip()) >= min_chars_per_page
-    )
->>>>>>> origin/kirupaN
     doc.close()
     return (text_pages / total_pages) >= text_ratio_threshold
 
@@ -244,11 +181,8 @@ def _pdf_is_mostly_text(content: bytes, min_chars_per_page: int = 20, text_ratio
 def extract(file_type: str, content: Optional[bytes] = None, url: Optional[str] = None, filename: Optional[str] = None) -> str:
     file_type = file_type.lower()
 
-<<<<<<< HEAD
-=======
     # Image tab + actual .pdf file → only allow scanned/image PDFs here.
     # Text-based PDFs are rejected and pointed to the PDF tab instead.
->>>>>>> origin/kirupaN
     if file_type == "image" and filename and filename.lower().endswith(".pdf"):
         if _pdf_is_mostly_text(content):
             raise ValueError(

@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { Routes, Route, Link, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { currentUser, logout } from "./api";
 import Login from "./pages/Login.jsx";
@@ -12,16 +13,11 @@ import ForgotPassword from "./pages/ForgotPassword.jsx";
 import ResetPassword from "./pages/ResetPassword.jsx";
 import Home from "./pages/Home.jsx";
 import ResendVerification from "./pages/ResendVerification.jsx";
-<<<<<<< HEAD
 import Terms from "./pages/Terms.jsx";
 import Privacy from "./pages/Privacy.jsx";
 import Licenses from "./pages/Licenses.jsx";
 import About from "./pages/About.jsx";
-=======
 import Profile from "./pages/Profile.jsx";
-import Privacy from "./pages/Privacy.jsx";
-import Terms from "./pages/Terms.jsx";
->>>>>>> origin/kirupaN
 import Contact from "./pages/Contact.jsx";
 
 function ProtectedRoute({ children, role }) {
@@ -34,13 +30,11 @@ function ProtectedRoute({ children, role }) {
 function TopBar() {
   const navigate = useNavigate();
   const location = useLocation();
-<<<<<<< HEAD
-  const user = currentUser();
-=======
   const [user, setUser] = useState(currentUser());
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [appLang, setAppLang] = useState(localStorage.getItem("lrw_lang") || "English");
   const dropdownRef = useRef(null);
+  const avatarSrc = user?.avatar_url || user?.avatar || "";
 
   useEffect(() => {
     const handleUpdate = (e) => {
@@ -59,7 +53,6 @@ function TopBar() {
     document.addEventListener("mousedown", clickOutside);
     return () => document.removeEventListener("mousedown", clickOutside);
   }, []);
->>>>>>> origin/kirupaN
 
   const handleLangChange = (e) => {
     const selected = e.target.value;
@@ -100,11 +93,7 @@ function TopBar() {
   const isActive = (path) => location.pathname === path ? "active" : "";
 
   if (!user) {
-<<<<<<< HEAD
-    const publicPages = ["/home", "/login", "/register", "/forgot-password", "/reset-password", "/verify-email", "/terms", "/privacy", "/licenses", "/about", "/contact"];
-=======
     const publicPages = ["/home", "/login", "/register", "/forgot-password", "/reset-password", "/verify-email", "/privacy", "/terms", "/contact"];
->>>>>>> origin/kirupaN
     const isPublic = publicPages.some(p => location.pathname.startsWith(p));
     if (!isPublic) return null;
     if (["/login", "/register"].includes(location.pathname)) return null;
@@ -133,14 +122,12 @@ function TopBar() {
         <Link to="/search" className={isActive("/search")}>Search</Link>
         {user.role === "admin" && <Link to="/admin" className={isActive("/admin")}>Admin</Link>}
       </div>
-<<<<<<< HEAD
       <div className="topbar-right">
         <div className="topbar-user">
           <span>{user.name}</span>
           <span className="badge" style={{ background: "rgba(255,255,255,0.15)", color: "#fff", fontSize: "11px" }}>{user.role.charAt(0).toUpperCase() + user.role.slice(1)}</span>
         </div>
         <button className="topbar-logout" onClick={handleLogout}>Sign out</button>
-=======
       
       <div className="topbar-right" style={{ display: "flex", alignItems: "center" }}>
         {langSelect}
@@ -312,7 +299,7 @@ function TopBar() {
             </div>
           )}
         </div>
->>>>>>> origin/kirupaN
+      </div>
       </div>
     </nav>
   );
