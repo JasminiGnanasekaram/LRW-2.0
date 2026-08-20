@@ -46,7 +46,6 @@ class DocumentOut(BaseModel):
     summary: Optional[str] = None
     metadata: Optional[dict] = None
     nlp: Optional[dict] = None
-    summary: Optional[str] = None
     created_at: datetime
 
 

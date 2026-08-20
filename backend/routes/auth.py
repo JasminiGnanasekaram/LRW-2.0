@@ -2,7 +2,7 @@ import os
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime

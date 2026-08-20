@@ -446,6 +446,7 @@ export default function Home() {
       </section>
 
       {/* ── Footer ────────────────────────────────────────── */}
+<<<<<<< HEAD
       <footer style={{ background: "#111d16", padding: "56px 32px 0" }}>
         <div style={{
           maxWidth: 960, margin: "0 auto", display: "grid",
@@ -478,6 +479,24 @@ export default function Home() {
                 ))}
               </div>
             </div>
+=======
+      <footer style={{
+        background: "#0c1510", padding: "32px 24px",
+        display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 20,
+        borderTop: "1px solid rgba(255,255,255,0.05)"
+      }}>
+        <span style={{ fontFamily: "var(--font-head)", fontSize: 18, fontWeight: 700, color: "rgba(255,255,255,0.5)", letterSpacing: "-0.01em" }}>LRW</span>
+        <div style={{ display: "flex", gap: 24 }}>
+          {[
+            { label: "Privacy Policy", path: "/privacy" },
+            { label: "Terms of Service", path: "/terms" },
+            { label: "Contact Support", path: "/contact" }
+          ].map(l => (
+            <Link key={l.label} to={l.path} style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", textDecoration: "none", transition: "color 0.2s" }}
+            onMouseEnter={(e) => e.currentTarget.style.color = "#fff"}
+            onMouseLeave={(e) => e.currentTarget.style.color = "rgba(255,255,255,0.4)"}
+            >{l.label}</Link>
+>>>>>>> origin/kirupaN
           ))}
         </div>
 

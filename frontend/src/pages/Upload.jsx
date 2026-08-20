@@ -270,7 +270,7 @@ export default function Upload() {
             {/* Left column */}
             <div style={{ display: "flex", flexDirection: "column", gap: 15 }}>
               <div className="field">
-                <label>SOURCE <span style={{ color: "red" }}>*</span></label>
+                <label>SOURCE <span style={{ color: "var(--danger)" }}>*</span></label>
                 <input
                   type="text"
                   value={meta.source}
@@ -280,7 +280,7 @@ export default function Upload() {
                 />
               </div>
               <div className="field">
-                  <label>DOMAIN <span style={{ color: "red" }}>*</span></label>
+                  <label>DOMAIN <span style={{ color: "var(--danger)" }}>*</span></label>
                   <select
                     value={meta.domain}
                     onChange={(e) => setMeta({ ...meta, domain: e.target.value })}
@@ -344,7 +344,7 @@ export default function Upload() {
                 />
               </div>
               <div className="field">
-                  <label>LICENSE <span style={{ color: "red" }}>*</span></label>
+                  <label>LICENSE <span style={{ color: "var(--danger)" }}>*</span></label>
                   <select
                     value={meta.license}
                     onChange={(e) => setMeta({ ...meta, license: e.target.value })}

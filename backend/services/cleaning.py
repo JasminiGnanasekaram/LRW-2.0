@@ -28,21 +28,32 @@ def remove_emojis(text: str) -> str:
 
 
 def remove_unwanted_chars(text: str) -> str:
-    cleaned = []
+    """
+    Keep letters, numbers, combining marks, whitespace, and basic sentence
+    punctuation. Other symbols and visual noise are removed.
+    """
+    allowed = []
     for ch in text:
         if ch in "\n\t ":
-            cleaned.append(ch)
+            allowed.append(ch)
             continue
         cat = unicodedata.category(ch)
         # ✅ Added "M" (marks) to preserve Tamil/Indian vowel signs & diacritics
         if cat.startswith(("L", "N", "M")):
-            cleaned.append(ch)
-    return "".join(cleaned)
+            allowed.append(ch)
+        elif ch in ".,!?:;":
+            allowed.append(ch)
+    return "".join(allowed)
 
 def collapse_whitespace(text: str) -> str:
     text = re.sub(r"[ \t]+", " ", text)
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
+
+
+def collapse_repeated_punctuation(text: str) -> str:
+    """Collapse punctuation runs such as !!! or ??? to one mark."""
+    return re.sub(r"([.,!?:;])\1+", r"\1", text)
 
 
 def remove_duplicate_lines(text: str) -> str:
@@ -57,6 +68,21 @@ def remove_duplicate_lines(text: str) -> str:
     return "\n".join(out_lines)
 
 
+def remove_duplicate_sentences(text: str) -> str:
+    """Remove repeated sentences while preserving their original order."""
+    sentences = re.split(r"(?<=[.!?])\s+", text)
+    seen = set()
+    unique = []
+    for sentence in sentences:
+        normalized = re.sub(r"\s+", " ", sentence).strip().casefold()
+        if normalized and normalized in seen:
+            continue
+        if normalized:
+            seen.add(normalized)
+        unique.append(sentence)
+    return " ".join(unique)
+
+
 def clean(text: str) -> str:
     """Run the full cleaning pipeline."""
     text = normalize_unicode(text)
@@ -66,7 +92,9 @@ def clean(text: str) -> str:
     text = remove_unwanted_chars(text)
     # ✅ Only lowercase ASCII, preserve Tamil characters
     text = ''.join(ch.lower() if ch.isascii() else ch for ch in text)
+    text = collapse_repeated_punctuation(text)
     text = collapse_whitespace(text)
     text = remove_duplicate_lines(text)
+    text = remove_duplicate_sentences(text)
     return text
     
