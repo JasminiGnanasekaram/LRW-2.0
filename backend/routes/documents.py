@@ -297,4 +297,184 @@ async def upload(
     }
     await nlp_analysis_col.insert_one(analysis_doc)
 
-    return {"async": False, "id": str(raw_res.inserted_id)}
+    # 7. Generate Summary
+    summary = ""
+    try:
+        from fastapi.concurrency import run_in_threadpool
+        from .summarize import summarize
+        summary = await run_in_threadpool(summarize, cleaned_text[:5000])
+    except Exception as e:
+        import logging
+        logging.getLogger("uvicorn.error").warning(f"Failed to generate summary during upload: {e}")
+        summary = ""
+
+    await raw_documents_col.update_one(
+        {"_id": raw_res.inserted_id},
+        {"$set": {"summary": summary}}
+    )
+    raw_doc["summary"] = summary
+
+    return await _doc_out(raw_doc, cleaned_doc, meta_doc, analysis_doc)
+
+
+# ── List documents ────────────────────────────────────────────────────
+@router.get("/")
+async def list_documents(user: dict = Depends(get_current_user), limit: int = 50):
+    cursor = raw_documents_col.find(
+        {"user_id": ObjectId(user["id"])}
+    ).sort("created_at", -1).limit(limit)
+
+    out = []
+    async for raw in cursor:
+        cleaned  = await cleaned_documents_col.find_one({"raw_document_id": raw["_id"]})
+        meta     = await document_metadata_col.find_one({"raw_document_id": raw["_id"]})
+        analysis = None
+        if cleaned:
+            analysis = await nlp_analysis_col.find_one({"cleaned_document_id": cleaned["_id"]})
+        out.append(await _doc_out(raw, cleaned, meta, analysis))
+    return out
+
+
+# ── Get single document ───────────────────────────────────────────────
+@router.get("/{doc_id}")
+async def get_document(doc_id: str, user: dict = Depends(get_current_user)):
+    raw = await raw_documents_col.find_one({"_id": ObjectId(doc_id)})
+    if not raw:
+        raise HTTPException(status_code=404, detail="Not found")
+    if str(raw["user_id"]) != user["id"] and user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    cleaned  = await cleaned_documents_col.find_one({"raw_document_id": raw["_id"]})
+    meta     = await document_metadata_col.find_one({"raw_document_id": raw["_id"]})
+    analysis = None
+    if cleaned:
+        analysis = await nlp_analysis_col.find_one({"cleaned_document_id": cleaned["_id"]})
+        if (
+            not analysis
+            or "sentiment" not in analysis.get("data", {})
+            or "classification" not in analysis.get("data", {})
+            or "entities" not in analysis.get("data", {})
+            or "sentences" not in analysis.get("data", {})
+        ):
+            try:
+                from fastapi.concurrency import run_in_threadpool
+                analysis_data = await run_in_threadpool(nlp.analyze, cleaned.get("text") or "")
+                if analysis:
+                    await nlp_analysis_col.update_one(
+                        {"_id": analysis["_id"]},
+                        {"$set": {"data": analysis_data}}
+                    )
+                    analysis["data"] = analysis_data
+                else:
+                    analysis_doc = {
+                        "cleaned_document_id": cleaned["_id"],
+                        "data": analysis_data,
+                        "created_at": datetime.utcnow(),
+                    }
+                    res = await nlp_analysis_col.insert_one(analysis_doc)
+                    analysis_doc["_id"] = res.inserted_id
+                    analysis = analysis_doc
+            except Exception as e:
+                import logging
+                logging.getLogger("uvicorn.error").warning(f"Failed to lazily compute NLP data: {e}")
+
+    # Auto-generate summary if missing and cleaned text is available
+    if not raw.get("summary") and cleaned and cleaned.get("text"):
+        summary = ""
+        try:
+            from fastapi.concurrency import run_in_threadpool
+            from .summarize import summarize
+            summary = await run_in_threadpool(summarize, cleaned.get("text")[:5000])
+        except Exception as e:
+            import logging
+            logging.getLogger("uvicorn.error").warning(f"Failed to auto-generate missing summary: {e}")
+            summary = ""
+        
+        if summary:
+            await raw_documents_col.update_one(
+                {"_id": raw["_id"]},
+                {"$set": {"summary": summary}}
+            )
+            raw["summary"] = summary
+
+    return await _doc_out(raw, cleaned, meta, analysis)
+
+
+# ── Delete document ───────────────────────────────────────────────────
+@router.delete("/{doc_id}")
+async def delete_document(doc_id: str, user: dict = Depends(get_current_user)):
+    """Delete a document and all associated data."""
+    raw = await raw_documents_col.find_one({"_id": ObjectId(doc_id)})
+    if not raw:
+        raise HTTPException(status_code=404, detail="Not found")
+    if str(raw["user_id"]) != user["id"] and user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    if raw.get("gridfs_id"):
+        bucket = get_gridfs_bucket()
+        try:
+            await bucket.delete(raw["gridfs_id"])
+        except Exception:
+            pass
+
+    cleaned_docs = await cleaned_documents_col.find({"raw_document_id": raw["_id"]}).to_list(None)
+    for cleaned in cleaned_docs:
+        await nlp_analysis_col.delete_many({"cleaned_document_id": cleaned["_id"]})
+
+    await raw_documents_col.delete_one({"_id": raw["_id"]})
+    await cleaned_documents_col.delete_many({"raw_document_id": raw["_id"]})
+    await document_metadata_col.delete_one({"raw_document_id": raw["_id"]})
+    await sources_col.delete_one({"_id": raw.get("source_id")})
+
+    return {"detail": "Deleted successfully"}
+
+
+# ── Export single document ────────────────────────────────────────────
+@router.get("/{doc_id}/export")
+async def export_document(
+    doc_id: str,
+    format: str = "json",
+    user: dict = Depends(get_current_user),
+):
+    """Export a processed document. format = json | csv."""
+    doc      = await get_document(doc_id, user)
+    safe_doc = json.loads(json.dumps(doc, default=str))
+    name     = _safe_filename(doc.get("filename") or "document")
+
+    if format == "json":
+        json_text = json.dumps(safe_doc, indent=2, ensure_ascii=False)
+        return PlainTextResponse(
+            json_text,
+            media_type="application/json; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{name}.json"'},
+        )
+
+    if format == "csv":
+        csv_text = document_to_csv(safe_doc)
+        return PlainTextResponse(
+            csv_text,
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{name}.csv"'},
+        )
+
+    raise HTTPException(status_code=400, detail="Unsupported format. Use json or csv.")
+
+
+# ── Bulk export ───────────────────────────────────────────────────────
+@router.get("/export/all")
+async def export_all(format: str = "csv", user: dict = Depends(get_current_user)):
+    """Bulk export the user's documents as a summary table (csv) or list (json)."""
+    docs      = await list_documents(user=user, limit=10_000)
+    safe_docs = json.loads(json.dumps(docs, default=str))
+
+    if format == "csv":
+        return PlainTextResponse(
+            documents_summary_csv(safe_docs),
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": 'attachment; filename="lrw_documents.csv"'},
+        )
+
+    return JSONResponse(
+        content=safe_docs,
+        media_type="application/json; charset=utf-8"
+    )
