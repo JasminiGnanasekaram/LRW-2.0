@@ -97,11 +97,11 @@ const POS_COLORS = {
 function tagWord(word) {
   const cleanWord = word.toLowerCase().trim();
   if (!cleanWord) return "OTHER";
-  
+
   if (POS_DICT[cleanWord]) {
     return POS_DICT[cleanWord];
   }
-  
+
   if (cleanWord.endsWith("ing") || cleanWord.endsWith("ed") || cleanWord.endsWith("es") || cleanWord.endsWith("s") && cleanWord.length > 3) {
     return "VERB";
   }
@@ -114,7 +114,7 @@ function tagWord(word) {
   if (cleanWord.endsWith("tion") || cleanWord.endsWith("ment") || cleanWord.endsWith("ness") || cleanWord.endsWith("ity") || cleanWord.endsWith("er") || cleanWord.endsWith("or")) {
     return "NOUN";
   }
-  
+
   return "NOUN";
 }
 
@@ -148,7 +148,7 @@ export default function Home() {
 
   return (
     <div style={{ fontFamily: "var(--font-body)", color: "var(--ink)", background: "var(--ivory)", minHeight: "100vh" }}>
-      
+
       {/* ── Hero ─────────────────────────────────────────── */}
       <section className="home-hero">
         <div className="hero-badge">
@@ -349,14 +349,14 @@ export default function Home() {
                 transition: "transform 0.2s var(--ease), border-color 0.2s",
                 cursor: "default"
               }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = "translateY(-3px)";
-                e.currentTarget.style.borderColor = "var(--sage)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = "translateY(0)";
-                e.currentTarget.style.borderColor = "var(--border)";
-              }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = "translateY(-3px)";
+                  e.currentTarget.style.borderColor = "var(--sage)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.borderColor = "var(--border)";
+                }}
               >
                 <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6, color: "var(--forest)" }}>{label}</div>
                 <div style={{ fontSize: 13, color: "var(--ink-lt)" }}>{sub}</div>
@@ -381,8 +381,8 @@ export default function Home() {
                 borderRadius: "var(--radius-lg)", padding: "24px",
                 boxShadow: "var(--shadow-xs)", transition: "transform 0.2s var(--ease)",
               }}
-              onMouseEnter={(e) => e.currentTarget.style.transform = "translateY(-4px)"}
-              onMouseLeave={(e) => e.currentTarget.style.transform = "translateY(0)"}
+                onMouseEnter={(e) => e.currentTarget.style.transform = "translateY(-4px)"}
+                onMouseLeave={(e) => e.currentTarget.style.transform = "translateY(0)"}
               >
                 <div style={{ width: 36, height: 36, borderRadius: "50%", background: color + "22", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
                   <div style={{ width: 12, height: 12, borderRadius: "50%", background: color }} />
@@ -431,8 +431,8 @@ export default function Home() {
             { label: "Contact Support", path: "/contact" }
           ].map(l => (
             <Link key={l.label} to={l.path} style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", textDecoration: "none", transition: "color 0.2s" }}
-            onMouseEnter={(e) => e.currentTarget.style.color = "#fff"}
-            onMouseLeave={(e) => e.currentTarget.style.color = "rgba(255,255,255,0.4)"}
+              onMouseEnter={(e) => e.currentTarget.style.color = "#fff"}
+              onMouseLeave={(e) => e.currentTarget.style.color = "rgba(255,255,255,0.4)"}
             >{l.label}</Link>
           ))}
         </div>

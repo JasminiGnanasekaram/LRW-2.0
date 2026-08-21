@@ -239,12 +239,103 @@ TAMIL_POSTPOSITIONS = {
 
 TAMIL_VERB_ROOTS = {
     "செய்": "செய்", "படி": "படி", "எழுது": "எழுது", "பார்": "பார்",
+    "முன்னேறு": "முன்னேறு", "முன்னேறுங்": "முன்னேறு", "முன்னேறுங்கள்": "முன்னேறு",
+    "வலுப்படுத்து": "வலுப்படுத்து", "வலுப்படுத்தும்": "வலுப்படுத்து",
+    "மற": "மற", "மறக்க": "மற", "மறக்காதீர்": "மற", "மறக்காதீர்கள்": "மற",
+    "மாறு": "மாறு", "மாறும்": "மாறு", "மாற்று": "மாற்று", "மாற்றும்": "மாற்று",
+    "வாழ்": "வாழ்", "வாழ": "வாழ்", "வாழும்": "வாழ்", "வாழ்க": "வாழ்",
+    "கடினமாகு": "கடினமாகு", "கடினமாகும்": "கடினமாகு",
+    "சுலபமாகு": "சுலபமாகு", "சாத்தியமாகு": "சாத்தியமாகு", "தெளிவாகு": "தெளிவாகு",
     "வா": "வா", "போ": "போ", "இரு": "இரு", "கொள்": "கொள்", "கொடு": "கொடு",
     "சொல்": "சொல்", "கூறு": "கூறு", "நட": "நட", "நில்": "நில்", "கேள்": "கேள்",
     "உருவாக்கு": "உருவாக்கு", "பயன்படுத்து": "பயன்படுத்து", "தெரிவி": "தெரிவி",
 }
 
 TAMIL_COMMON_VERBS = {
+    "கடினமாகும்": ("VERB", "கடினமாகு", "Tense=Fut|VerbForm=Part"),
+    "கடினமாகிறது": ("VERB", "கடினமாகு", "Tense=Pres|Gender=Neut|Number=Sing|Person=3"),
+    "கடினமானது": ("VERB", "கடினமாகு", "Tense=Past|Gender=Neut|Number=Sing"),
+    "கடினமாகி": ("VERB", "கடினமாகு", "VerbForm=Part|Aspect=Perf"),
+    "கடினமாக": ("VERB", "கடினமாகு", "VerbForm=Inf"),
+    "சுலபமாகும்": ("VERB", "சுலபமாகு", "Tense=Fut|VerbForm=Part"),
+    "சாத்தியமாகும்": ("VERB", "சாத்தியமாகு", "Tense=Fut|VerbForm=Part"),
+    "தெளிவாகும்": ("VERB", "தெளிவாகு", "Tense=Fut|VerbForm=Part"),
+    "அவசியமாகும்": ("VERB", "அவசியமாகு", "Tense=Fut|VerbForm=Part"),
+    "வாழக்கூடாது": ("VERB", "வாழ்", "Mood=Proh|Polarity=Neg"),
+    "வாழலாம்": ("VERB", "வாழ்", "Mood=Pot"),
+    "வாழ்க": ("VERB", "வாழ்", "Mood=Opt"),
+    "வாழ்கிறார்": ("VERB", "வாழ்", "Tense=Pres|Number=Sing|Person=3|Polite=Yes"),
+    "வாழ்கிறார்கள்": ("VERB", "வாழ்", "Tense=Pres|Number=Plur|Person=3"),
+    "வாழ்கிறது": ("VERB", "வாழ்", "Tense=Pres|Gender=Neut|Number=Sing|Person=3"),
+    "வாழ்ந்தார்": ("VERB", "வாழ்", "Tense=Past|Number=Sing|Person=3|Polite=Yes"),
+    "வாழ்ந்தார்கள்": ("VERB", "வாழ்", "Tense=Past|Number=Plur|Person=3"),
+    "வாழ்ந்தது": ("VERB", "வாழ்", "Tense=Past|Gender=Neut|Number=Sing"),
+    "வாழ்ந்து": ("VERB", "வாழ்", "VerbForm=Part|Aspect=Perf"),
+    "வாழ": ("VERB", "வாழ்", "VerbForm=Inf"),
+    "வாழும்": ("VERB", "வாழ்", "Tense=Fut|VerbForm=Part"),
+    "வாழுங்கள்": ("VERB", "வாழ்", "Mood=Imp|Number=Plur|Person=2|Polite=Yes"),
+    "வாழ்": ("VERB", "வாழ்", "Mood=Imp|Number=Sing|Person=2"),
+    "செய்யக்கூடாது": ("VERB", "செய்", "Mood=Proh|Polarity=Neg"),
+    "போகக்கூடாது": ("VERB", "போ", "Mood=Proh|Polarity=Neg"),
+    "வரக்கூடாது": ("VERB", "வா", "Mood=Proh|Polarity=Neg"),
+    "பார்க்கக்கூடாது": ("VERB", "பார்", "Mood=Proh|Polarity=Neg"),
+    "படிக்கக்கூடாது": ("VERB", "படி", "Mood=Proh|Polarity=Neg"),
+    "மாறும்": ("VERB", "மாறு", "Tense=Fut|VerbForm=Part"),
+    "மாறுகிறது": ("VERB", "மாறு", "Tense=Pres|Gender=Neut|Number=Sing|Person=3"),
+    "மாறுகிறார்": ("VERB", "மாறு", "Tense=Pres|Number=Sing|Person=3|Polite=Yes"),
+    "மாறுகிறார்கள்": ("VERB", "மாறு", "Tense=Pres|Number=Plur|Person=3"),
+    "மாறியது": ("VERB", "மாறு", "Tense=Past|Gender=Neut|Number=Sing"),
+    "மாறினார்": ("VERB", "மாறு", "Tense=Past|Number=Sing|Person=3|Polite=Yes"),
+    "மாறினர்": ("VERB", "மாறு", "Tense=Past|Number=Plur|Person=3"),
+    "மாறி": ("VERB", "மாறு", "VerbForm=Part|Aspect=Perf"),
+    "மாற": ("VERB", "மாறு", "VerbForm=Inf"),
+    "மாறு": ("VERB", "மாறு", "Mood=Imp|Number=Sing|Person=2"),
+    "மாறுங்கள்": ("VERB", "மாறு", "Mood=Imp|Number=Plur|Person=2|Polite=Yes"),
+    "மாற்றும்": ("VERB", "மாற்று", "Tense=Fut|VerbForm=Part"),
+    "மாற்றுகிறது": ("VERB", "மாற்று", "Tense=Pres|Gender=Neut|Number=Sing|Person=3"),
+    "மாற்றினார்": ("VERB", "மாற்று", "Tense=Past|Number=Sing|Person=3|Polite=Yes"),
+    "மாற்றி": ("VERB", "மாற்று", "VerbForm=Part|Aspect=Perf"),
+    "மாற்ற": ("VERB", "மாற்று", "VerbForm=Inf"),
+    "வலுப்படுத்தும்": ("VERB", "வலுப்படுத்து", "Tense=Fut|VerbForm=Part"),
+    "வலுப்படுத்துகிறது": ("VERB", "வலுப்படுத்து", "Tense=Pres|Gender=Neut|Number=Sing|Person=3"),
+    "வலுப்படுத்துகிறார்": ("VERB", "வலுப்படுத்து", "Tense=Pres|Number=Sing|Person=3|Polite=Yes"),
+    "வலுப்படுத்துகிறார்கள்": ("VERB", "வலுப்படுத்து", "Tense=Pres|Number=Plur|Person=3"),
+    "வலுப்படுத்தியது": ("VERB", "வலுப்படுத்து", "Tense=Past|Gender=Neut|Number=Sing|Person=3"),
+    "வலுப்படுத்தினார்": ("VERB", "வலுப்படுத்து", "Tense=Past|Number=Sing|Person=3|Polite=Yes"),
+    "வலுப்படுத்தினர்": ("VERB", "வலுப்படுத்து", "Tense=Past|Number=Plur|Person=3"),
+    "வலுப்படுத்தி": ("VERB", "வலுப்படுத்து", "VerbForm=Part|Aspect=Perf"),
+    "வலுப்படுத்த": ("VERB", "வலுப்படுத்து", "VerbForm=Inf"),
+    "வலுப்படுத்து": ("VERB", "வலுப்படுத்து", "Mood=Imp|Number=Sing|Person=2"),
+    "வலுப்படுத்துங்கள்": ("VERB", "வலுப்படுத்து", "Mood=Imp|Number=Plur|Person=2|Polite=Yes"),
+    "மறக்காதீர்கள்": ("VERB", "மற", "Mood=Imp|Polarity=Neg|Number=Plur|Person=2|Polite=Yes"),
+    "மறக்காதீர்": ("VERB", "மற", "Mood=Imp|Polarity=Neg|Number=Sing|Person=2|Polite=Yes"),
+    "மறக்காதே": ("VERB", "மற", "Mood=Imp|Polarity=Neg|Number=Sing|Person=2"),
+    "மறக்காமல்": ("VERB", "மற", "VerbForm=Part|Polarity=Neg"),
+    "மறந்து": ("VERB", "மற", "VerbForm=Part|Aspect=Perf"),
+    "மறந்தார்": ("VERB", "மற", "Tense=Past|Number=Sing|Person=3|Polite=Yes"),
+    "மறந்தார்கள்": ("VERB", "மற", "Tense=Past|Number=Plur|Person=3"),
+    "மறந்தது": ("VERB", "மற", "Tense=Past|Gender=Neut|Number=Sing"),
+    "மறக்கிறார்": ("VERB", "மற", "Tense=Pres|Number=Sing|Person=3|Polite=Yes"),
+    "மறக்கிறார்கள்": ("VERB", "மற", "Tense=Pres|Number=Plur|Person=3"),
+    "மறக்கும்": ("VERB", "மற", "Tense=Fut|VerbForm=Part"),
+    "மறக்க": ("VERB", "மற", "VerbForm=Inf"),
+    "முன்னேறுங்கள்": ("VERB", "முன்னேறு", "Mood=Imp|Number=Plur|Person=2|Polite=Yes"),
+    "முன்னேறுங்": ("VERB", "முன்னேறு", "Mood=Imp|Number=Plur|Person=2"),
+    "முன்னேறு": ("VERB", "முன்னேறு", "Mood=Imp|Number=Sing|Person=2"),
+    "முன்னேறி": ("VERB", "முன்னேறு", "VerbForm=Part|Aspect=Perf"),
+    "முன்னேறியது": ("VERB", "முன்னேறு", "Tense=Past|Gender=Neut|Number=Sing"),
+    "முன்னேறினார்": ("VERB", "முன்னேறு", "Tense=Past|Number=Sing|Person=3|Polite=Yes"),
+    "முன்னேறினார்கள்": ("VERB", "முன்னேறு", "Tense=Past|Number=Plur|Person=3"),
+    "முன்னேறினர்": ("VERB", "முன்னேறு", "Tense=Past|Number=Plur|Person=3"),
+    "முன்னேறுகிறார்": ("VERB", "முன்னேறு", "Tense=Pres|Number=Sing|Person=3|Polite=Yes"),
+    "முன்னேறுகிறார்கள்": ("VERB", "முன்னேறு", "Tense=Pres|Number=Plur|Person=3"),
+    "முன்னேறும்": ("VERB", "முன்னேறு", "Tense=Fut|VerbForm=Part"),
+    "முன்னேற": ("VERB", "முன்னேறு", "VerbForm=Inf"),
+    "செய்யுங்கள்": ("VERB", "செய்", "Mood=Imp|Number=Plur|Person=2|Polite=Yes"),
+    "படியுங்கள்": ("VERB", "படி", "Mood=Imp|Number=Plur|Person=2|Polite=Yes"),
+    "எழுதுங்கள்": ("VERB", "எழுது", "Mood=Imp|Number=Plur|Person=2|Polite=Yes"),
+    "வாருங்கள்": ("VERB", "வா", "Mood=Imp|Number=Plur|Person=2|Polite=Yes"),
+    "பாருங்கள்": ("VERB", "பார்", "Mood=Imp|Number=Plur|Person=2|Polite=Yes"),
     "செய்து": ("VERB", "செய்", "VerbForm=Part|Aspect=Perf"),
     "செய்தார்": ("VERB", "செய்", "Tense=Past|Number=Sing|Person=3|Polite=Yes"),
     "செய்தனர்": ("VERB", "செய்", "Tense=Past|Number=Plur|Person=3"),
@@ -281,15 +372,61 @@ TAMIL_COMMON_VERBS = {
     "சென்றார்கள்": ("VERB", "செல்", "Tense=Past|Number=Plur|Person=3"),
     "பார்த்து": ("VERB", "பார்", "VerbForm=Part|Aspect=Perf"),
     "பார்த்தார்": ("VERB", "பார்", "Tense=Past|Number=Sing|Person=3|Polite=Yes"),
+    "இரு": ("VERB", "இரு", "Mood=Imp|Number=Sing|Person=2"),
+    "இருங்கள்": ("VERB", "இரு", "Mood=Imp|Number=Plur|Person=2|Polite=Yes"),
+    "இருக்க": ("VERB", "இரு", "VerbForm=Inf"),
     "இருந்து": ("VERB", "இரு", "VerbForm=Part|Aspect=Perf"),
     "இருந்தார்": ("VERB", "இரு", "Tense=Past|Number=Sing|Person=3|Polite=Yes"),
+    "இருந்தார்கள்": ("VERB", "இரு", "Tense=Past|Number=Plur|Person=3"),
+    "இருந்தது": ("VERB", "இரு", "Tense=Past|Gender=Neut|Number=Sing"),
+    "இருந்தனர்": ("VERB", "இரு", "Tense=Past|Number=Plur|Person=3"),
+    "இருக்கிறார்": ("VERB", "இரு", "Tense=Pres|Number=Sing|Person=3|Polite=Yes"),
+    "இருக்கிறார்கள்": ("VERB", "இரு", "Tense=Pres|Number=Plur|Person=3"),
     "இருக்கிறது": ("VERB", "இரு", "Tense=Pres|Gender=Neut|Number=Sing|Person=3"),
+    "இருக்கின்றன": ("VERB", "இரு", "Tense=Pres|Gender=Neut|Number=Plur|Person=3"),
+    "இருப்பார்": ("VERB", "இரு", "Tense=Fut|Number=Sing|Person=3|Polite=Yes"),
+    "இருப்பார்கள்": ("VERB", "இரு", "Tense=Fut|Number=Plur|Person=3"),
+    "இருக்கும்": ("VERB", "இரு", "Tense=Fut|VerbForm=Part"),
+    "இருக்கலாம்": ("VERB", "இரு", "Mood=Pot"),
+    "இருக்கக்கூடாது": ("VERB", "இரு", "Mood=Proh|Polarity=Neg"),
     "உள்ளது": ("VERB", "உள்", "Tense=Pres|Gender=Neut|Number=Sing|Person=3"),
     "உள்ளன": ("VERB", "உள்", "Tense=Pres|Gender=Neut|Number=Plur|Person=3"),
     "இல்லை": ("VERB", "இல்", "Polarity=Neg"),
     "வேண்டும்": ("VERB", "வேண்டு", "Mood=Des"),
     "முடியும்": ("VERB", "முடி", "Mood=Pot"),
     "முடியாது": ("VERB", "முடி", "Mood=Pot|Polarity=Neg"),
+}
+
+TAMIL_COMMON_NOUNS = {
+    "உனக்காக": ("NOUN", "நீ", "Case=Ben|Number=Sing|Person=2"),
+    "உனக்கு": ("NOUN", "நீ", "Case=Dat|Number=Sing|Person=2"),
+    "உன்னை": ("NOUN", "நீ", "Case=Acc|Number=Sing|Person=2"),
+    "உன்னால்": ("NOUN", "நீ", "Case=Ins|Number=Sing|Person=2"),
+    "உன்னுடன்": ("NOUN", "நீ", "Case=Com|Number=Sing|Person=2"),
+    "உன்னில்": ("NOUN", "நீ", "Case=Loc|Number=Sing|Person=2"),
+    "உன்": ("NOUN", "நீ", "Case=Gen|Number=Sing|Person=2"),
+    "எனக்காக": ("NOUN", "நான்", "Case=Ben|Number=Sing|Person=1"),
+    "எனக்கு": ("NOUN", "நான்", "Case=Dat|Number=Sing|Person=1"),
+    "என்னை": ("NOUN", "நான்", "Case=Acc|Number=Sing|Person=1"),
+    "என்னால்": ("NOUN", "நான்", "Case=Ins|Number=Sing|Person=1"),
+    "உங்களுக்காக": ("NOUN", "நீங்கள்", "Case=Ben|Number=Plur|Person=2"),
+    "உங்களுக்கு": ("NOUN", "நீங்கள்", "Case=Dat|Number=Plur|Person=2"),
+    "ஆரோக்கியம்": ("NOUN", "ஆரோக்கியம்", "Case=Nom|Number=Sing"),
+    "ஆரோக்கியமாக": ("NOUN", "ஆரோக்கியம்", "Case=Nom|Number=Sing"),
+    "ஆரோக்கியமா": ("NOUN", "ஆரோக்கியம்", "Case=Nom|Number=Sing"),
+    "ஆரோக்கியத்தை": ("NOUN", "ஆரோக்கியம்", "Case=Acc|Number=Sing"),
+    "ஆரோக்கியத்திற்கு": ("NOUN", "ஆரோக்கியம்", "Case=Dat|Number=Sing"),
+    "ஆரோக்கியத்தில்": ("NOUN", "ஆரோக்கியம்", "Case=Loc|Number=Sing"),
+    "ஆரோக்கியத்துடன்": ("NOUN", "ஆரோக்கியம்", "Case=Com|Number=Sing"),
+    "ஆரோக்கியத்தின்": ("NOUN", "ஆரோக்கியம்", "Case=Gen|Number=Sing"),
+    "கவனம்": ("NOUN", "கவனம்", "Case=Nom|Number=Sing"),
+    "கவனமாக": ("ADV", "கவனம்", ""),
+    "கவனமா": ("ADV", "கவனம்", ""),
+    "கவனத்தை": ("NOUN", "கவனம்", "Case=Acc|Number=Sing"),
+    "கவனத்துடன்": ("NOUN", "கவனம்", "Case=Com|Number=Sing"),
+    "கவனத்தில்": ("NOUN", "கவனம்", "Case=Loc|Number=Sing"),
+    "கவனத்திற்கு": ("NOUN", "கவனம்", "Case=Dat|Number=Sing"),
+    "கவனத்தின்": ("NOUN", "கவனம்", "Case=Gen|Number=Sing"),
 }
 
 
@@ -318,7 +455,12 @@ def _analyze_tamil_word(word: str) -> Tuple[str, str, str, str]:
     if word in TAMIL_POSTPOSITIONS:
         return ("ADP", "POSTP", word, "")
 
-    # 6. Exact Common Verb lookup
+    # 6. Exact Common Noun lookup
+    if word in TAMIL_COMMON_NOUNS:
+        pos, lemma, morph = TAMIL_COMMON_NOUNS[word]
+        return (pos, pos, lemma, morph)
+
+    # 7. Exact Common Verb lookup
     if word in TAMIL_COMMON_VERBS:
         pos, lemma, morph = TAMIL_COMMON_VERBS[word]
         return (pos, pos, lemma, morph)
@@ -358,6 +500,35 @@ def _analyze_tamil_word(word: str) -> Tuple[str, str, str, str]:
         ("க்கப்பட", "Voice=Pass|VerbForm=Inf"),
         ("ப்பட்டது", "Voice=Pass|Tense=Past|Gender=Neut|Number=Sing"),
         ("பட்டது", "Voice=Pass|Tense=Past|Gender=Neut|Number=Sing"),
+        ("க்காதீர்கள்", "Mood=Imp|Polarity=Neg|Number=Plur|Person=2|Polite=Yes"),
+        ("ாதீர்கள்", "Mood=Imp|Polarity=Neg|Number=Plur|Person=2|Polite=Yes"),
+        ("க்காதீர்", "Mood=Imp|Polarity=Neg|Number=Sing|Person=2|Polite=Yes"),
+        ("ாதீர்", "Mood=Imp|Polarity=Neg|Number=Sing|Person=2|Polite=Yes"),
+        ("க்காதே", "Mood=Imp|Polarity=Neg|Number=Sing|Person=2"),
+        ("ாதே", "Mood=Imp|Polarity=Neg|Number=Sing|Person=2"),
+        ("க்காமல்", "VerbForm=Part|Polarity=Neg"),
+        ("ாமல்", "VerbForm=Part|Polarity=Neg"),
+        ("ப்படுத்தும்", "Tense=Fut|VerbForm=Part"),
+        ("ப்படுத்துகிறது", "Tense=Pres|Gender=Neut|Number=Sing|Person=3"),
+        ("ப்படுத்துகிறார்", "Tense=Pres|Number=Sing|Person=3|Polite=Yes"),
+        ("ப்படுத்துகிறார்கள்", "Tense=Pres|Number=Plur|Person=3"),
+        ("ப்படுத்தியது", "Tense=Past|Gender=Neut|Number=Sing"),
+        ("ப்படுத்தினார்", "Tense=Past|Number=Sing|Person=3|Polite=Yes"),
+        ("ப்படுத்தினர்", "Tense=Past|Number=Plur|Person=3"),
+        ("ப்படுத்தி", "VerbForm=Part|Aspect=Perf"),
+        ("ப்படுத்த", "VerbForm=Inf"),
+        ("ப்படுத்து", "Mood=Imp|Number=Sing|Person=2"),
+        ("ப்படுத்துங்கள்", "Mood=Imp|Number=Plur|Person=2|Polite=Yes"),
+        ("மாகும்", "Tense=Fut|VerbForm=Part"),
+        ("ஆகும்", "Tense=Fut|VerbForm=Part"),
+        ("மாகிறது", "Tense=Pres|Gender=Neut|Number=Sing|Person=3"),
+        ("ஆகிறது", "Tense=Pres|Gender=Neut|Number=Sing|Person=3"),
+        ("மாகி", "VerbForm=Part|Aspect=Perf"),
+        ("ஆகி", "VerbForm=Part|Aspect=Perf"),
+        ("ுங்கள்", "Mood=Imp|Number=Plur|Person=2|Polite=Yes"),
+        ("ுங்", "Mood=Imp|Number=Plur|Person=2"),
+        ("க்கக்கூடாது", "Mood=Proh|Polarity=Neg"),
+        ("க்கூடாது", "Mood=Proh|Polarity=Neg"),
         ("க்கலாம்", "Mood=Pot"),
         ("லாம்", "Mood=Pot"),
         ("க்க", "VerbForm=Inf"),
@@ -367,19 +538,29 @@ def _analyze_tamil_word(word: str) -> Tuple[str, str, str, str]:
     for suffix, morph in verb_suffixes:
         if word.endswith(suffix) and len(word) > len(suffix) + 1:
             base = word[:-len(suffix)]
+            if base in TAMIL_VERB_ROOTS:
+                base = TAMIL_VERB_ROOTS[base]
+            elif (base + "ு") in TAMIL_VERB_ROOTS:
+                base = TAMIL_VERB_ROOTS[base + "ு"]
             return ("VERB", "VERB", base, morph)
 
     # 8. Adjective Suffixes
     adj_suffixes = ["ஆன", "வான", "மான", "யான", "கான", "இல்லாத", "உள்ள", "நல்ல"]
     for s in adj_suffixes:
         if word.endswith(s) and len(word) > len(s):
-            return ("ADJ", "ADJ", word[:-len(s)] if len(word) > len(s) + 2 else word, "")
+            base = word[:-len(s)]
+            if s == "மான" and (base + "ம்") in TAMIL_COMMON_NOUNS:
+                base = base + "ம்"
+            return ("ADJ", "ADJ", base if len(base) >= 2 else word, "")
 
     # 9. Adverb Suffixes
     adv_suffixes = ["யாக", "வாக", "றாக", "ஆக", "மாக", "காக", "தாக", "ாகக்", "உடன்"]
     for s in adv_suffixes:
         if word.endswith(s) and len(word) > len(s):
-            return ("ADV", "ADV", word[:-len(s)] if len(word) > len(s) + 2 else word, "")
+            base = word[:-len(s)]
+            if s == "மாக" and (base + "ம்") in TAMIL_COMMON_NOUNS:
+                base = base + "ம்"
+            return ("ADV", "ADV", base if len(base) >= 2 else word, "")
 
     # 10. Noun Suffixes / Case Endings
     noun_cases = [
