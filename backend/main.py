@@ -6,6 +6,10 @@ from config import get_settings
 from database import init_indexes
 from routes import auth, documents, search, admin, jobs
 from routes import summarize  
+from fastapi.middleware.cors import CORSMiddleware
+
+
+
 
 settings = get_settings()
 
@@ -21,6 +25,14 @@ app = FastAPI(
     version="0.1.0",
     description="Centralized platform for language resource collection, processing, and analysis.",
     lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.add_middleware(
