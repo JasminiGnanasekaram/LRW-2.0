@@ -1,4 +1,4 @@
-"""Text cleaning and normalization supporting English, Tamil, Sinhala, and multilingual documents."""
+﻿"""Text cleaning and normalization supporting English, Tamil, Sinhala, and multilingual documents."""
 import re
 import unicodedata
 
@@ -45,7 +45,7 @@ def remove_unwanted_chars(text: str) -> str:
     """
     allowed = []
     # Common punctuation and currency signs used in English, Tamil, and Sinhala
-    safe_symbols = set(".,!?:;\"'()[]{}<>-–—/\\@#$%&*+=_~^`|।॥\n\r\t \u200c\u200d\u0BF9\u0DF4₹$€£¥")
+    safe_symbols = set(r".,!?:;\"'()[]{}<>-–—/\@#$%&*+=_~^`|।॥" + "\n\r\t \u200c\u200d\u0BF9\u0DF4₹$€£¥")
     for ch in text:
         if ch in safe_symbols:
             allowed.append(ch)
@@ -56,37 +56,14 @@ def remove_unwanted_chars(text: str) -> str:
             allowed.append(ch)
     return "".join(allowed)
 
-<<<<<<< HEAD
-def collapse_whitespace(text: str) -> str:
-    text = re.sub(r"[ \t]+", " ", text)
-    text = re.sub(r"\n{3,}", "\n\n", text)
-    return text.strip()
-
-
-def collapse_repeated_punctuation(text: str) -> str:
-    """Collapse punctuation runs such as !!! or ??? to one mark."""
-    return re.sub(r"([.,!?:;])\1+", r"\1", text)
-
-
-def remove_duplicate_lines(text: str) -> str:
-    seen = set()
-    out_lines = []
-    for line in text.split("\n"):
-        key = line.strip()
-        if key and key in seen:
-            continue
-        seen.add(key)
-        out_lines.append(line)
-    return "\n".join(out_lines)
-=======
 
 def normalize_punctuation(text: str) -> str:
     """
     Normalize quotes, dashes, and visual noise without breaking decimal numbers (e.g. 3.14)
     or standard abbreviations (e.g. Dr., Rs., Mr.).
     """
-    text = re.sub(r"[“”«»„‟˝`´]+", '"', text)
-    text = re.sub(r"[‘’‛‚]+", "'", text)
+    text = re.sub(r"[""«»„‟˝`´]+", '"', text)
+    text = re.sub(r"[''‛‚]+", "'", text)
     text = re.sub(r"[–—]+", "-", text)
     text = re.sub(r"[•●▪◆◦◾◽◼★☆✓✔✕✖✗✘✙✚✜✠\u2022\u25aa\u25ab]+", " ", text)
     # Deduplicate repeated dots/exclamation/question marks (keep ellipsis as max 3 dots)
@@ -111,7 +88,6 @@ def collapse_whitespace(text: str) -> str:
     # Collapse 3 or more newlines into double newline (paragraph break)
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
->>>>>>> origin/kirupaN
 
 
 def remove_duplicate_sentences(text: str) -> str:
