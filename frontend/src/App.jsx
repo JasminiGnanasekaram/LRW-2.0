@@ -12,7 +12,11 @@ import ForgotPassword from "./pages/ForgotPassword.jsx";
 import ResetPassword from "./pages/ResetPassword.jsx";
 import Home from "./pages/Home.jsx";
 import ResendVerification from "./pages/ResendVerification.jsx";
-import LanguageSwitcher, { useUILanguage, UI_STRINGS } from "./components/LanguageSwitcher.jsx";
+import Terms from "./pages/Terms.jsx";
+import Privacy from "./pages/Privacy.jsx";
+import Licenses from "./pages/Licenses.jsx";
+import About from "./pages/About.jsx";
+import Contact from "./pages/Contact.jsx";
 
 function ProtectedRoute({ children, role }) {
   const u = currentUser();
@@ -21,39 +25,26 @@ function ProtectedRoute({ children, role }) {
   return children;
 }
 
-function TopBar({ uiLang, setUiLang }) {
-  const navigate  = useNavigate();
-  const location  = useLocation();
-  const user      = currentUser();
-  const s         = UI_STRINGS[uiLang] || UI_STRINGS.en;
-  const isActive  = (path) => location.pathname === path ? "active" : "";
+function TopBar() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const user = currentUser();
+
+  const isActive = (path) => location.pathname === path ? "active" : "";
 
   if (!user) {
-    const publicPages = ["/home", "/login", "/register", "/forgot-password", "/reset-password", "/verify-email"];
+    const publicPages = ["/home", "/login", "/register", "/forgot-password", "/reset-password", "/verify-email", "/terms", "/privacy", "/licenses", "/about", "/contact"];
     const isPublic = publicPages.some(p => location.pathname.startsWith(p));
     if (!isPublic) return null;
     if (["/login", "/register"].includes(location.pathname)) return null;
 
     return (
       <nav className="topbar">
-        <span className="topbar-brand" onClick={() => navigate("/home")} style={{ cursor: "pointer" }}>
-          LR<span>W</span>
-        </span>
+        <span className="topbar-brand" onClick={() => navigate("/home")} style={{ cursor: "pointer" }}>LR<span>W</span></span>
         <div className="topbar-links" />
         <div className="topbar-right">
-          <LanguageSwitcher lang={uiLang} onChange={setUiLang} />
-          <Link to="/login">
-            <button className="topbar-logout">{s.signIn}</button>
-          </Link>
-          <Link to="/register">
-            <button style={{
-              background: "#fff", color: "var(--forest)", border: "none",
-              padding: "5px 14px", borderRadius: 6, fontSize: 13,
-              fontWeight: 600, cursor: "pointer",
-            }}>
-              {s.getStarted}
-            </button>
-          </Link>
+          <Link to="/login"><button className="topbar-logout">Sign in</button></Link>
+          <Link to="/register"><button style={{ background: "#fff", color: "var(--forest)", border: "none", padding: "5px 14px", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Get started</button></Link>
         </div>
       </nav>
     );
@@ -63,50 +54,44 @@ function TopBar({ uiLang, setUiLang }) {
 
   return (
     <nav className="topbar">
-      <span className="topbar-brand" onClick={() => navigate("/")} style={{ cursor: "pointer" }}>
-        LR<span>W</span>
-      </span>
+      <span className="topbar-brand" onClick={() => navigate("/")} style={{ cursor: "pointer" }}>LR<span>W</span></span>
       <div className="topbar-links">
-        <Link to="/"       className={isActive("/")}      >{s.dashboard}</Link>
-        <Link to="/upload" className={isActive("/upload")} >{s.upload}</Link>
-        <Link to="/search" className={isActive("/search")} >{s.search}</Link>
-        {user.role === "admin" && (
-          <Link to="/admin" className={isActive("/admin")}>{s.admin}</Link>
-        )}
+        <Link to="/" className={isActive("/")}>Dashboard</Link>
+        <Link to="/upload" className={isActive("/upload")}>Upload</Link>
+        <Link to="/search" className={isActive("/search")}>Search</Link>
+        {user.role === "admin" && <Link to="/admin" className={isActive("/admin")}>Admin</Link>}
       </div>
       <div className="topbar-right">
-        <LanguageSwitcher lang={uiLang} onChange={setUiLang} />
         <div className="topbar-user">
           <span>{user.name}</span>
-          <span className="badge" style={{
-            background: "rgba(255,255,255,0.15)", color: "#fff", fontSize: "11px",
-          }}>
-            {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
-          </span>
+          <span className="badge" style={{ background: "rgba(255,255,255,0.15)", color: "#fff", fontSize: "11px" }}>{user.role.charAt(0).toUpperCase() + user.role.slice(1)}</span>
         </div>
-        <button className="topbar-logout" onClick={handleLogout}>{s.signOut}</button>
+        <button className="topbar-logout" onClick={handleLogout}>Sign out</button>
       </div>
     </nav>
   );
 }
 
 export default function App() {
-  const [uiLang, setUiLang] = useUILanguage();
-
   return (
     <>
-      <TopBar uiLang={uiLang} setUiLang={setUiLang} />
+      <TopBar />
       <Routes>
-        <Route path="/home"            element={<Home />} />
-        <Route path="/login"           element={<Login />} />
-        <Route path="/register"        element={<Register />} />
-        <Route path="/verify-email"    element={<VerifyEmail />} />
+        <Route path="/home" element={<Home />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/reset-password"  element={<ResetPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/terms" element={<Terms />} />
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/licenses" element={<Licenses />} />
+        <Route path="/about" element={<About />} />
+        <Route path="/contact" element={<Contact />} />
         <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
         <Route path="/upload" element={<ProtectedRoute><Upload /></ProtectedRoute>} />
         <Route path="/search" element={<ProtectedRoute><Search /></ProtectedRoute>} />
-        <Route path="/documents/:id" element={<ProtectedRoute><DocumentView uiLang={uiLang} /></ProtectedRoute>} />
+        <Route path="/documents/:id" element={<ProtectedRoute><DocumentView /></ProtectedRoute>} />
         <Route path="/admin" element={<ProtectedRoute role="admin"><Admin /></ProtectedRoute>} />
         <Route path="/resend-verification" element={<ResendVerification />} />
         <Route path="*" element={<Navigate to="/home" />} />
