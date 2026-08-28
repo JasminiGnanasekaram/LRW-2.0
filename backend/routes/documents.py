@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, Depends, UploadFile, File, Form, Body, HTTPException
 from fastapi.responses import JSONResponse, PlainTextResponse
 from datetime import datetime
 from bson import ObjectId
@@ -332,6 +332,41 @@ async def get_document(doc_id: str, user: dict = Depends(get_current_user)):
             raw["summary"] = summary
 
     return await _doc_out(raw, cleaned, meta, analysis)
+
+
+# ── Update document metadata ──────────────────────────────────────────
+@router.patch("/{doc_id}/metadata")
+async def update_document_metadata(
+    doc_id: str,
+    metadata_update: dict = Body(...),
+    user: dict = Depends(get_current_user),
+):
+    """Update metadata for a document."""
+    try:
+        raw = await raw_documents_col.find_one({"_id": ObjectId(doc_id)})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid document ID")
+
+    if not raw:
+        raise HTTPException(status_code=404, detail="Not found")
+    if str(raw["user_id"]) != user["id"] and user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    meta = await document_metadata_col.find_one({"raw_document_id": raw["_id"]})
+    if meta:
+        await document_metadata_col.update_one(
+            {"_id": meta["_id"]},
+            {"$set": {"data": metadata_update, "updated_at": datetime.utcnow()}},
+        )
+    else:
+        meta_doc = {
+            "raw_document_id": raw["_id"],
+            "data": metadata_update,
+            "created_at": datetime.utcnow(),
+        }
+        await document_metadata_col.insert_one(meta_doc)
+
+    return {"detail": "Metadata updated successfully", "metadata": metadata_update}
 
 
 # ── Delete document ───────────────────────────────────────────────────

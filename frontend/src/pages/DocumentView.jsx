@@ -4,7 +4,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
 } from "recharts";
-import { getDocument, exportDocument } from "../api";
+import { getDocument, exportDocument, updateDocumentMetadata } from "../api";
 
 const PIE_COLORS = ["#1a3a2a", "#4a7c59", "#8fb89a", "#d4e8d0", "#2d5a3d", "#6aaa80", "#b0d8b8", "#386641"];
 const SENTIMENT_COLORS = {
@@ -42,7 +42,6 @@ const NLP_SECTIONS = [
   {
     key: "language",
     label: { English: "Language Detection", Tamil: "மொழி கண்டறிதல்", Sinhala: "භාෂා හඳුනාගැනීම" },
-    icon: "🌐",
     desc: {
       English: "Detects primary and secondary languages, script proportions, and multilingual presence.",
       Tamil: "முதன்மை மற்றும் இரண்டாம் நிலை மொழிகள், எழுத்து விகிதங்கள் மற்றும் பன்மொழித் தன்மையைக் கண்டறிகிறது.",
@@ -50,9 +49,62 @@ const NLP_SECTIONS = [
     },
   },
   {
+    key: "tokens",
+    label: { English: "Tokenization", Tamil: "சொல் பிரித்தல்", Sinhala: "ටෝකනීකරණය" },
+    desc: {
+      English: "Segments the text into normalized tokens with language codes and sentence alignments.",
+      Tamil: "உரையை மொழி குறியீடுகள் மற்றும் வாக்கிய வரிசையுடன் கூடிய சீராக்கப்பட்ட சொற்களாகப் பிரிக்கிறது.",
+      Sinhala: "භාෂා කේත සහ වාක්‍ය පෙළගැස්ම සමඟ පෙළ ටෝකන බවට වෙන් කරයි.",
+    },
+  },
+  {
+    key: "sentences",
+    label: { English: "Sentences", Tamil: "வாக்கியங்கள்", Sinhala: "වාක්‍ය" },
+    desc: {
+      English: "Multilingual sentence segmentation handling punctuation, abbreviations, and decimal numbers.",
+      Tamil: "நிறுத்தற்குறிகள், சுருக்கங்கள் மற்றும் தசம எண்களைப் பாதுகாத்து வாக்கியங்களைப் பிரிக்கிறது.",
+      Sinhala: "විරාම ලකුණු, කෙටි යෙදුම් සහ දශම සංඛ්‍යා නිවැරදිව කළමනාකරණය කරමින් වාක්‍ය වෙන් කරයි.",
+    },
+  },
+  {
+    key: "pos",
+    label: { English: "Part-of-Speech (POS)", Tamil: "சொல் வகை (POS)", Sinhala: "පද වර්ග (POS)" },
+    desc: {
+      English: "Identifies grammatical roles of words: Nouns, Verbs, Adjectives, Adverbs, Pronouns, and Conjunctions.",
+      Tamil: "சொற்களின் இலக்கண வகைகளை (பெயர்ச்சொல், வினைச்சொல், பெயரடை, வினையடை, பிரதிப்பெயர், இணைப்புச்சொல்) கண்டறிகிறது.",
+      Sinhala: "වචනවල ව්‍යාකරණ භූමිකාව (නාම පද, ක්‍රියා පද, විශේෂණ, ක්‍රියා විශේෂණ, සර්වනාම, සම්බන්ධක පද) හඳුනා ගනී.",
+    },
+  },
+  {
+    key: "lemma",
+    label: { English: "Lemmatization", Tamil: "வேர்ச்சொல்", Sinhala: "ලේමටීකරණය" },
+    desc: {
+      English: "Reduces inflected words to their base dictionary roots across English, Tamil, and Sinhala.",
+      Tamil: "வார்த்தைகளை அவற்றின் அடிப்படை வேர்ச்சொல் வடிவத்திற்கு மாற்றுகிறது.",
+      Sinhala: "වචනවල අර්ථය වෙනස් නොකර ඒවායේ මූලික ශබ්දකෝෂ ස්වරූපයට අඩු කරයි.",
+    },
+  },
+  {
+    key: "morph",
+    label: { English: "Morphological Analysis", Tamil: "உருபியல் பகுப்பாய்வு", Sinhala: "රූප විද්‍යාත්මක විශ්ලේෂණය" },
+    desc: {
+      English: "Extracts grammatical features including grammatical Case, Number, Tense, and Person.",
+      Tamil: "வேற்றுமை, எண், காலம் மற்றும் நபர் போன்ற உருபியல் கூறுகளை பகுப்பாய்வு செய்கிறது.",
+      Sinhala: "විභක්ති, වචන, කාලය සහ පුරුෂ වැනි රූපවිද්‍යාත්මක ලක්ෂණ විග්‍රහ කරයි.",
+    },
+  },
+  {
+    key: "ner",
+    label: { English: "Named Entities", Tamil: "பெயரிடப்பட்ட நிறுவனங்கள்", Sinhala: "නම් කළ ආයතන" },
+    desc: {
+      English: "Extracts key named entities: Persons, Organizations, Locations, Dates, Times, and Monetary amounts.",
+      Tamil: "முக்கிய பெயர்கள்: நபர்கள், நிறுவனங்கள், இடங்கள், தேதிகள், நேரம் மற்றும் பண மதிப்புகளை அடையாளம் காண்கிறது.",
+      Sinhala: "වැදගත් ආයතන හඳුනා ගනී: පුද්ගලයන්, සංවිධාන, ස්ථාන, දිනයන්, වේලාව සහ මුදල් ප්‍රමාණ.",
+    },
+  },
+  {
     key: "sentiment",
     label: { English: "Sentiment Analysis", Tamil: "உணர்வு பகுப்பாய்வு", Sinhala: "හැඟීම් විශ්ලේෂණය" },
-    icon: "😊",
     desc: {
       English: "Evaluates overall and sentence-by-sentence emotional polarity (Positive, Negative, or Neutral).",
       Tamil: "முழு ஆவணம் மற்றும் வாக்கிய வாரியான உணர்வு நிலையை (நேர்மறை, எதிர்மறை, நடுநிலை) மதிப்பிடுகிறது.",
@@ -62,7 +114,6 @@ const NLP_SECTIONS = [
   {
     key: "classification",
     label: { English: "Text Classification", Tamil: "உரை வகைப்பாடு", Sinhala: "පෙළ වර්ගීකරණය" },
-    icon: "🏷️",
     desc: {
       English: "Categorizes the text into domain topics (Politics, Sports, Business, Technology, Education, etc.) with probabilities.",
       Tamil: "உரையை அதன் தலைப்பு அடிப்படையில் (அரசியல், விளையாட்டு, வணிகம், தொழில்நுட்பம், கல்வி) வகைப்படுத்துகிறது.",
@@ -70,73 +121,21 @@ const NLP_SECTIONS = [
     },
   },
   {
-    key: "ner",
-    label: { English: "Named Entities", Tamil: "பெயரிடப்பட்ட நிறுவனங்கள்", Sinhala: "නම් කළ ආයතන" },
-    icon: "📍",
-    desc: {
-      English: "Extracts key named entities: Persons, Organizations, Locations, Dates, Times, and Monetary amounts.",
-      Tamil: "முக்கிய பெயர்கள்: நபர்கள், நிறுவனங்கள், இடங்கள், தேதிகள், நேரம் மற்றும் பண மதிப்புகளை அடையாளம் காண்கிறது.",
-      Sinhala: "වැදගත් ආයතන හඳුනා ගනී: පුද්ගලයන්, සංවිධාන, ස්ථාන, දිනයන්, වේලාව සහ මුදල් ප්‍රමාණ.",
-    },
-  },
-  {
-    key: "pos",
-    label: { English: "Part-of-Speech", Tamil: "சொல் வகை", Sinhala: "පද වර්ග" },
-    icon: "🔤",
-    desc: {
-      English: "Identifies grammatical roles of words: Nouns, Verbs, Adjectives, Adverbs, Pronouns, and Conjunctions.",
-      Tamil: "சொற்களின் இலக்கண வகைகளை (பெயர்ச்சொல், வினைச்சொல், பெயரடை, வினையடை, பிரதிப்பெயர், இணைப்புச்சொல்) கண்டறிகிறது.",
-      Sinhala: "වචනවල ව්‍යාකරණ භූමිකාව (නාම පද, ක්‍රියා පද, විශේෂණ, ක්‍රියා විශේෂණ, සර්වනාම, සම්බන්ධක පද) හඳුනා ගනී.",
-    },
-  },
-  {
-    key: "tokens",
-    label: { English: "Tokenization", Tamil: "சொல் பிரித்தல்", Sinhala: "ටෝකනීකරණය" },
-    icon: "✂️",
-    desc: {
-      English: "Segments the text into normalized tokens with language codes and sentence alignments.",
-      Tamil: "உரையை மொழி குறியீடுகள் மற்றும் வாக்கிய வரிசையுடன் கூடிய சீராக்கப்பட்ட சொற்களாகப் பிரிக்கிறது.",
-      Sinhala: "භාෂා කේත සහ වාක්‍ය පෙළගැස්ම සමඟ පෙළ ටෝකන බවට වෙන් කරයි.",
-    },
-  },
-  {
-    key: "lemma",
-    label: { English: "Lemmatization", Tamil: "அடிவடிவ சுருக்கம்", Sinhala: "ලේමටීකරණය" },
-    icon: "📚",
-    desc: {
-      English: "Reduces inflected words to their base dictionary roots across English, Tamil, and Sinhala.",
-      Tamil: "வார்த்தைகளை அவற்றின் அடிப்படை அகராதி வடிவத்திற்கு மாற்றுகிறது.",
-      Sinhala: "වචනවල අර්ථය වෙනස් නොකර ඒවායේ මූලික ශබ්දකෝෂ ස්වරූපයට අඩු කරයි.",
-    },
-  },
-  {
-    key: "morph",
-    label: { English: "Morphological Analysis", Tamil: "உருபியல் பகுப்பாய்வு", Sinhala: "රූප විද්‍යාත්මක විශ්ලේෂණය" },
-    icon: "🧬",
-    desc: {
-      English: "Extracts grammatical features including grammatical Case, Number, Tense, and Person.",
-      Tamil: "வேற்றுமை, எண், காலம் மற்றும் நபர் போன்ற உருபியல் கூறுகளை பகுப்பாய்வு செய்கிறது.",
-      Sinhala: "විභක්ති, වචන, කාලය සහ පුරුෂ වැනි රූපවිද්‍යාත්මක ලක්ෂණ විග්‍රහ කරයි.",
-    },
-  },
-  {
-    key: "sentences",
-    label: { English: "Sentences", Tamil: "வாக்கியங்கள்", Sinhala: "වාක්‍ය" },
-    icon: "📑",
-    desc: {
-      English: "Multilingual sentence segmentation handling punctuation, abbreviations, and decimal numbers.",
-      Tamil: "நிறுத்தற்குறிகள், சுருக்கங்கள் மற்றும் தசம எண்களைப் பாதுகாத்து வாக்கியங்களைப் பிரிக்கிறது.",
-      Sinhala: "විරාම ලකුණු, කෙටි යෙදුම් සහ දශම සංඛ්‍යා නිවැරදිව කළමනාකරණය කරමින් වාක්‍ය වෙන් කරයි.",
-    },
-  },
-  {
     key: "statistics",
     label: { English: "Corpus Statistics", Tamil: "புள்ளிவிவரங்கள்", Sinhala: "සංඛ්‍යාලේඛන" },
-    icon: "📊",
     desc: {
       English: "Detailed document metrics including character lengths, token density, vocabulary richness, and paragraph counts.",
       Tamil: "எழுத்துக்கள், சொற்கள், தனித்துவ சொற்கள் மற்றும் பத்திகள் பற்றிய முழுமையான புள்ளிவிவரங்கள்.",
       Sinhala: "අක්ෂර, ටෝකන, අනන්‍ය වචන සහ ඡේද පිළිබඳ සවිස්තරාත්මක සංඛ්‍යාලේඛන.",
+    },
+  },
+  {
+    key: "charts",
+    label: { English: "Visual Charts", Tamil: "வரைபடங்கள்", Sinhala: "ප්‍රස්ථාර" },
+    desc: {
+      English: "Interactive visual distributions for language proportions, sentiment polarity, grammatical POS categories, and topic classification.",
+      Tamil: "மொழி பகிர்வு, உணர்வு நிலை, சொல் வகைகள் மற்றும் வகைப்பாடு ஆகியவற்றின் ஊடாடும் வரைபடங்கள்.",
+      Sinhala: "භාෂා බෙදාහැරීම, හැඟීම්, පද වර්ග සහ වර්ගීකරණය පිළිබඳ අන්තර්ක්‍රියාකාරී ප්‍රස්ථාර.",
     },
   },
 ];
@@ -405,6 +404,13 @@ export default function DocumentView() {
   const [error, setError] = useState("");
   const [appLang, setAppLang] = useState(localStorage.getItem("lrw_lang") || "");
 
+  // Metadata editing state
+  const [isEditingMeta, setIsEditingMeta] = useState(false);
+  const [metaForm, setMetaForm] = useState({});
+  const [metaSaving, setMetaSaving] = useState(false);
+  const [metaMsg, setMetaMsg] = useState(null);
+  const [customFields, setCustomFields] = useState([]);
+
   useEffect(() => {
     setError("");
     getDocument(id)
@@ -430,6 +436,82 @@ export default function DocumentView() {
       setAppLang(doc.nlp.language);
     }
   }, [doc]);
+
+  const handleStartEditMeta = () => {
+    const currentMeta = doc?.metadata || {};
+    const standardKeys = ["source", "license", "domain", "author", "publication_date", "category"];
+    const baseForm = {
+      source: currentMeta.source || "",
+      license: currentMeta.license || "",
+      domain: currentMeta.domain || "",
+      author: currentMeta.author || "",
+      publication_date: currentMeta.publication_date || "",
+      category: currentMeta.category || "open",
+    };
+    const extras = Object.entries(currentMeta)
+      .filter(([k]) => !standardKeys.includes(k))
+      .map(([key, value]) => ({
+        key,
+        value: typeof value === "object" ? JSON.stringify(value) : String(value ?? ""),
+      }));
+    setMetaForm(baseForm);
+    setCustomFields(extras);
+    setMetaMsg(null);
+    setIsEditingMeta(true);
+  };
+
+  const handleSaveMeta = async (e) => {
+    if (e) e.preventDefault();
+    setMetaSaving(true);
+    setMetaMsg(null);
+
+    const payload = { ...metaForm };
+    customFields.forEach(({ key, value }) => {
+      if (key && key.trim()) {
+        payload[key.trim()] = value;
+      }
+    });
+
+    try {
+      const res = await updateDocumentMetadata(id, payload);
+      setDoc((prev) => ({
+        ...prev,
+        metadata: res.metadata || payload,
+      }));
+      setMetaMsg({
+        type: "success",
+        text: isTamil ? "மெட்டாடேட்டா வெற்றிகரமாக புதுப்பிக்கப்பட்டது." :
+          isSinhala ? "පාරදත්ත සාර්ථකව යාවත්කාලීන කරන ලදී." :
+          "Metadata updated successfully."
+      });
+      setIsEditingMeta(false);
+    } catch (err) {
+      setMetaMsg({
+        type: "error",
+        text: err.response?.data?.detail || (
+          isTamil ? "மெட்டாடேட்டாவை புதுப்பிப்பதில் தோல்வி." :
+          isSinhala ? "පාරදත්ත යාවත්කාලීන කිරීම අසාර්ථක විය." :
+          "Failed to update metadata."
+        )
+      });
+    } finally {
+      setMetaSaving(false);
+    }
+  };
+
+  const handleAddCustomField = () => {
+    setCustomFields([...customFields, { key: "", value: "" }]);
+  };
+
+  const handleUpdateCustomField = (index, field, val) => {
+    const updated = [...customFields];
+    updated[index][field] = val;
+    setCustomFields(updated);
+  };
+
+  const handleRemoveCustomField = (index) => {
+    setCustomFields(customFields.filter((_, i) => i !== index));
+  };
 
   if (error) return (
     <div className="page" style={{ maxWidth: 720 }}>
@@ -547,7 +629,6 @@ export default function DocumentView() {
     { key: "raw", label: isTamil ? "அசல் உரை" : isSinhala ? "මුල් පෙළ" : "Raw Text" },
     ...(doc.nlp ? [
       { key: "nlp", label: isTamil ? "NLP தரவு" : isSinhala ? "NLP දත්ත" : "NLP Data" },
-      { key: "charts", label: isTamil ? "வரைபடங்கள்" : isSinhala ? "ප්‍රස්ථාර" : "Charts" },
     ] : []),
     { key: "metadata", label: isTamil ? "மெட்டாடேட்டா" : isSinhala ? "පාරදත්ත" : "Metadata" },
   ];
@@ -587,7 +668,7 @@ export default function DocumentView() {
               </span>
               {langDet.is_multilingual && (
                 <span className="badge" style={{ background: "#e0f2fe", color: "#0369a1", fontWeight: 600 }}>
-                  🌐 {isTamil ? "பன்மொழி ஆவணம்" : isSinhala ? "බහුභාෂා ලේඛනය" : "Multilingual Document"}
+                  {isTamil ? "பன்மொழி ஆவணம்" : isSinhala ? "බහුභාෂා ලේඛනය" : "Multilingual Document"}
                 </span>
               )}
             </div>
@@ -678,7 +759,7 @@ export default function DocumentView() {
             {sentiment.sentences?.length > 0 && (
               <div>
                 <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: "var(--ink)" }}>
-                  📑 {isTamil ? "வாக்கிய வாரியான உணர்வு" : isSinhala ? "වාක්‍ය මට්ටමේ හැඟීම්" : "Sentence-by-Sentence Sentiment"}
+                  {isTamil ? "வாக்கிய வாரியான உணர்வு" : isSinhala ? "වාක්‍ය මට්ටමේ හැඟීම්" : "Sentence-by-Sentence Sentiment"}
                 </div>
                 <div style={scrollBox}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
@@ -729,7 +810,7 @@ export default function DocumentView() {
                 display: "inline-block", background: "var(--mint)", border: "1.5px solid var(--forest)",
                 borderRadius: 8, padding: "8px 18px", fontSize: 16, fontWeight: 700, color: "var(--forest)"
               }}>
-                🏷️ {classif.predicted_label || classif.predicted_category || "General"}
+                {classif.predicted_label || classif.predicted_category || "General"}
               </span>
             </div>
 
@@ -901,7 +982,7 @@ export default function DocumentView() {
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 10 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--ink)" }}>
-                    🔍 {isTamil ? "சொற்கள் வாரியான இலக்கண விபரம்" : isSinhala ? "වචන අනුව ව්‍යාකරණ විස්තරය" : "Words by Part-of-Speech"}
+                    {isTamil ? "சொற்கள் வாரியான இலக்கண விபரம்" : isSinhala ? "වචන අනුව ව්‍යාකරණ විස්තරය" : "Words by Part-of-Speech"}
                   </h4>
                   {selectedPosFilter && (
                     <button
@@ -936,7 +1017,7 @@ export default function DocumentView() {
                     <tr>
                       <th style={{ ...th, width: 35 }}>#</th>
                       <th style={th}>{isTamil ? "சொல்" : isSinhala ? "වචනය (ටෝකනය)" : "Token"}</th>
-                      <th style={th}>{isTamil ? "அடிவடிவம் (Lemma)" : isSinhala ? "මූලය (Lemma)" : "Base Form (Lemma)"}</th>
+                      <th style={th}>{isTamil ? "வேர்ச்சொல் (Lemma)" : isSinhala ? "මූලය (Lemma)" : "Base Form (Lemma)"}</th>
                       <th style={{ ...th, width: 170 }}>{isTamil ? "இலக்கண வகை (POS)" : isSinhala ? "පද වර්ගය (POS)" : "Part-of-Speech"}</th>
                       <th style={th}>{isTamil ? "இலக்கண உருபியல்" : isSinhala ? "රූපවිද්‍යාත්මක ලක්ෂණ" : "Morphological Features"}</th>
                       <th style={{ ...th, width: 70 }}>{isTamil ? "வாக்கியம்" : isSinhala ? "වාක්‍යය" : "Sent ID"}</th>
@@ -994,7 +1075,7 @@ export default function DocumentView() {
                   <tr>
                     <th style={{ ...th, width: 35 }}>#</th>
                     <th style={th}>{isTamil ? "சொல்" : isSinhala ? "ටෝකනය" : "Token"}</th>
-                    <th style={th}>{isTamil ? "அடிவடிவம்" : isSinhala ? "මූලය" : "Lemma"}</th>
+                    <th style={th}>{isTamil ? "வேர்ச்சொல்" : isSinhala ? "මූලය" : "Lemma"}</th>
                     <th style={{ ...th, width: 160 }}>{isTamil ? "இலக்கண வகை (POS)" : isSinhala ? "පද වර්ගය (POS)" : "POS"}</th>
                     <th style={{ ...th, width: 60 }}>{isTamil ? "மொழி" : isSinhala ? "භාෂාව" : "Lang"}</th>
                     <th style={{ ...th, width: 80 }}>{isTamil ? "வாக்கிய எண்" : isSinhala ? "වාක්‍ය අංකය" : "Sent ID"}</th>
@@ -1042,7 +1123,7 @@ export default function DocumentView() {
                     <tr>
                       <th style={th}>{isTamil ? "அசல் சொல்" : isSinhala ? "මුල් වචනය" : "Original"}</th>
                       <th style={{ ...th, width: 32 }}></th>
-                      <th style={th}>{isTamil ? "அடிவடிவம்" : isSinhala ? "මූල ස්වරූපය" : "Base Form (Lemma)"}</th>
+                      <th style={th}>{isTamil ? "வேர்ச்சொல்" : isSinhala ? "මූල ස්වරූපය" : "Base Form (Lemma)"}</th>
                       <th style={{ ...th, width: 80 }}>{isTamil ? "மொழி" : isSinhala ? "භාෂාව" : "Language"}</th>
                     </tr>
                   </thead>
@@ -1060,7 +1141,7 @@ export default function DocumentView() {
               </div>
             ) : (
               <p className="muted" style={{ fontSize: 13 }}>
-                {isTamil ? "அனைத்து வார்த்தைகளும் ஏற்கனவே அவற்றின் அடிவடிவத்தில் உள்ளன." :
+                {isTamil ? "அனைத்து வார்த்தைகளும் ஏற்கனவே அவற்றின் வேர்ச்சொல் வடிவத்தில் உள்ளன." :
                   isSinhala ? "සියලු වචන දැනටමත් මූල ස්වරූපයේ ඇත." :
                     "All words are already in base form."}
               </p>
@@ -1077,7 +1158,7 @@ export default function DocumentView() {
                 <thead>
                   <tr>
                     <th style={th}>{isTamil ? "வார்த்தை" : isSinhala ? "වචනය" : "Word"}</th>
-                    <th style={th}>{isTamil ? "அடிவடிவம்" : isSinhala ? "මූලය" : "Lemma"}</th>
+                    <th style={th}>{isTamil ? "வேர்ச்சொல்" : isSinhala ? "මූලය" : "Lemma"}</th>
                     <th style={{ ...th, width: 160 }}>{isTamil ? "இலக்கண வகை (POS)" : isSinhala ? "පද වර්ගය (POS)" : "POS"}</th>
                     <th style={th}>{isTamil ? "இலக்கண உருபியல் கூறுகள்" : isSinhala ? "රූපවිද්‍යාත්මක ලක්ෂණ" : "Morphological Features"}</th>
                   </tr>
@@ -1152,6 +1233,88 @@ export default function DocumentView() {
                   <div style={{ fontSize: 12, color: "var(--ink-lt)", marginTop: 4 }}>{label}</div>
                 </div>
               ))}
+            </div>
+          </div>
+        );
+
+      case "charts":
+        return (
+          <div>
+            <SectionDesc desc={t(currentSection?.desc)} />
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20 }}>
+
+              {/* Chart 1: Language Distribution */}
+              <div style={{ background: "var(--bg-lt)", borderRadius: 10, padding: 18, border: "1px solid var(--border)" }}>
+                <h4 style={{ color: "var(--forest)", margin: "0 0 14px 0", fontSize: 14 }}>
+                  {isTamil ? "மொழிப் பகிர்வு" : isSinhala ? "භාෂා බෙදාහැරීම" : "Language Breakdown"}
+                </h4>
+                <div style={{ width: "100%", height: 240 }}>
+                  <ResponsiveContainer>
+                    <PieChart>
+                      <Pie data={langChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={(entry) => `${entry.name} (${entry.value}%)`}>
+                        {langChartData.map((entry, i) => (
+                          <Cell key={i} fill={LANG_COLORS[entry.name] || PIE_COLORS[i % PIE_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip /><Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Chart 2: Sentiment Distribution */}
+              <div style={{ background: "var(--bg-lt)", borderRadius: 10, padding: 18, border: "1px solid var(--border)" }}>
+                <h4 style={{ color: "var(--forest)", margin: "0 0 14px 0", fontSize: 14 }}>
+                  {isTamil ? "உணர்வு விகிதங்கள்" : isSinhala ? "හැඟීම් අනුපාතය" : "Sentiment Distribution"}
+                </h4>
+                <div style={{ width: "100%", height: 240 }}>
+                  <ResponsiveContainer>
+                    <PieChart>
+                      <Pie data={sentimentChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} label={(entry) => `${entry.name} (${entry.value}%)`}>
+                        {sentimentChartData.map((entry, i) => (
+                          <Cell key={i} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip /><Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Chart 3: POS Distribution */}
+              <div style={{ background: "var(--bg-lt)", borderRadius: 10, padding: 18, border: "1px solid var(--border)" }}>
+                <h4 style={{ color: "var(--forest)", margin: "0 0 14px 0", fontSize: 14 }}>
+                  {isTamil ? "சொல் வகைப் பகிர்வு (POS)" : isSinhala ? "පද වර්ග බෙදාහැරීම (POS)" : "Part-of-Speech Distribution"}
+                </h4>
+                <div style={{ width: "100%", height: 240 }}>
+                  <ResponsiveContainer>
+                    <BarChart data={posData.slice(0, 8)}>
+                      <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={0} angle={-15} textAnchor="end" height={45} />
+                      <YAxis tick={{ fontSize: 11 }} />
+                      <Tooltip formatter={(value, name, item) => [value, item?.payload?.label || name]} />
+                      <Bar dataKey="count" fill="var(--forest)" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Chart 4: Classification Probabilities */}
+              <div style={{ background: "var(--bg-lt)", borderRadius: 10, padding: 18, border: "1px solid var(--border)" }}>
+                <h4 style={{ color: "var(--forest)", margin: "0 0 14px 0", fontSize: 14 }}>
+                  {isTamil ? "உரை வகைப்பாடு நிகழ்தகவு" : isSinhala ? "වර්ගීකරණ සම්භාවිතාව" : "Classification Probabilities (%)"}
+                </h4>
+                <div style={{ width: "100%", height: 240 }}>
+                  <ResponsiveContainer>
+                    <BarChart data={classifChartData} layout="vertical" margin={{ left: 20 }}>
+                      <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11 }} />
+                      <YAxis type="category" dataKey="category" tick={{ fontSize: 11 }} width={90} />
+                      <Tooltip />
+                      <Bar dataKey="score" fill="#4a7c59" radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
             </div>
           </div>
         );
@@ -1276,7 +1439,288 @@ export default function DocumentView() {
 
         {tab === "cleaned" && <pre className="snippet">{doc.cleaned_text}</pre>}
         {tab === "raw" && <pre className="snippet">{doc.raw_text}</pre>}
-        {tab === "metadata" && <pre className="snippet">{JSON.stringify(doc.metadata, null, 2)}</pre>}
+        {tab === "metadata" && (
+          <div style={{ padding: "8px 0" }}>
+            {/* Metadata Header with Edit Action */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "var(--ink)" }}>
+                  {isTamil ? "ஆவண மெட்டாடேட்டா" : isSinhala ? "ලේඛන පාරදත්ත" : "Document Metadata"}
+                </h3>
+                <p className="muted" style={{ margin: "3px 0 0", fontSize: 13 }}>
+                  {isTamil ? "ஆவணத்தின் மூல உரிமை, வகை மற்றும் விவரங்களை நிர்வகிக்கவும்." :
+                    isSinhala ? "ලේඛනයේ මූලාශ්‍රය, බලපත්‍රය සහ අමතර තොරතුරු කළමනාකරණය කරන්න." :
+                    "Manage document provenance, licensing, domain, and custom metadata."}
+                </p>
+              </div>
+
+              {!isEditingMeta && (
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={handleStartEditMeta}
+                >
+                  {isTamil ? "மெட்டாடேட்டாவைத் திருத்து" : isSinhala ? "පාරදත්ත සංස්කරණය කරන්න" : "Edit Metadata"}
+                </button>
+              )}
+            </div>
+
+            {/* Notification alert */}
+            {metaMsg && (
+              <div
+                className={metaMsg.type === "success" ? "alert-success" : "alert-error"}
+                style={{
+                  marginBottom: 16,
+                  padding: "10px 14px",
+                  borderRadius: 8,
+                  fontSize: 13,
+                  background: metaMsg.type === "success" ? "#dcfce7" : "#fee2e2",
+                  color: metaMsg.type === "success" ? "#15803d" : "#b91c1c",
+                  border: `1px solid ${metaMsg.type === "success" ? "#bbf7d0" : "#fecaca"}`
+                }}
+              >
+                {metaMsg.text}
+              </div>
+            )}
+
+            {!isEditingMeta ? (
+              /* View Mode */
+              <div>
+                {doc.metadata && Object.keys(doc.metadata).length > 0 ? (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 14, marginBottom: 24 }}>
+                    {[
+                      { key: "source", label: isTamil ? "மூலம் (Source)" : isSinhala ? "මූලාශ්‍රය (Source)" : "Source", val: doc.metadata.source },
+                      { key: "domain", label: isTamil ? "பிரிவு (Domain)" : isSinhala ? "ක්ෂේත්‍රය (Domain)" : "Domain", val: doc.metadata.domain },
+                      { key: "license", label: isTamil ? "உரிமம் (License)" : isSinhala ? "බලපත්‍රය (License)" : "License", val: doc.metadata.license },
+                      { key: "category", label: isTamil ? "வகை (Category)" : isSinhala ? "කාණ්ඩය (Category)" : "Category", val: doc.metadata.category },
+                      { key: "author", label: isTamil ? "ஆசிரியர் (Author)" : isSinhala ? "කර්තෘ (Author)" : "Author", val: doc.metadata.author },
+                      { key: "publication_date", label: isTamil ? "வெளியீட்டு தேதி" : isSinhala ? "ප්‍රකාශන දිනය" : "Publication Date", val: doc.metadata.publication_date },
+                    ].map(({ key, label, val }) => (
+                      <div key={key} style={{
+                        background: "var(--bg-lt)", borderRadius: 8, padding: "14px 16px",
+                        border: "1px solid var(--border)"
+                      }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--ink-lt)", marginBottom: 6 }}>
+                          {label}
+                        </div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>
+                          {val || <span className="muted" style={{ fontWeight: 400 }}>—</span>}
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* Additional Custom Keys */}
+                    {Object.entries(doc.metadata)
+                      .filter(([k]) => !["source", "domain", "license", "category", "author", "publication_date"].includes(k))
+                      .map(([k, v]) => (
+                        <div key={k} style={{
+                          background: "var(--bg-lt)", borderRadius: 8, padding: "14px 16px",
+                          border: "1px solid var(--border)"
+                        }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--ink-lt)", marginBottom: 6 }}>
+                            {k}
+                          </div>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)", wordBreak: "break-all" }}>
+                            {typeof v === "object" ? JSON.stringify(v) : String(v)}
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                ) : (
+                  <div style={{
+                    textAlign: "center", padding: "32px 16px", background: "var(--bg-lt)",
+                    borderRadius: 8, marginBottom: 20
+                  }}>
+                    <p className="muted" style={{ margin: "0 0 12px 0" }}>
+                      {isTamil ? "மெட்டாடேட்டா எதுவும் சேர்க்கப்படவில்லை." : isSinhala ? "පාරදත්ත එකතු කර නොමැත." : "No metadata defined for this document."}
+                    </p>
+                    <button type="button" className="btn btn-primary btn-sm" onClick={handleStartEditMeta}>
+                      {isTamil ? "மெட்டாடேட்டாவைச் சேர்" : isSinhala ? "පාරදත්ත එක් කරන්න" : "Add Metadata"}
+                    </button>
+                  </div>
+                )}
+
+                {/* Raw JSON View Accordion */}
+                <details style={{ marginTop: 20 }}>
+                  <summary style={{ cursor: "pointer", fontSize: 12, fontWeight: 600, color: "var(--ink-lt)" }}>
+                    {isTamil ? "மூல JSON வடிவத்தைக் காட்டு" : isSinhala ? "මුල් JSON ආකෘතිය පෙන්වන්න" : "View Raw JSON"}
+                  </summary>
+                  <pre className="snippet" style={{ marginTop: 10 }}>{JSON.stringify(doc.metadata || {}, null, 2)}</pre>
+                </details>
+              </div>
+            ) : (
+              /* Edit Mode Form */
+              <form onSubmit={handleSaveMeta} style={{ maxWidth: 680 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16, marginBottom: 20 }}>
+                  
+                  {/* Source */}
+                  <div>
+                    <label style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 6, color: "var(--ink)" }}>
+                      {isTamil ? "மூலம் (Source) *" : isSinhala ? "මූලාශ්‍රය (Source) *" : "Source *"}
+                    </label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border)" }}
+                      value={metaForm.source || ""}
+                      onChange={(e) => setMetaForm({ ...metaForm, source: e.target.value })}
+                      placeholder="e.g. Daily News, Wikipedia, Research Paper"
+                      required
+                    />
+                  </div>
+
+                  {/* Domain */}
+                  <div>
+                    <label style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 6, color: "var(--ink)" }}>
+                      {isTamil ? "பிரிவு (Domain) *" : isSinhala ? "ක්ෂේත්‍රය (Domain) *" : "Domain *"}
+                    </label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border)" }}
+                      value={metaForm.domain || ""}
+                      onChange={(e) => setMetaForm({ ...metaForm, domain: e.target.value })}
+                      placeholder="e.g. General, News, Technology, Legal, Sports"
+                      required
+                    />
+                  </div>
+
+                  {/* License */}
+                  <div>
+                    <label style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 6, color: "var(--ink)" }}>
+                      {isTamil ? "உரிமம் (License) *" : isSinhala ? "බලපත්‍රය (License) *" : "License *"}
+                    </label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border)" }}
+                      value={metaForm.license || ""}
+                      onChange={(e) => setMetaForm({ ...metaForm, license: e.target.value })}
+                      placeholder="e.g. CC-BY-4.0, MIT, Public Domain, All Rights Reserved"
+                      required
+                    />
+                  </div>
+
+                  {/* Category */}
+                  <div>
+                    <label style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 6, color: "var(--ink)" }}>
+                      {isTamil ? "அணுகல் வகை (Category)" : isSinhala ? "ප්‍රවේශ කාණ්ඩය (Category)" : "Category"}
+                    </label>
+                    <select
+                      className="form-input"
+                      style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--paper)" }}
+                      value={metaForm.category || "open"}
+                      onChange={(e) => setMetaForm({ ...metaForm, category: e.target.value })}
+                    >
+                      <option value="open">Open</option>
+                      <option value="research">Research</option>
+                      <option value="restricted">Restricted</option>
+                    </select>
+                  </div>
+
+                  {/* Author */}
+                  <div>
+                    <label style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 6, color: "var(--ink)" }}>
+                      {isTamil ? "ஆசிரியர் (Author)" : isSinhala ? "කර්තෘ (Author)" : "Author"}
+                    </label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border)" }}
+                      value={metaForm.author || ""}
+                      onChange={(e) => setMetaForm({ ...metaForm, author: e.target.value })}
+                      placeholder="e.g. Author or Organization name"
+                    />
+                  </div>
+
+                  {/* Publication Date */}
+                  <div>
+                    <label style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 6, color: "var(--ink)" }}>
+                      {isTamil ? "வெளியீட்டு தேதி (Publication Date)" : isSinhala ? "ප්‍රකාශන දිනය (Publication Date)" : "Publication Date"}
+                    </label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border)" }}
+                      value={metaForm.publication_date || ""}
+                      onChange={(e) => setMetaForm({ ...metaForm, publication_date: e.target.value })}
+                      placeholder="YYYY-MM-DD or text"
+                    />
+                  </div>
+                </div>
+
+                {/* Custom key-value pairs */}
+                <div style={{ marginBottom: 24 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                    <label style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)" }}>
+                      {isTamil ? "கூடுதல் புலங்கள் (Custom Fields)" : isSinhala ? "අමතර ක්ෂේත්‍ර (Custom Fields)" : "Custom Metadata Fields"}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleAddCustomField}
+                      style={{
+                        background: "none", border: "1px dashed var(--forest)", color: "var(--forest)",
+                        borderRadius: 6, padding: "4px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer"
+                      }}
+                    >
+                      + {isTamil ? "புலம் சேர்" : isSinhala ? "ක්ෂේත්‍රයක් එක් කරන්න" : "Add Field"}
+                    </button>
+                  </div>
+
+                  {customFields.map((cf, idx) => (
+                    <div key={idx} style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 8 }}>
+                      <input
+                        type="text"
+                        placeholder="Key / Attribute"
+                        value={cf.key}
+                        onChange={(e) => handleUpdateCustomField(idx, "key", e.target.value)}
+                        style={{ flex: 1, padding: "7px 10px", borderRadius: 6, border: "1px solid var(--border)", fontSize: 13 }}
+                      />
+                      <input
+                        type="text"
+                        placeholder="Value"
+                        value={cf.value}
+                        onChange={(e) => handleUpdateCustomField(idx, "value", e.target.value)}
+                        style={{ flex: 2, padding: "7px 10px", borderRadius: 6, border: "1px solid var(--border)", fontSize: 13 }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveCustomField(idx)}
+                        style={{
+                          background: "none", border: "none", color: "var(--danger)",
+                          cursor: "pointer", fontSize: 16, padding: "4px 8px"
+                        }}
+                        title="Remove"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Form Action Buttons */}
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    disabled={metaSaving}
+                  >
+                    {metaSaving ? (isTamil ? "சேமிக்கிறது..." : isSinhala ? "සුරකිමින් පවතී..." : "Saving...") :
+                      (isTamil ? "மாற்றங்களைச் சேமி" : isSinhala ? "වෙනස්කම් සුරකින්න" : "Save Metadata")}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={() => { setIsEditingMeta(false); setMetaMsg(null); }}
+                    disabled={metaSaving}
+                  >
+                    {isTamil ? "ரத்துசெய்" : isSinhala ? "අවලංගු කරන්න" : "Cancel"}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        )}
 
         {/* NLP Tab with sidebar */}
         {tab === "nlp" && doc.nlp && (
@@ -1295,10 +1739,10 @@ export default function DocumentView() {
               }}>
                 {isTamil ? "NLP பகுப்பாய்வு" : isSinhala ? "NLP විශ්ලේෂණය" : "NLP Analysis"}
               </div>
-              {NLP_SECTIONS.map(({ key, label, icon }) => (
+              {NLP_SECTIONS.map(({ key, label }) => (
                 <button key={key} type="button" onClick={() => setNlpSec(key)}
                   style={{
-                    display: "flex", alignItems: "center", gap: 10,
+                    display: "block",
                     width: "100%", padding: "10px 18px",
                     background: nlpSec === key ? "var(--card,#fff)" : "transparent",
                     border: "none",
@@ -1307,7 +1751,6 @@ export default function DocumentView() {
                     fontWeight: nlpSec === key ? 600 : 400,
                     fontSize: 13, cursor: "pointer", textAlign: "left",
                   }}>
-                  <span>{icon}</span>
                   <span>{t(label)}</span>
                 </button>
               ))}
@@ -1317,91 +1760,11 @@ export default function DocumentView() {
             <div style={{ flex: 1, padding: "20px 24px", overflowY: "auto", minWidth: 0 }}>
               <h2 style={{
                 margin: "0 0 16px 0", fontSize: 18, fontWeight: 700, color: "var(--ink)",
-                display: "flex", alignItems: "center", gap: 8
               }}>
-                <span>{currentSection?.icon}</span> {t(currentSection?.label)}
+                {t(currentSection?.label)}
               </h2>
               {renderNlpSection()}
             </div>
-          </div>
-        )}
-
-        {/* Charts Tab */}
-        {tab === "charts" && doc.nlp && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, padding: "10px 0" }}>
-
-            {/* Chart 1: Language Distribution */}
-            <div style={{ background: "var(--bg-lt)", borderRadius: 10, padding: 18, border: "1px solid var(--border)" }}>
-              <h4 style={{ color: "var(--forest)", margin: "0 0 14px 0" }}>
-                🌐 {isTamil ? "மொழிப் பகிர்வு" : isSinhala ? "භාෂා බෙදාහැරීම" : "Language Breakdown"}
-              </h4>
-              <div style={{ width: "100%", height: 240 }}>
-                <ResponsiveContainer>
-                  <PieChart>
-                    <Pie data={langChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={(entry) => `${entry.name} (${entry.value}%)`}>
-                      {langChartData.map((entry, i) => (
-                        <Cell key={i} fill={LANG_COLORS[entry.name] || PIE_COLORS[i % PIE_COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip /><Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* Chart 2: Sentiment Distribution */}
-            <div style={{ background: "var(--bg-lt)", borderRadius: 10, padding: 18, border: "1px solid var(--border)" }}>
-              <h4 style={{ color: "var(--forest)", margin: "0 0 14px 0" }}>
-                😊 {isTamil ? "உணர்வு விகிதங்கள்" : isSinhala ? "හැඟීම් අනුපාතය" : "Sentiment Distribution"}
-              </h4>
-              <div style={{ width: "100%", height: 240 }}>
-                <ResponsiveContainer>
-                  <PieChart>
-                    <Pie data={sentimentChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} label={(entry) => `${entry.name} (${entry.value}%)`}>
-                      {sentimentChartData.map((entry, i) => (
-                        <Cell key={i} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip /><Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* Chart 3: POS Distribution */}
-            <div style={{ background: "var(--bg-lt)", borderRadius: 10, padding: 18, border: "1px solid var(--border)" }}>
-              <h4 style={{ color: "var(--forest)", margin: "0 0 14px 0" }}>
-                🔤 {isTamil ? "சொல் வகைப் பகிர்வு (POS)" : isSinhala ? "පද වර්ග බෙදාහැරීම (POS)" : "Part-of-Speech Distribution"}
-              </h4>
-              <div style={{ width: "100%", height: 240 }}>
-                <ResponsiveContainer>
-                  <BarChart data={posData.slice(0, 8)}>
-                    <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={0} angle={-15} textAnchor="end" height={45} />
-                    <YAxis tick={{ fontSize: 11 }} />
-                    <Tooltip formatter={(value, name, item) => [value, item?.payload?.label || name]} />
-                    <Bar dataKey="count" fill="var(--forest)" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* Chart 4: Classification Probabilities */}
-            <div style={{ background: "var(--bg-lt)", borderRadius: 10, padding: 18, border: "1px solid var(--border)" }}>
-              <h4 style={{ color: "var(--forest)", margin: "0 0 14px 0" }}>
-                🏷️ {isTamil ? "உரை வகைப்பாடு நிகழ்தகவு" : isSinhala ? "වර්ගීකරණ සම්භාවිතාව" : "Classification Probabilities (%)"}
-              </h4>
-              <div style={{ width: "100%", height: 240 }}>
-                <ResponsiveContainer>
-                  <BarChart data={classifChartData} layout="vertical" margin={{ left: 20 }}>
-                    <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11 }} />
-                    <YAxis type="category" dataKey="category" tick={{ fontSize: 11 }} width={90} />
-                    <Tooltip />
-                    <Bar dataKey="score" fill="#4a7c59" radius={[0, 4, 4, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
           </div>
         )}
 

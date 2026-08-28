@@ -25,6 +25,42 @@ function ProtectedRoute({ children, role }) {
   return children;
 }
 
+const TOPBAR_I18N = {
+  English: {
+    dashboard: "Dashboard",
+    upload: "Upload",
+    search: "Search",
+    admin: "Admin",
+    signIn: "Sign in",
+    getStarted: "Get started",
+    myProfile: "My Profile",
+    adminPanel: "Admin Panel",
+    signOut: "Sign out",
+  },
+  Tamil: {
+    dashboard: "முகப்பு",
+    upload: "பதிவேற்று",
+    search: "தேடு",
+    admin: "நிர்வாகம்",
+    signIn: "உள்நுழைக",
+    getStarted: "தொடங்குங்கள்",
+    myProfile: "எனது சுயவிவரம்",
+    adminPanel: "நிர்வாக குழு",
+    signOut: "வெளியேறு",
+  },
+  Sinhala: {
+    dashboard: "පුවරුව",
+    upload: "උඩුගත කරන්න",
+    search: "සොයන්න",
+    admin: "පරිපාලක",
+    signIn: "ඇතුල් වන්න",
+    getStarted: "ආරම්භ කරන්න",
+    myProfile: "මගේ පැතිකඩ",
+    adminPanel: "පරිපාලක පුවරුව",
+    signOut: "ඉවත් වන්න",
+  },
+};
+
 function TopBar() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -33,12 +69,24 @@ function TopBar() {
   const [appLang, setAppLang] = useState(localStorage.getItem("lrw_lang") || "English");
   const dropdownRef = useRef(null);
 
+  const t = (key) => TOPBAR_I18N[appLang]?.[key] || TOPBAR_I18N.English[key];
+
   useEffect(() => {
     const handleUpdate = (e) => {
       setUser(e.detail);
     };
     window.addEventListener("lrw_user_updated", handleUpdate);
     return () => window.removeEventListener("lrw_user_updated", handleUpdate);
+  }, []);
+
+  useEffect(() => {
+    const handleLang = (e) => {
+      if (e.detail) {
+        setAppLang(e.detail);
+      }
+    };
+    window.addEventListener("lrw_lang_changed", handleLang);
+    return () => window.removeEventListener("lrw_lang_changed", handleLang);
   }, []);
 
   useEffect(() => {
@@ -101,8 +149,8 @@ function TopBar() {
         <div className="topbar-links" />
         <div className="topbar-right" style={{ display: "flex", alignItems: "center" }}>
           {langSelect}
-          <Link to="/login"><button className="topbar-logout">Sign in</button></Link>
-          <Link to="/register"><button style={{ background: "#fff", color: "var(--forest)", border: "none", padding: "5px 14px", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Get started</button></Link>
+          <Link to="/login"><button className="topbar-logout">{t("signIn")}</button></Link>
+          <Link to="/register"><button style={{ background: "#fff", color: "var(--forest)", border: "none", padding: "5px 14px", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{t("getStarted")}</button></Link>
         </div>
       </nav>
     );
@@ -115,10 +163,10 @@ function TopBar() {
     <nav className="topbar">
       <span className="topbar-brand" onClick={() => navigate("/")} style={{ cursor: "pointer" }}>LR<span>W</span></span>
       <div className="topbar-links">
-        <Link to="/" className={isActive("/")}>Dashboard</Link>
-        <Link to="/upload" className={isActive("/upload")}>Upload</Link>
-        <Link to="/search" className={isActive("/search")}>Search</Link>
-        {user.role === "admin" && <Link to="/admin" className={isActive("/admin")}>Admin</Link>}
+        <Link to="/" className={isActive("/")}>{t("dashboard")}</Link>
+        <Link to="/upload" className={isActive("/upload")}>{t("upload")}</Link>
+        <Link to="/search" className={isActive("/search")}>{t("search")}</Link>
+        {user.role === "admin" && <Link to="/admin" className={isActive("/admin")}>{t("admin")}</Link>}
       </div>
       
       <div className="topbar-right" style={{ display: "flex", alignItems: "center" }}>
@@ -222,7 +270,7 @@ function TopBar() {
                 className="topbar-dropdown-item"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                My Profile
+                {t("myProfile")}
               </Link>
 
               <Link 
@@ -241,7 +289,7 @@ function TopBar() {
                 className="topbar-dropdown-item"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
-                Dashboard
+                {t("dashboard")}
               </Link>
 
               {user.role === "admin" && (
@@ -261,7 +309,7 @@ function TopBar() {
                   className="topbar-dropdown-item"
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                  Admin Panel
+                  {t("adminPanel")}
                 </Link>
               )}
 
@@ -286,7 +334,7 @@ function TopBar() {
                 className="topbar-dropdown-logout-item"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-                Sign out
+                {t("signOut")}
               </button>
             </div>
           )}
