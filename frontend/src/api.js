@@ -111,6 +111,11 @@ export async function deleteDocument(id) {
   return data;
 }
 
+export async function updateDocumentMetadata(id, metadata) {
+  const { data } = await api.patch(`/documents/${id}/metadata`, metadata);
+  return data;
+}
+
 function triggerBlobDownload(blobData, filename) {
   const blob = new Blob([blobData]);
   const url = window.URL.createObjectURL(blob);
