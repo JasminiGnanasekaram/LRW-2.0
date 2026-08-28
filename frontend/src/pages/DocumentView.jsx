@@ -52,9 +52,9 @@ const NLP_SECTIONS = [
     key: "tokens",
     label: { English: "Tokenization", Tamil: "சொல் பிரித்தல்", Sinhala: "ටෝකනීකරණය" },
     desc: {
-      English: "Segments the text into normalized tokens with language codes and sentence alignments.",
-      Tamil: "உரையை மொழி குறியீடுகள் மற்றும் வாக்கிய வரிசையுடன் கூடிய சீராக்கப்பட்ட சொற்களாகப் பிரிக்கிறது.",
-      Sinhala: "භාෂා කේත සහ වාක්‍ය පෙළගැස්ම සමඟ පෙළ ටෝකන බවට වෙන් කරයි.",
+      English: "Segments the text into individual normalized word tokens.",
+      Tamil: "உரையை சீராக்கப்பட்ட தனித்தனி சொற்களாகப் பிரிக்கிறது.",
+      Sinhala: "පෙළ ප්‍රමිතිගත තනි වචන ටෝකන බවට වෙන් කරයි.",
     },
   },
   {
@@ -125,7 +125,7 @@ const NLP_SECTIONS = [
     label: { English: "Corpus Statistics", Tamil: "புள்ளிவிவரங்கள்", Sinhala: "සංඛ්‍යාලේඛන" },
     desc: {
       English: "Detailed document metrics including character lengths, token density, vocabulary richness, and paragraph counts.",
-      Tamil: "எழுத்துக்கள், சொற்கள், தனித்துவ சொற்கள் மற்றும் பத்திகள் பற்றிய முழுமையான புள்ளிவிவரங்கள்.",
+      Tamil: "எழுத்துக்கள், சொற்கள், தனித்துவ சொற்கள் மற்றும் பந்திகள் பற்றிய முழுமையான புள்ளிவிவரங்கள்.",
       Sinhala: "අක්ෂර, ටෝකන, අනන්‍ය වචන සහ ඡේද පිළිබඳ සවිස්තරාත්මක සංඛ්‍යාලේඛන.",
     },
   },
@@ -892,7 +892,7 @@ export default function DocumentView() {
           const matchPos = !selectedPosFilter || (tk.pos || "").toUpperCase() === selectedPosFilter.toUpperCase();
           const matchQuery = !posSearchQuery.trim() ||
             (tk.text || tk.token || "").toLowerCase().includes(posSearchQuery.toLowerCase()) ||
-            (tk.lemma || "").toLowerCase().includes(posSearchQuery.toLowerCase());
+            (tk.pos || "").toLowerCase().includes(posSearchQuery.toLowerCase());
           return matchPos && matchQuery;
         });
 
@@ -1003,7 +1003,7 @@ export default function DocumentView() {
                   type="text"
                   value={posSearchQuery}
                   onChange={(e) => setPosSearchQuery(e.target.value)}
-                  placeholder={isTamil ? "சொல்லைத் தேடுங்கள்..." : isSinhala ? "වචනයක් සොයන්න..." : "Search word or lemma..."}
+                  placeholder={isTamil ? "சொல்லைத் தேடுங்கள்..." : isSinhala ? "වචනයක් සොයන්න..." : "Search word or POS..."}
                   style={{
                     padding: "6px 12px", borderRadius: 6, border: "1px solid var(--border)",
                     fontSize: 12, background: "var(--paper)", color: "var(--ink)", width: 220
@@ -1015,12 +1015,9 @@ export default function DocumentView() {
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                   <thead>
                     <tr>
-                      <th style={{ ...th, width: 35 }}>#</th>
+                      <th style={{ ...th, width: 45 }}>#</th>
                       <th style={th}>{isTamil ? "சொல்" : isSinhala ? "වචනය (ටෝකනය)" : "Token"}</th>
-                      <th style={th}>{isTamil ? "வேர்ச்சொல் (Lemma)" : isSinhala ? "මූලය (Lemma)" : "Base Form (Lemma)"}</th>
-                      <th style={{ ...th, width: 170 }}>{isTamil ? "இலக்கண வகை (POS)" : isSinhala ? "පද වර්ගය (POS)" : "Part-of-Speech"}</th>
-                      <th style={th}>{isTamil ? "இலக்கண உருபியல்" : isSinhala ? "රූපවිද්‍යාත්මක ලක්ෂණ" : "Morphological Features"}</th>
-                      <th style={{ ...th, width: 70 }}>{isTamil ? "வாக்கியம்" : isSinhala ? "වාක්‍යය" : "Sent ID"}</th>
+                      <th style={{ ...th, width: 220 }}>{isTamil ? "இலக்கண வகை (POS)" : isSinhala ? "පද වර්ගය (POS)" : "Part-of-Speech"}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1031,7 +1028,6 @@ export default function DocumentView() {
                         <tr key={i}>
                           <td style={{ ...tdStyle(i % 2), color: "var(--ink-lt)" }}>{i + 1}</td>
                           <td style={{ ...tdStyle(i % 2), fontWeight: 600 }}>{tk.token || tk.text}</td>
-                          <td style={{ ...tdStyle(i % 2), color: "var(--forest)" }}>{tk.lemma || "—"}</td>
                           <td style={tdStyle(i % 2)}>
                             <span style={{
                               display: "inline-flex", alignItems: "center", gap: 6,
@@ -1043,16 +1039,12 @@ export default function DocumentView() {
                               <span style={{ opacity: 0.7, fontSize: 10, fontWeight: 700 }}>({tk.pos})</span>
                             </span>
                           </td>
-                          <td style={{ ...tdStyle(i % 2), color: "var(--ink)", fontSize: 12 }}>
-                            {tk.morph ? translateMorph(tk.morph) : "—"}
-                          </td>
-                          <td style={{ ...tdStyle(i % 2), color: "var(--ink-lt)" }}>{tk.sentence_id || 1}</td>
                         </tr>
                       );
                     })}
                     {filteredTokens.length === 0 && (
                       <tr>
-                        <td colSpan={6} style={{ padding: 24, textAlign: "center", color: "var(--ink-lt)" }}>
+                        <td colSpan={3} style={{ padding: 24, textAlign: "center", color: "var(--ink-lt)" }}>
                           {isTamil ? "பொருந்தும் சொற்கள் எதுவும் இல்லை." : isSinhala ? "ගැලපෙන වචන හමු නොවීය." : "No matching tokens found."}
                         </td>
                       </tr>
@@ -1073,39 +1065,24 @@ export default function DocumentView() {
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
                   <tr>
-                    <th style={{ ...th, width: 35 }}>#</th>
+                    <th style={{ ...th, width: 45 }}>#</th>
                     <th style={th}>{isTamil ? "சொல்" : isSinhala ? "ටෝකනය" : "Token"}</th>
-                    <th style={th}>{isTamil ? "வேர்ச்சொல்" : isSinhala ? "මූලය" : "Lemma"}</th>
-                    <th style={{ ...th, width: 160 }}>{isTamil ? "இலக்கண வகை (POS)" : isSinhala ? "පද වර්ගය (POS)" : "POS"}</th>
-                    <th style={{ ...th, width: 60 }}>{isTamil ? "மொழி" : isSinhala ? "භාෂාව" : "Lang"}</th>
-                    <th style={{ ...th, width: 80 }}>{isTamil ? "வாக்கிய எண்" : isSinhala ? "වාක්‍ය අංකය" : "Sent ID"}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {(nlp.token_details || []).slice(0, 250).map((tk, i) => {
-                    const posInfo = getPosInfo(tk.pos);
-                    const localizedPos = getPosLabel(tk.pos, lang);
-                    return (
-                      <tr key={i}>
-                        <td style={{ ...tdStyle(i % 2), color: "var(--ink-lt)" }}>{i + 1}</td>
-                        <td style={{ ...tdStyle(i % 2), fontWeight: 600 }}>{tk.token || tk.text}</td>
-                        <td style={{ ...tdStyle(i % 2), color: "var(--forest)" }}>{tk.lemma}</td>
-                        <td style={tdStyle(i % 2)}>
-                          <span style={{
-                            display: "inline-flex", alignItems: "center", gap: 4,
-                            padding: "2px 6px", borderRadius: 4,
-                            background: posInfo.bg, color: posInfo.color,
-                            border: `1px solid ${posInfo.border}`, fontSize: 11, fontWeight: 600
-                          }}>
-                            <span>{localizedPos}</span>
-                            <span style={{ opacity: 0.7, fontSize: 10 }}>({tk.pos})</span>
-                          </span>
-                        </td>
-                        <td style={tdStyle(i % 2)}><span className="badge" style={{ fontSize: 11 }}>{tk.language || "en"}</span></td>
-                        <td style={{ ...tdStyle(i % 2), color: "var(--ink-lt)" }}>{tk.sentence_id || 1}</td>
-                      </tr>
-                    );
-                  })}
+                  {(nlp.token_details || []).slice(0, 250).map((tk, i) => (
+                    <tr key={i}>
+                      <td style={{ ...tdStyle(i % 2), color: "var(--ink-lt)" }}>{i + 1}</td>
+                      <td style={{ ...tdStyle(i % 2), fontWeight: 600 }}>{tk.token || tk.text}</td>
+                    </tr>
+                  ))}
+                  {(!nlp.token_details || nlp.token_details.length === 0) && (
+                    <tr>
+                      <td colSpan={2} style={{ padding: 24, textAlign: "center", color: "var(--ink-lt)" }}>
+                        {isTamil ? "சொற்கள் எதுவும் இல்லை." : isSinhala ? "ටෝකන හමු නොවීය." : "No tokens found."}
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -1157,37 +1134,28 @@ export default function DocumentView() {
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
                   <tr>
-                    <th style={th}>{isTamil ? "வார்த்தை" : isSinhala ? "වචනය" : "Word"}</th>
-                    <th style={th}>{isTamil ? "வேர்ச்சொல்" : isSinhala ? "මූලය" : "Lemma"}</th>
-                    <th style={{ ...th, width: 160 }}>{isTamil ? "இலக்கண வகை (POS)" : isSinhala ? "පද වර්ගය (POS)" : "POS"}</th>
+                    <th style={{ ...th, width: 45 }}>#</th>
+                    <th style={{ ...th, width: 220 }}>{isTamil ? "வார்த்தை" : isSinhala ? "වචනය" : "Word"}</th>
                     <th style={th}>{isTamil ? "இலக்கண உருபியல் கூறுகள்" : isSinhala ? "රූපවිද්‍යාත්මක ලක්ෂණ" : "Morphological Features"}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {(morphTokens.length > 0 ? morphTokens : (nlp.token_details || []).slice(0, 50)).map((tk, i) => {
-                    const posInfo = getPosInfo(tk.pos);
-                    const localizedPos = getPosLabel(tk.pos, lang);
-                    return (
-                      <tr key={i}>
-                        <td style={{ ...tdStyle(i % 2), fontWeight: 600 }}>{tk.text || tk.token}</td>
-                        <td style={{ ...tdStyle(i % 2), color: "var(--forest)" }}>{tk.lemma}</td>
-                        <td style={tdStyle(i % 2)}>
-                          <span style={{
-                            display: "inline-flex", alignItems: "center", gap: 4,
-                            padding: "2px 6px", borderRadius: 4,
-                            background: posInfo.bg, color: posInfo.color,
-                            border: `1px solid ${posInfo.border}`, fontSize: 11, fontWeight: 600
-                          }}>
-                            <span>{localizedPos}</span>
-                            <span style={{ opacity: 0.7, fontSize: 10 }}>({tk.pos})</span>
-                          </span>
-                        </td>
-                        <td style={{ ...tdStyle(i % 2), color: "var(--ink)", fontSize: 12 }}>
-                          {tk.morph ? translateMorph(tk.morph) : "—"}
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {(morphTokens.length > 0 ? morphTokens : (nlp.token_details || []).slice(0, 50)).map((tk, i) => (
+                    <tr key={i}>
+                      <td style={{ ...tdStyle(i % 2), color: "var(--ink-lt)" }}>{i + 1}</td>
+                      <td style={{ ...tdStyle(i % 2), fontWeight: 600 }}>{tk.text || tk.token}</td>
+                      <td style={{ ...tdStyle(i % 2), color: "var(--ink)", fontSize: 12 }}>
+                        {tk.morph ? translateMorph(tk.morph) : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                  {((morphTokens.length === 0 && (!nlp.token_details || nlp.token_details.length === 0))) && (
+                    <tr>
+                      <td colSpan={3} style={{ padding: 24, textAlign: "center", color: "var(--ink-lt)" }}>
+                        {isTamil ? "உருபியல் தரவு எதுவும் கிடைக்கவில்லை." : isSinhala ? "රූපවිද්‍යාත්මක දත්ත හමු නොවීය." : "No morphological features found."}
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -1224,7 +1192,7 @@ export default function DocumentView() {
                 { label: isTamil ? "மொத்த சொற்கள்" : isSinhala ? "මුළු ටෝකන" : "Total Tokens", val: stats.tokens?.toLocaleString() },
                 { label: isTamil ? "தனித்துவ சொற்கள்" : isSinhala ? "අනන්‍ය වචන" : "Unique Tokens", val: stats.unique_tokens?.toLocaleString() },
                 { label: isTamil ? "வாக்கியங்கள்" : isSinhala ? "වාක්‍ය ගණන" : "Sentence Count", val: stats.sentences?.toLocaleString() },
-                { label: isTamil ? "பத்திகள்" : isSinhala ? "ඡේද ගණන" : "Paragraph Count", val: stats.paragraphs?.toLocaleString() },
+                { label: isTamil ? "பந்திகள்" : isSinhala ? "ඡේද ගණන" : "Paragraph Count", val: stats.paragraphs?.toLocaleString() },
               ].map(({ label, val }) => (
                 <div key={label} style={{
                   background: "var(--bg-lt)", borderRadius: 8, padding: "14px 18px", border: "1px solid var(--border)"
