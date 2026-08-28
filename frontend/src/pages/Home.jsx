@@ -28,7 +28,6 @@ const SOURCES = [
 const ROLES = [
   { name: "Researcher", color: "#3B6D11", desc: "Upload, analyze, search, and export. Full corpus access." },
   { name: "Guest", color: "#5F5E5A", desc: "Read-only browsing of open-licensed documents without an account." },
-  { name: "Researcher/ NLP Developer", color: "#3B6D11", desc: "Upload, analyze, search, and export. Full corpus access." },
 ];
 
 const FOOTER_COLUMNS = [
@@ -377,14 +376,14 @@ export default function Home() {
                 transition: "transform 0.2s var(--ease), border-color 0.2s",
                 cursor: "default"
               }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = "translateY(-3px)";
-                e.currentTarget.style.borderColor = "var(--sage)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = "translateY(0)";
-                e.currentTarget.style.borderColor = "var(--border)";
-              }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = "translateY(-3px)";
+                  e.currentTarget.style.borderColor = "var(--sage)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.borderColor = "var(--border)";
+                }}
               >
                 <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6, color: "var(--forest)" }}>{label}</div>
                 <div style={{ fontSize: 13, color: "var(--ink-lt)" }}>{sub}</div>
@@ -409,8 +408,8 @@ export default function Home() {
                 borderRadius: "var(--radius-lg)", padding: "24px",
                 boxShadow: "var(--shadow-xs)", transition: "transform 0.2s var(--ease)",
               }}
-              onMouseEnter={(e) => e.currentTarget.style.transform = "translateY(-4px)"}
-              onMouseLeave={(e) => e.currentTarget.style.transform = "translateY(0)"}
+                onMouseEnter={(e) => e.currentTarget.style.transform = "translateY(-4px)"}
+                onMouseLeave={(e) => e.currentTarget.style.transform = "translateY(0)"}
               >
                 <div style={{ width: 36, height: 36, borderRadius: "50%", background: color + "22", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
                   <div style={{ width: 12, height: 12, borderRadius: "50%", background: color }} />
