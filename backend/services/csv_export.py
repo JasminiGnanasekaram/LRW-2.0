@@ -15,11 +15,7 @@ def document_to_csv(doc: dict) -> str:
     meta = doc.get("metadata") or {}
     tokens = nlp.get("token_details") or []
     sentences = nlp.get("sentences") or []
-    entities = nlp.get("entities") or []
-    sentiment = nlp.get("sentiment") or {}
-    classif = nlp.get("classification") or {}
     stats = nlp.get("statistics") or {}
-    lang_det = nlp.get("language_detection") or {}
 
     # Section 1: Document Summary & Metadata
     writer.writerow(["=== DOCUMENT SUMMARY ==="])
@@ -27,18 +23,12 @@ def document_to_csv(doc: dict) -> str:
     writer.writerow(["Filename", doc.get("filename", "")])
     writer.writerow(["File Type", doc.get("file_type", "")])
     writer.writerow(["Primary Language", nlp.get("language", "")])
-    writer.writerow(["Language Breakdown", nlp.get("language_display", "")])
-    writer.writerow(["Is Multilingual", "Yes" if lang_det.get("is_multilingual") else "No"])
     writer.writerow(["Token Count", nlp.get("token_count", "")])
     writer.writerow(["Unique Tokens", nlp.get("unique_tokens", "")])
     writer.writerow(["Sentence Count", nlp.get("sentence_count", "")])
     writer.writerow(["Character Count", stats.get("characters", "")])
     writer.writerow(["Characters (No Spaces)", stats.get("characters_without_spaces", "")])
     writer.writerow(["Paragraph Count", stats.get("paragraphs", "")])
-    writer.writerow(["Overall Sentiment", sentiment.get("label", "")])
-    writer.writerow(["Sentiment Score", sentiment.get("score", "")])
-    writer.writerow(["Predicted Category", classif.get("predicted_category", classif.get("label_en", ""))])
-    writer.writerow(["Category Score", classif.get("score", "")])
     writer.writerow(["Source", meta.get("source", "")])
     writer.writerow(["Domain", meta.get("domain", "")])
     writer.writerow(["License", meta.get("license", "")])
@@ -56,55 +46,15 @@ def document_to_csv(doc: dict) -> str:
             writer.writerow([i, kw])
         writer.writerow([])
 
-    # Section 3: Text Classification
-    all_cats = classif.get("all") or []
-    if all_cats:
-        writer.writerow(["=== TEXT CLASSIFICATION ==="])
-        writer.writerow(["Category", "Category (Native)", "Score / Probability"])
-        for c in all_cats:
-            writer.writerow([
-                c.get("label_en", ""),
-                c.get("label", ""),
-                c.get("score", ""),
-            ])
-        writer.writerow([])
-
-    # Section 4: Named Entities
-    if entities:
-        writer.writerow(["=== NAMED ENTITIES ==="])
-        writer.writerow(["#", "Entity Text", "Category Code", "Category", "Confidence"])
-        for i, e in enumerate(entities, 1):
-            writer.writerow([
-                i,
-                e.get("text", ""),
-                e.get("label_en", ""),
-                e.get("label", ""),
-                e.get("score", ""),
-            ])
-        writer.writerow([])
-
-    # Section 5: Sentence-Level Sentiment & Analysis
-    sent_list = sentiment.get("sentences") or []
-    if sent_list:
-        writer.writerow(["=== SENTENCE-LEVEL SENTIMENT ==="])
-        writer.writerow(["#", "Sentence", "Language", "Sentiment", "Confidence"])
-        for i, s_item in enumerate(sent_list, 1):
-            writer.writerow([
-                i,
-                s_item.get("sentence", ""),
-                s_item.get("language", ""),
-                s_item.get("sentiment", ""),
-                s_item.get("confidence", ""),
-            ])
-        writer.writerow([])
-    elif sentences:
+    # Section 3: Sentences
+    if sentences:
         writer.writerow(["=== SENTENCES ==="])
         writer.writerow(["#", "Sentence"])
         for i, s in enumerate(sentences[:100], 1):
             writer.writerow([i, s if isinstance(s, str) else ""])
         writer.writerow([])
 
-    # Section 6: POS Distribution
+    # Section 4: POS Distribution
     pos_dist = nlp.get("pos_distribution") or {}
     if pos_dist:
         writer.writerow(["=== PART-OF-SPEECH DISTRIBUTION ==="])
@@ -113,7 +63,7 @@ def document_to_csv(doc: dict) -> str:
             writer.writerow([pos, count])
         writer.writerow([])
 
-    # Section 7: Top Words Frequency
+    # Section 5: Top Words Frequency
     top_words = nlp.get("top_words") or []
     if top_words:
         writer.writerow(["=== TOP WORDS ==="])
@@ -125,7 +75,7 @@ def document_to_csv(doc: dict) -> str:
                 writer.writerow([i, item.get("word", ""), item.get("count", "")])
         writer.writerow([])
 
-    # Section 8: Detailed Token Analysis
+    # Section 6: Detailed Token Analysis
     if tokens:
         writer.writerow(["=== TOKEN-LEVEL ANALYSIS ==="])
         writer.writerow([
@@ -170,15 +120,10 @@ def documents_summary_csv(docs: List[dict]) -> str:
         "Filename",
         "File Type",
         "Primary Language",
-        "Language Breakdown",
         "Token Count",
         "Unique Tokens",
         "Sentence Count",
         "Character Count",
-        "Sentiment",
-        "Sentiment Score",
-        "Top Category",
-        "Category Score",
         "Top Keywords",
         "Source",
         "Domain",
@@ -190,8 +135,6 @@ def documents_summary_csv(docs: List[dict]) -> str:
     for d in docs:
         meta = d.get("metadata") or {}
         nlp = d.get("nlp") or {}
-        sentiment = nlp.get("sentiment") or {}
-        classif = nlp.get("classification") or {}
         stats = nlp.get("statistics") or {}
         keywords = nlp.get("top_keywords") or []
 
@@ -200,15 +143,10 @@ def documents_summary_csv(docs: List[dict]) -> str:
             d.get("filename", ""),
             d.get("file_type", ""),
             nlp.get("language", ""),
-            nlp.get("language_display", ""),
             nlp.get("token_count", ""),
             nlp.get("unique_tokens", ""),
             nlp.get("sentence_count", ""),
             stats.get("characters", ""),
-            sentiment.get("label", ""),
-            sentiment.get("score", ""),
-            classif.get("predicted_category", classif.get("label_en", "")),
-            classif.get("score", ""),
             ", ".join(keywords[:5]) if keywords else "",
             meta.get("source", ""),
             meta.get("domain", ""),

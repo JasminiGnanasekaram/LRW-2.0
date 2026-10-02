@@ -18,6 +18,8 @@ from collections import Counter
 from functools import lru_cache
 from typing import Dict, List, Any, Optional, Tuple
 
+NLP_RULES_VERSION = 8
+
 
 # ==============================================================================
 # 1. LANGUAGE DETECTION
@@ -193,9 +195,32 @@ def _get_english_nlp():
             return None
 
 
+@lru_cache(maxsize=1)
+def _get_tamil_nlp():
+    """Load the local Stanza Tamil tokenizer/POS/lemma model using the correct Stanza API."""
+    try:
+        import stanza
+        try:
+            stanza.download("ta", processors="tokenize,mwt,pos,lemma")
+        except Exception:
+            pass
+        return stanza.Pipeline(
+            "ta",
+            processors="tokenize,mwt,pos,lemma",
+            download_method=None,
+            verbose=False,
+        )
+    except Exception:
+        return None
+
+
 def _tokenize_english_regex(text: str) -> List[str]:
     """Fallback regex tokenizer for English."""
     return re.findall(r"[A-Za-z0-9]+(?:'[A-Za-z]+)?|[^\w\s]", text)
+
+
+def _is_punctuation_token(token: str) -> bool:
+    return bool(token) and all(c in '.,!?;:|।॥\'"()[]{}<>-–—/\\@#$%&*+=_~^`' for c in token)
 
 
 # ==============================================================================
@@ -237,6 +262,15 @@ TAMIL_POSTPOSITIONS = {
     "உள்", "வெளியே", "மேல்", "கீழ்", "இடையே", "நடுவில்", "சார்பாக",
 }
 
+TAMIL_DETERMINERS = {
+    "ஒரு", "இந்த", "அந்த", "எந்த", "இவ்வொரு", "அவ்வொரு",
+}
+
+TAMIL_ADJECTIVES = {
+    "அழகான", "புதிய", "பழைய", "நல்ல", "சிறந்த", "பெரிய", "சிறிய",
+    "முக்கியமான", "மிகப்பெரிய", "நவீன", "தமிழ்",
+}
+
 TAMIL_VERB_ROOTS = {
     "செய்": "செய்", "படி": "படி", "எழுது": "எழுது", "பார்": "பார்",
     "முன்னேறு": "முன்னேறு", "முன்னேறுங்": "முன்னேறு", "முன்னேறுங்கள்": "முன்னேறு",
@@ -250,6 +284,7 @@ TAMIL_VERB_ROOTS = {
     "வா": "வா", "போ": "போ", "இரு": "இரு", "கொள்": "கொள்", "கொடு": "கொடு",
     "சொல்": "சொல்", "கூறு": "கூறு", "நட": "நட", "நில்": "நில்", "கேள்": "கேள்",
     "உருவாக்கு": "உருவாக்கு", "பயன்படுத்து": "பயன்படுத்து", "தெரிவி": "தெரிவி",
+    "முயல்": "முயல்", "முயன்று": "முயல்", "முயன்றால்": "முயல்",
 }
 
 TAMIL_COMMON_VERBS = {
@@ -402,6 +437,9 @@ TAMIL_COMMON_VERBS = {
     "வேண்டும்": ("VERB", "வேண்டு", "Mood=Des"),
     "முடியும்": ("VERB", "முடி", "Mood=Pot"),
     "முடியாது": ("VERB", "முடி", "Mood=Pot|Polarity=Neg"),
+    "முடியாதது": ("VERB", "முடி", "Mood=Pot|Polarity=Neg|Gender=Neut|Number=Sing"),
+    "முயன்றால்": ("VERB", "முயல்", "Mood=Cond|Tense=Past"),
+    "முயன்று": ("VERB", "முயல்", "VerbForm=Part"),
 }
 
 TAMIL_COMMON_NOUNS = {
@@ -434,11 +472,172 @@ TAMIL_COMMON_NOUNS = {
     "கவனத்தின்": ("NOUN", "கவனம்", "Case=Gen|Number=Sing"),
 }
 
+TAMIL_LEMMA_OVERRIDES = {
+    "மாணவர்கள்": ("NOUN", "NOUN", "மாணவர்", "Case=Nom|Number=Plur"),
+    "மாணவர்களை": ("NOUN", "NOUN", "மாணவர்", "Case=Acc|Number=Plur"),
+    "மாணவர்களுக்கு": ("NOUN", "NOUN", "மாணவர்", "Case=Dat|Number=Plur"),
+    "மாணவர்களின்": ("NOUN", "NOUN", "மாணவர்", "Case=Gen|Number=Plur"),
+    "மாணவர்களால்": ("NOUN", "NOUN", "மாணவர்", "Case=Ins|Number=Plur"),
+}
+
+TAMIL_LEMMA_CORRECTIONS = {
+    "காலத்துல": "காலம்",
+    "காலத்தில்": "காலம்",
+    "காலத்தை": "காலம்",
+    "காலத்திற்கு": "காலம்",
+    "நாட்டை": "நாடு",
+    "நாட்டில்": "நாடு",
+    "நாட்டின்": "நாடு",
+    "ஆட்சியில்": "ஆட்சி",
+    "ஆட்சியை": "ஆட்சி",
+    "ஆட்சிக்கு": "ஆட்சி",
+    "அந்தப்": "அந்த",
+    "அந்தனை": "அந்த",
+    "பயராசுக்கு": "பயராசு",
+    "வாழ்ந்துட்டு": "வாழ்",
+    "சென்றுள்ளது": "செல்",
+    "வந்துள்ளது": "வா",
+    "செய்துள்ளது": "செய்",
+    "சவலித்தபடத்தில்": "சவலித்தபடம்",
+    "சவலித்தபடத்தில": "சவலித்தபடம்",
+    "சதனங்கன்னு": "சதனம்",
+    "சதணங்கன்னு": "சதனம்",
+    "நடத்தை": "நடை",
+    "சொத்துல்": "சொத்து",
+    "சொத்துல": "சொத்து",
+    "பகத்துல": "பக்கம்",
+    "பகத்துள்": "பக்கம்",
+    "கற்றுக்": "கல்",
+    "கற்று": "கல்",
+    "கற்க": "கல்",
+    "கற்கும்": "கல்",
+    "கற்கை": "கல்",
+    "பாடத்தை": "பாடம்",
+    "பாடத்த": "பாடம்",
+    "பாடத்": "பாடம்",
+    "கொடுக்காத": "கொடு",
+    "கொடுக": "கொடு",
+    "கொடுத்து": "கொடு",
+    "மறுத்தால்": "மறு",
+    "மறுத்தா": "மறு",
+    "மறுத்த": "மறு",
+    "ஆசிரியர்கள்": "ஆசிரியர்",
+    "ஆசிரியர": "ஆசிரியர்",
+    "கற்றுக்கொடுக்கும்": "கற்றுக் கொடு",
+    "கற்றுக்கொடு": "கற்றுக் கொடு",
+    "கற்றுக்கொண்ட": "கற்றுக் கொடு",
+}
+
+
+def _strip_common_tamil_suffix(word: str) -> str:
+    """Strip common Tamil noun/verb suffixes to recover the root form automatically."""
+    clean = (word or "").strip("\u200c\u200d\ufeff")
+    if not clean or len(clean) <= 2:
+        return clean
+
+    suffix_replacements = [
+        ("த்துல்", "ம்"), ("த்துல", "ம்"), ("த்துள்", "ம்"), ("த்தில்", "ம்"),
+        ("துல்", ""), ("தில்", "ம்"), ("வில்", "ம்"), ("லில்", "ம்"),
+        ("ளில்", ""), ("ரில்", ""), ("யில்", ""), ("ஆல்", ""),
+        ("களுக்காக", ""), ("களுக்கு", ""), ("களின்", ""), ("களை", ""),
+        ("களால்", ""), ("களுடன்", ""), ("களில்", ""), ("களே", ""),
+        ("க்கு", ""), ("அக்கு", ""), ("இல்", ""), ("ல்", ""),
+        ("டை", ""), ("தை", ""), ("யை", ""), ("னை", ""), ("இன்", ""),
+        ("ன்", ""), ("கள்", ""), ("ன்றால்", "ல்"), ("ந்தால்", ""),
+        ("த்தால்", ""), ("னால்", ""), ("வார்", ""), ("த்தார்", ""),
+        ("ந்தார்", ""), ("னார்", ""), ("த்தது", ""), ("ன்றது", ""),
+        ("ந்தது", ""), ("னது", ""), ("வார்கள்", ""), ("கிறார்கள்", ""),
+        ("கின்றார்கள்", ""), ("கிறது", ""), ("கின்றது", ""), ("ாதது", ""),
+        ("ஆகிறது", ""), ("மாகிறது", ""), ("யாக", "")
+    ]
+
+    for suffix, replacement in suffix_replacements:
+        if clean.endswith(suffix):
+            base = clean[:-len(suffix)]
+            if len(base) <= 1:
+                continue
+            candidate = base + replacement if replacement else base
+            if len(candidate) >= 2:
+                return candidate
+
+    return clean
+
+
+def _lookup_known_tamil_lemma(candidate: str) -> Optional[str]:
+    """Resolve a Tamil form against the project’s known lemma dictionaries."""
+    if not candidate:
+        return None
+
+    normalized = candidate.strip("\u200c\u200d\ufeff")
+    if not normalized:
+        return None
+
+    if normalized in TAMIL_LEMMA_CORRECTIONS:
+        return TAMIL_LEMMA_CORRECTIONS[normalized]
+
+    if normalized in TAMIL_COMMON_VERBS:
+        return TAMIL_COMMON_VERBS[normalized][1]
+
+    if normalized in TAMIL_COMMON_NOUNS:
+        return TAMIL_COMMON_NOUNS[normalized][1]
+
+    if normalized in TAMIL_LEMMA_OVERRIDES:
+        return TAMIL_LEMMA_OVERRIDES[normalized][2]
+
+    if normalized in TAMIL_VERB_ROOTS:
+        return TAMIL_VERB_ROOTS[normalized]
+
+    if normalized.endswith("க்கு") and normalized[:-2] in TAMIL_LEMMA_CORRECTIONS:
+        return TAMIL_LEMMA_CORRECTIONS[normalized[:-2]]
+
+    stripped = _strip_common_tamil_suffix(normalized)
+    if stripped != normalized and stripped not in ("", normalized):
+        return stripped
+
+    return None
+
+
+def correct_tamil_lemma(word: str, stanza_lemma: str) -> str:
+    """Return the best Tamil lemma using Stanza output first, then morphological/dictionary resolution."""
+    normalized = (word or "").strip("\u200c\u200d\ufeff")
+    stanza_value = (stanza_lemma or "").strip("\u200c\u200d\ufeff")
+
+    if not normalized:
+        return stanza_value or ""
+
+    ordered_candidates = []
+    for candidate in [stanza_value, normalized]:
+        if candidate and candidate not in ordered_candidates:
+            ordered_candidates.append(candidate)
+
+    for candidate in ordered_candidates:
+        if candidate in TAMIL_LEMMA_CORRECTIONS:
+            return TAMIL_LEMMA_CORRECTIONS[candidate]
+
+        known = _lookup_known_tamil_lemma(candidate)
+        if known:
+            return known
+
+    stripped = _strip_common_tamil_suffix(normalized)
+    if stripped != normalized and stripped not in ("", normalized):
+        return stripped
+
+    return stanza_value or normalized
+
 
 def _analyze_tamil_word(word: str) -> Tuple[str, str, str, str]:
     """
     Returns (pos, tag, lemma, morph_features) for a Tamil word.
     """
+    # Tamil text may contain invisible joiners after a token.
+    word = word.strip("\u200c\u200d\ufeff")
+
+    if word in TAMIL_LEMMA_OVERRIDES:
+        return TAMIL_LEMMA_OVERRIDES[word]
+
+    if word in TAMIL_LEMMA_CORRECTIONS:
+        return ("NOUN", "NOUN", TAMIL_LEMMA_CORRECTIONS[word], "Case=Nom|Number=Sing")
+
     # 1. Punctuation
     if all(c in '.,!?;:|।॥\'"()[]{}<>-–—/\\@#$%&*+=_~^`' for c in word):
         return ("PUNCT", "PUNCT", word, "")
@@ -460,12 +659,19 @@ def _analyze_tamil_word(word: str) -> Tuple[str, str, str, str]:
     if word in TAMIL_POSTPOSITIONS:
         return ("ADP", "POSTP", word, "")
 
-    # 6. Exact Common Noun lookup
+    # 6. Exact determiner and adjective lookup
+    if word in TAMIL_DETERMINERS:
+        return ("DET", "DET", word, "PronType=Art")
+
+    if word in TAMIL_ADJECTIVES:
+        return ("ADJ", "ADJ", word, "")
+
+    # 7. Exact Common Noun lookup
     if word in TAMIL_COMMON_NOUNS:
         pos, lemma, morph = TAMIL_COMMON_NOUNS[word]
         return (pos, pos, lemma, morph)
 
-    # 7. Exact Common Verb lookup
+    # 8. Exact Common Verb lookup
     if word in TAMIL_COMMON_VERBS:
         pos, lemma, morph = TAMIL_COMMON_VERBS[word]
         return (pos, pos, lemma, morph)
@@ -569,6 +775,14 @@ def _analyze_tamil_word(word: str) -> Tuple[str, str, str, str]:
 
     # 10. Noun Suffixes / Case Endings
     noun_cases = [
+        # Tamil nouns ending in ம் change to த்த் before case suffixes.
+        ("த்திலிருந்து", "Case=Abl|Number=Sing", "ம்"),
+        ("த்துடன்", "Case=Com|Number=Sing", "ம்"),
+        ("த்தினால்", "Case=Ins|Number=Sing", "ம்"),
+        ("த்தால்", "Case=Ins|Number=Sing", "ம்"),
+        ("த்திற்கு", "Case=Dat|Number=Sing", "ம்"),
+        ("த்தில்", "Case=Loc|Number=Sing", "ம்"),
+        ("த்தின்", "Case=Gen|Number=Sing", "ம்"),
         ("களிலிருந்து", "Case=Abl|Number=Plur"),
         ("களுக்கு", "Case=Dat|Number=Plur"),
         ("களுடன்", "Case=Com|Number=Plur"),
@@ -585,13 +799,45 @@ def _analyze_tamil_word(word: str) -> Tuple[str, str, str, str]:
         ("ஆல்", "Case=Ins|Number=Sing"),
         ("ஐ", "Case=Acc|Number=Sing"),
     ]
-    for s, morph in noun_cases:
+    for case in noun_cases:
+        s, morph = case[:2]
         if word.endswith(s) and len(word) > len(s) + 1:
             lemma = word[:-len(s)]
+            if len(case) == 3:
+                lemma += case[2]
             return ("NOUN", "NOUN", lemma, morph)
+
+    stripped = _strip_common_tamil_suffix(word)
+    if stripped != word and stripped:
+        return ("NOUN", "NOUN", stripped, "Case=Nom|Number=Sing")
 
     # Default Noun
     return ("NOUN", "NOUN", word, "Case=Nom|Number=Sing")
+
+
+def _analyze_tamil_sentence(sentence: str) -> Optional[List[Dict[str, str]]]:
+    """Return Stanza Tamil POS results, or None when its local model is unavailable."""
+    tamil_nlp = _get_tamil_nlp()
+    if tamil_nlp is None:
+        return None
+
+    try:
+        normalized_sentence = sentence.translate(str.maketrans("", "", "\u200c\u200d\ufeff"))
+        doc = tamil_nlp(normalized_sentence)
+        results = []
+        for stanza_sentence in doc.sentences:
+            for word in stanza_sentence.words:
+                lemma = correct_tamil_lemma(word.text, word.lemma or word.text)
+                results.append({
+                    "token": word.text,
+                    "pos": word.upos or "X",
+                    "lemma": lemma,
+                    "morph": word.feats or "",
+                    "tag": word.xpos or word.upos or "X",
+                })
+        return results
+    except Exception:
+        return None
 
 
 # ==============================================================================
@@ -640,11 +886,38 @@ SINHALA_ADVERBS = {
     "නැවත", "දැන්", "පසුව", "එතැන", "මෙතැන", "ඉතා", "බොහෝ", "වඩාත්",
 }
 
+SINHALA_LEMMA_OVERRIDES = {
+    "විශ්වවිද්‍යාලයේ": ("NOUN", "විශ්වවිද්‍යාලය", "Case=Loc|Number=Sing"),
+    "හොඳින්": ("ADV", "හොඳ", ""),
+    "ලබා": ("VERB", "ලබ", "VerbForm=Part|Aspect=Perf"),
+    "කළහ": ("VERB", "කර", "Tense=Past|Number=Plur|Person=3"),
+    "කළා": ("VERB", "කර", "Tense=Past|Aspect=Perf"),
+    "කරනවා": ("VERB", "කර", "Tense=Pres|Mood=Ind"),
+    "කරන": ("VERB", "කර", "VerbForm=Part|Tense=Pres"),
+    "කරලා": ("VERB", "කර", "VerbForm=Part|Aspect=Perf"),
+    "කරපු": ("VERB", "කර", "VerbForm=Part|Tense=Past"),
+    "කරමින්": ("VERB", "කර", "VerbForm=Part|Aspect=Prog"),
+    "වූයේය": ("VERB", "වෙ", "Tense=Past|Person=3"),
+    "විය": ("VERB", "වෙ", "Tense=Past|Person=3"),
+    "වෙයි": ("VERB", "වෙ", "Tense=Pres|Mood=Ind"),
+    "ලැබේ": ("VERB", "ලබ", "Tense=Pres|Voice=Pass"),
+    "ලැබූ": ("VERB", "ලබ", "Tense=Past|Voice=Pass"),
+}
+SINHALA_LEMMA_OVERRIDES_NORMALIZED = {
+    key.translate(str.maketrans("", "", "\u200c\u200d\ufeff")): value
+    for key, value in SINHALA_LEMMA_OVERRIDES.items()
+}
+
 
 def _analyze_sinhala_word(word: str) -> Tuple[str, str, str, str]:
     """
     Returns (pos, tag, lemma, morph_features) for a Sinhala word.
     """
+    lookup_word = word.translate(str.maketrans("", "", "\u200c\u200d\ufeff"))
+    if lookup_word in SINHALA_LEMMA_OVERRIDES_NORMALIZED:
+        pos, lemma, morph = SINHALA_LEMMA_OVERRIDES_NORMALIZED[lookup_word]
+        return (pos, pos, lemma, morph)
+
     # 1. Punctuation
     if all(c in '.,!?;:|।॥\'"()[]{}<>-–—/\\@#$%&*+=_~^`' for c in word):
         return ("PUNCT", "PUNCT", word, "")
@@ -776,9 +1049,11 @@ def tokenize_and_tag(text: str) -> Dict[str, Any]:
                 if not text_clean:
                     continue
 
-                if not token.is_punct and not token.is_space:
-                    token_texts.append(text_clean)
-                    word_freq[text_clean.lower()] += 1
+                if token.is_punct or token.is_space:
+                    continue
+
+                token_texts.append(text_clean)
+                word_freq[text_clean.lower()] += 1
 
                 pos_counter[pos] += 1
                 lemmas.append(token.lemma_ or text_clean)
@@ -796,17 +1071,53 @@ def tokenize_and_tag(text: str) -> Dict[str, Any]:
                 })
 
         elif sent_lang == "Tamil":
-            # Extract Tamil words, numbers, English tokens, punctuation
-            raw_tokens = re.findall(r'[\u0B80-\u0BFF\u200C\u200D]+|[a-zA-Z0-9]+|[^\w\s]', sent)
-            for raw_tok in raw_tokens:
-                tok = raw_tok.strip()
+            stanza_tokens = _analyze_tamil_sentence(sent)
+            if stanza_tokens is None:
+                # Extract Tamil words, numbers, English tokens, punctuation.
+                stanza_tokens = []
+                raw_tokens = re.findall(r'[\u0B80-\u0BFF\u200C\u200D]+|[a-zA-Z0-9]+|[^\w\s]', sent)
+                for raw_tok in raw_tokens:
+                    tok = raw_tok.strip()
+                    if not tok:
+                        continue
+                    pos, tag, lemma, morph = _analyze_tamil_word(tok)
+                    stanza_tokens.append({
+                        "token": tok, "pos": pos, "tag": tag,
+                        "lemma": lemma, "morph": morph,
+                    })
+
+            for stanza_token in stanza_tokens:
+                tok = stanza_token["token"].strip()
+                tok = tok.strip("\u200c\u200d\ufeff")
                 if not tok:
                     continue
 
-                pos, tag, lemma, morph = _analyze_tamil_word(tok)
-                if pos != "PUNCT":
-                    token_texts.append(tok)
-                    word_freq[tok] += 1
+                if _is_punctuation_token(tok):
+                    continue
+
+                pos = stanza_token["pos"]
+                tag = stanza_token["tag"]
+                lemma = correct_tamil_lemma(stanza_token.get("token", tok), stanza_token["lemma"])
+                morph = stanza_token["morph"]
+                if (
+                    tok in TAMIL_PRONOUNS
+                    or tok in TAMIL_CONJUNCTIONS
+                    or tok in TAMIL_POSTPOSITIONS
+                    or tok in TAMIL_DETERMINERS
+                    or tok in TAMIL_ADJECTIVES
+                    or tok in TAMIL_COMMON_NOUNS
+                    or tok in TAMIL_COMMON_VERBS
+                    or tok in TAMIL_LEMMA_OVERRIDES
+                ):
+                    pos, tag, lemma, morph = _analyze_tamil_word(tok)
+                if pos == "AUX":
+                    pos = "VERB"
+                    tag = "VERB"
+                if pos == "PUNCT":
+                    continue
+
+                token_texts.append(tok)
+                word_freq[tok] += 1
 
                 pos_counter[pos] += 1
                 lemmas.append(lemma)
@@ -832,9 +1143,11 @@ def tokenize_and_tag(text: str) -> Dict[str, Any]:
                     continue
 
                 pos, tag, lemma, morph = _analyze_sinhala_word(tok)
-                if pos != "PUNCT":
-                    token_texts.append(tok)
-                    word_freq[tok] += 1
+                if _is_punctuation_token(tok) or pos == "PUNCT":
+                    continue
+
+                token_texts.append(tok)
+                word_freq[tok] += 1
 
                 pos_counter[pos] += 1
                 lemmas.append(lemma)
@@ -857,11 +1170,13 @@ def tokenize_and_tag(text: str) -> Dict[str, Any]:
                 tok = raw_tok.strip()
                 if not tok:
                     continue
-                is_punct = all(c in '.,!?;:|।॥\'"()[]{}<>-–—/\\@#$%&*+=_~^`' for c in tok)
+                is_punct = _is_punctuation_token(tok)
                 pos = "PUNCT" if is_punct else ("NUM" if tok.isdigit() else "NOUN")
-                if not is_punct:
-                    token_texts.append(tok)
-                    word_freq[tok.lower()] += 1
+                if is_punct:
+                    continue
+
+                token_texts.append(tok)
+                word_freq[tok.lower()] += 1
 
                 pos_counter[pos] += 1
                 lemmas.append(tok)
@@ -1388,37 +1703,17 @@ def classify_text(text: str, lang: str = "English") -> Dict[str, Any]:
 # 10. DOCUMENT STATISTICS COMPUTATION
 # ==============================================================================
 
-def compute_statistics(
-    text: str,
-    token_data: Dict[str, Any],
-    lang_data: Dict[str, Any],
-    sentiment_data: Dict[str, Any],
-    entities: List[Dict[str, Any]],
-) -> Dict[str, Any]:
-    """
-    Computes comprehensive structural and NLP statistics for the document.
-    """
-    chars = len(text)
-    chars_no_spaces = len(re.sub(r'\s+', '', text))
-    paragraphs = [p for p in text.split("\n\n") if p.strip()]
-
-    # Entity counts by type
-    entity_counts = Counter(e.get("label_en", "MISC") for e in entities)
-
-    # Language percentage breakdown
-    lang_dist = {b["language"]: b["percentage"] for b in lang_data.get("languages_detected", [])}
-
+def compute_statistics(text: str, token_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Compute structural document statistics without language/entity/sentiment analysis."""
+    normalized_text = text or ""
+    paragraphs = [p for p in re.split(r"\n\s*\n", normalized_text.strip()) if p.strip()]
     return {
-        "characters": chars,
-        "characters_without_spaces": chars_no_spaces,
+        "characters": len(normalized_text),
+        "characters_without_spaces": len(re.sub(r"\s+", "", normalized_text)),
         "tokens": token_data.get("token_count", 0),
         "unique_tokens": token_data.get("unique_tokens", 0),
         "sentences": token_data.get("sentence_count", 0),
-        "paragraphs": max(len(paragraphs), 1),
-        "language_distribution": lang_dist,
-        "pos_distribution": token_data.get("pos_distribution", {}),
-        "sentiment_distribution": sentiment_data.get("distribution", {}),
-        "entity_counts": dict(entity_counts),
+        "paragraphs": len(paragraphs),
     }
 
 
@@ -1429,59 +1724,25 @@ def compute_statistics(
 def analyze(text: str, max_chars: int = 100_000) -> Dict[str, Any]:
     """
     Complete language-aware NLP processing pipeline for English, Tamil, and Sinhala.
-    1. Language Detection (multilingual awareness)
-    2. Sentence Segmentation & Language-Aware Tokenization
-    3. POS Tagging, Lemmatization, and Morphology
-    4. Named Entity Recognition (NER)
-    5. Sentiment Analysis (Document & Sentence levels)
-    6. Text Classification with Probability Distribution
-    7. Full Corpus Statistics
+    1. Sentence Segmentation & Language-Aware Tokenization
+    2. POS Tagging, Lemmatization, and Morphology
+    3. Language-aware token and corpus analysis
     """
     if not text:
         text = ""
 
     truncated_text = text[:max_chars]
 
-    # 1. Detect language distribution
+    # Select a primary language internally for language-aware processing.
     lang_data = detect_languages(truncated_text)
     primary_lang = lang_data["primary_language"]
 
-    # 2. Tokenize, POS Tag, Lemmatize, and extract Morphological features
+    # Tokenize, POS Tag, Lemmatize, and extract Morphological features
     token_results = tokenize_and_tag(truncated_text)
-
-    # 3. Named Entity Recognition
-    entities = extract_entities(truncated_text, lang=primary_lang)
-
-    # 4. Sentiment Analysis
-    sentiment_results = analyze_sentiment(
-        truncated_text,
-        lang=primary_lang,
-        sentences=token_results.get("sentences", [])
-    )
-
-    # 5. Domain Text Classification
-    classif_results = classify_text(truncated_text, lang=primary_lang)
-
-    # 6. Detailed Statistics
-    stats = compute_statistics(
-        truncated_text,
-        token_data=token_results,
-        lang_data=lang_data,
-        sentiment_data=sentiment_results,
-        entities=entities,
-    )
-
-    # Language display string (e.g. "Tamil (72.5%), English (20.1%), Sinhala (7.4%)" or "Tamil")
-    if lang_data.get("is_multilingual"):
-        display_parts = [f"{b['language']} ({b['percentage']}%)" for b in lang_data.get("languages_detected", [])]
-        lang_display = "Multilingual: " + ", ".join(display_parts)
-    else:
-        lang_display = primary_lang
+    statistics = compute_statistics(truncated_text, token_results)
 
     return {
         "language": primary_lang,
-        "language_display": lang_display,
-        "language_detection": lang_data,
         "tokens": token_results.get("tokens", []),
         "token_count": token_results.get("token_count", 0),
         "unique_tokens": token_results.get("unique_tokens", 0),
@@ -1492,10 +1753,7 @@ def analyze(text: str, max_chars: int = 100_000) -> Dict[str, Any]:
         "top_words": token_results.get("top_words", []),
         "sentences": token_results.get("sentences", []),
         "sentence_count": token_results.get("sentence_count", 0),
-        "entities": entities,
-        "sentiment": sentiment_results,
-        "classification": classif_results,
-        "statistics": stats,
+        "statistics": statistics,
     }
 
 

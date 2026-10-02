@@ -21,6 +21,7 @@ requests>=2.32.0
 
 # NLP
 spacy>=3.8.0
+stanza>=1.10.0
 groq>=0.11.0
 langdetect>=1.0.9
 

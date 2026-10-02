@@ -61,6 +61,12 @@ async def _doc_out(raw, cleaned=None, meta=None, analysis=None):
     if not raw_text and raw.get("gridfs_id"):
         raw_text = await _fetch_text_gridfs(raw["gridfs_id"])
 
+    nlp_data = dict(analysis.get("data") or {}) if analysis else None
+    if nlp_data is not None:
+        analysis_text = (cleaned or {}).get("text") or raw_text or ""
+        computed_stats = nlp.compute_statistics(analysis_text, nlp_data)
+        nlp_data["statistics"] = {**computed_stats, **(nlp_data.get("statistics") or {})}
+
     # Generate summary: prefer stored summary, fallback to extractive summary
     summary = raw.get("summary") or (get_text_summary(raw_text) if raw_text else None)
 
@@ -74,7 +80,7 @@ async def _doc_out(raw, cleaned=None, meta=None, analysis=None):
         "summary":      summary,
         "cleaned_text": cleaned.get("text") if cleaned else None,
         "metadata": meta.get("data") if meta else None,
-        "nlp": analysis.get("data") if analysis else None,
+        "nlp": nlp_data,
         "created_at": raw.get("created_at"),
     }
 
@@ -94,11 +100,11 @@ async def _owned_raw_document(document_id: str, user: dict) -> dict:
 
 
 @router.get("/")
-async def list_documents(user: dict = Depends(get_current_user)):
+async def list_documents(user: dict = Depends(get_current_user), limit: int = 10_000):
     """List the current user's documents for the dashboard."""
     query = {} if user["role"] == "admin" else {"user_id": ObjectId(user["id"])}
     result = []
-    async for raw in raw_documents_col.find(query).sort("created_at", -1):
+    async for raw in raw_documents_col.find(query).sort("created_at", -1).limit(limit):
         cleaned = await cleaned_documents_col.find_one({"raw_document_id": raw["_id"]})
         meta = await document_metadata_col.find_one({"raw_document_id": raw["_id"]})
         analysis = await nlp_analysis_col.find_one(
@@ -116,6 +122,32 @@ async def get_document(document_id: str, user: dict = Depends(get_current_user))
     analysis = await nlp_analysis_col.find_one(
         {"cleaned_document_id": cleaned["_id"]}
     ) if cleaned else None
+    if cleaned and (
+        not analysis
+        or analysis.get("nlp_rules_version") != nlp.NLP_RULES_VERSION
+    ):
+        try:
+            from fastapi.concurrency import run_in_threadpool
+            analysis_data = await run_in_threadpool(nlp.analyze, cleaned.get("text") or "")
+            if analysis:
+                await nlp_analysis_col.update_one(
+                    {"_id": analysis["_id"]},
+                    {"$set": {"data": analysis_data, "nlp_rules_version": nlp.NLP_RULES_VERSION}},
+                )
+                analysis["data"] = analysis_data
+                analysis["nlp_rules_version"] = nlp.NLP_RULES_VERSION
+            else:
+                analysis = {
+                    "cleaned_document_id": cleaned["_id"],
+                    "data": analysis_data,
+                    "nlp_rules_version": nlp.NLP_RULES_VERSION,
+                    "created_at": datetime.utcnow(),
+                }
+                result = await nlp_analysis_col.insert_one(analysis)
+                analysis["_id"] = result.inserted_id
+        except Exception as exc:
+            import logging
+            logging.getLogger("uvicorn.error").warning(f"Failed to refresh NLP analysis: {exc}")
     return await _doc_out(raw, cleaned, meta, analysis)
 
 
@@ -293,6 +325,7 @@ async def upload(
     analysis_doc = {
         "cleaned_document_id": cl_res.inserted_id,
         "data": analysis_data,
+        "nlp_rules_version": nlp.NLP_RULES_VERSION,
         "created_at": datetime.utcnow(),
     }
     await nlp_analysis_col.insert_one(analysis_doc)
@@ -351,10 +384,8 @@ async def get_document(doc_id: str, user: dict = Depends(get_current_user)):
         analysis = await nlp_analysis_col.find_one({"cleaned_document_id": cleaned["_id"]})
         if (
             not analysis
-            or "sentiment" not in analysis.get("data", {})
-            or "classification" not in analysis.get("data", {})
-            or "entities" not in analysis.get("data", {})
             or "sentences" not in analysis.get("data", {})
+            or analysis.get("nlp_rules_version") != nlp.NLP_RULES_VERSION
         ):
             try:
                 from fastapi.concurrency import run_in_threadpool
@@ -362,13 +393,17 @@ async def get_document(doc_id: str, user: dict = Depends(get_current_user)):
                 if analysis:
                     await nlp_analysis_col.update_one(
                         {"_id": analysis["_id"]},
-                        {"$set": {"data": analysis_data}}
+                        {"$set": {
+                            "data": analysis_data,
+                            "nlp_rules_version": nlp.NLP_RULES_VERSION,
+                        }}
                     )
                     analysis["data"] = analysis_data
                 else:
                     analysis_doc = {
                         "cleaned_document_id": cleaned["_id"],
                         "data": analysis_data,
+                        "nlp_rules_version": nlp.NLP_RULES_VERSION,
                         "created_at": datetime.utcnow(),
                     }
                     res = await nlp_analysis_col.insert_one(analysis_doc)
@@ -464,52 +499,25 @@ async def delete_document(doc_id: str, user: dict = Depends(get_current_user)):
     return {"detail": "Deleted successfully"}
 
 
-# ── Export single document ────────────────────────────────────────────
-@router.get("/{doc_id}/export")
-async def export_document(
-    doc_id: str,
-    format: str = "json",
-    user: dict = Depends(get_current_user),
-):
-    """Export a processed document. format = json | csv."""
-    doc      = await get_document(doc_id, user)
-    safe_doc = json.loads(json.dumps(doc, default=str))
-    name     = _safe_filename(doc.get("filename") or "document")
-
-    if format == "json":
-        json_text = json.dumps(safe_doc, indent=2, ensure_ascii=False)
-        return PlainTextResponse(
-            json_text,
-            media_type="application/json; charset=utf-8",
-            headers={"Content-Disposition": f'attachment; filename="{name}.json"'},
-        )
-
-    if format == "csv":
-        csv_text = document_to_csv(safe_doc)
-        return PlainTextResponse(
-            csv_text,
-            media_type="text/csv; charset=utf-8",
-            headers={"Content-Disposition": f'attachment; filename="{name}.csv"'},
-        )
-
-    raise HTTPException(status_code=400, detail="Unsupported format. Use json or csv.")
-
-
 # ── Bulk export ───────────────────────────────────────────────────────
 @router.get("/export/all")
 async def export_all(format: str = "csv", user: dict = Depends(get_current_user)):
     """Bulk export the user's documents as a summary table (csv) or list (json)."""
-    docs      = await list_documents(user=user, limit=10_000)
+    docs = await list_documents(user=user, limit=10_000)
     safe_docs = json.loads(json.dumps(docs, default=str))
 
-    if format == "csv":
+    if format.lower() == "csv":
         return PlainTextResponse(
             documents_summary_csv(safe_docs),
             media_type="text/csv; charset=utf-8",
             headers={"Content-Disposition": 'attachment; filename="lrw_documents.csv"'},
         )
 
-    return JSONResponse(
-        content=safe_docs,
-        media_type="application/json; charset=utf-8"
-    )
+    if format.lower() == "json":
+        return JSONResponse(
+            content=safe_docs,
+            media_type="application/json; charset=utf-8",
+            headers={"Content-Disposition": 'attachment; filename="lrw_documents.json"'},
+        )
+
+    raise HTTPException(status_code=400, detail="Unsupported format. Use json or csv.")

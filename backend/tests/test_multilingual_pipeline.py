@@ -95,6 +95,82 @@ class TestMultilingualPipeline(unittest.TestCase):
         token_details = res["token_details"]
         self.assertTrue(any(t["language"] == "ta" for t in token_details))
         self.assertTrue(any("Tense=" in (t.get("morph") or "") for t in token_details))
+        lemmas = {item["token"]: item["lemma"] for item in token_details}
+        self.assertEqual(lemmas["பல்கலைக்கழகத்தில்"], "பல்கலைக்கழகம்")
+        self.assertEqual(lemmas["பெற்றார்கள்"], "பெறு")
+
+    def test_tamil_pos_for_common_sentence_forms(self):
+        text = "முயன்றால் முடியாது இல்லை! ஒரு அழகான"
+        tokens = {
+            item["token"]: item["pos"]
+            for item in nlp.tokenize_and_tag(text)["token_details"]
+        }
+        self.assertEqual(tokens["முயன்றால்"], "VERB")
+        self.assertEqual(tokens["முடியாது"], "VERB")
+        self.assertEqual(tokens["இல்லை"], "VERB")
+        self.assertEqual(tokens["ஒரு"], "DET")
+        self.assertEqual(tokens["அழகான"], "ADJ")
+
+    def test_tamil_pos_handles_zero_width_forms(self):
+        self.assertEqual(nlp._analyze_tamil_word("முயன்றால்\u200c")[0], "VERB")
+        self.assertEqual(nlp._analyze_tamil_word("முடியாதது")[0], "VERB")
+        tokens = {
+            item["token"]: item["pos"]
+            for item in nlp.tokenize_and_tag("முயன்றால்\u200c முடியாதது")["token_details"]
+        }
+        self.assertEqual(tokens["முயன்றால்"], "VERB")
+        self.assertEqual(tokens["முடியாதது"], "VERB")
+
+    def test_tamil_lemma_restores_noun_base_after_case_suffix(self):
+        _, _, lemma, morph = nlp._analyze_tamil_word("பல்கலைக்கழகத்தில்")
+        self.assertEqual(lemma, "பல்கலைக்கழகம்")
+        self.assertEqual(morph, "Case=Loc|Number=Sing")
+
+        _, _, lemma, morph = nlp._analyze_tamil_word("மாணவர்கள்")
+        self.assertEqual(lemma, "மாணவர்")
+        self.assertEqual(morph, "Case=Nom|Number=Plur")
+
+    def test_tamil_lemma_correction_dictionary_applies_irregular_forms(self):
+        self.assertEqual(nlp.correct_tamil_lemma("காலத்துல", "காலம்துலம்"), "காலம்")
+        self.assertEqual(nlp.correct_tamil_lemma("நாட்டை", "நாட்டை"), "நாடு")
+        self.assertEqual(nlp.correct_tamil_lemma("சொத்துல்", "சொத்துல்"), "சொத்து")
+
+        result = nlp.tokenize_and_tag("காலத்துல நாட்டை சொத்துல்")
+        lemmas = {item["token"]: item["lemma"] for item in result["token_details"]}
+        self.assertEqual(lemmas["காலத்துல"], "காலம்")
+        self.assertEqual(lemmas["நாட்டை"], "நாடு")
+        self.assertEqual(lemmas["சொத்துல்"], "சொத்து")
+
+    def test_tamil_lemma_strips_common_suffixes_automatically(self):
+        self.assertEqual(nlp._analyze_tamil_word("சவலித்தபடத்தில்")[2], "சவலித்தபடம்")
+        self.assertEqual(nlp._analyze_tamil_word("நடத்தை")[2], "நடை")
+        self.assertEqual(nlp._analyze_tamil_word("சதணங்கன்னு")[2], "சதனம்")
+
+    def test_tamil_lemma_corrects_stanza_intermediate_forms(self):
+        self.assertEqual(nlp.correct_tamil_lemma("பாடத்தை", "பாடத்"), "பாடம்")
+        self.assertEqual(nlp.correct_tamil_lemma("கற்க", "கற்கு"), "கல்")
+        self.assertEqual(nlp.correct_tamil_lemma("கற்றுக்", "கற்று"), "கல்")
+        self.assertEqual(nlp.correct_tamil_lemma("மறுத்தால்", "மறுத்தா"), "மறு")
+        self.assertEqual(nlp.correct_tamil_lemma("ஆசிரியர்கள்", "ஆசிரியர்"), "ஆசிரியர்")
+        self.assertEqual(nlp.correct_tamil_lemma("முயன்றால்", "முயன்றா"), "முயல்")
+        self.assertEqual(nlp.correct_tamil_lemma("முடியாதது", "முடியாதது"), "முடி")
+
+    def test_sinhala_lemma_normalizes_common_inflections(self):
+        cases = {
+            "විශ්වවිද්‍යාලයේ": "විශ්වවිද්‍යාලය",
+            "හොඳින්": "හොඳ",
+            "ලබා": "ලබ",
+            "කළහ": "කර",
+        }
+        for word, expected_lemma in cases.items():
+            with self.subTest(word=word):
+                self.assertEqual(nlp._analyze_sinhala_word(word)[2], expected_lemma)
+
+    def test_tokenization_excludes_punctuation_from_nlp_results(self):
+        result = nlp.tokenize_and_tag("முயன்றால், முடியாதது! (வா?)")
+        self.assertEqual(result["tokens"], ["முயன்றால்", "முடியாதது", "வா"])
+        self.assertTrue(all(item["pos"] != "PUNCT" for item in result["token_details"]))
+        self.assertNotIn("PUNCT", result["pos_distribution"])
 
     def test_sinhala_nlp_analysis(self):
         text = "ශිෂ්‍යයන් විශ්වවිද්‍යාලයේ ඉතා හොඳින් අධ්‍යාපනය ලබා ජයග්‍රහණය කළහ."
@@ -105,6 +181,9 @@ class TestMultilingualPipeline(unittest.TestCase):
         
         token_details = res["token_details"]
         self.assertTrue(any(t["language"] == "si" for t in token_details))
+        lemmas = {item["token"]: item["lemma"] for item in token_details}
+        self.assertEqual(lemmas["විශ්වවිද්‍යාලයේ"], "විශ්වවිද්‍යාලය")
+        self.assertEqual(lemmas["හොඳින්"], "හොඳ")
 
     def test_mixed_document_nlp_analysis(self):
         text = (
@@ -113,11 +192,35 @@ class TestMultilingualPipeline(unittest.TestCase):
             "අධ්‍යාපනය ඉතා වැදගත් වේ."
         )
         res = nlp.analyze(text)
-        self.assertTrue(res["language_detection"]["is_multilingual"])
+        self.assertNotIn("language_detection", res)
+        self.assertNotIn("language_display", res)
+        self.assertNotIn("entities", res)
+        self.assertNotIn("sentiment", res)
+        self.assertNotIn("classification", res)
         self.assertGreater(res["token_count"], 5)
         self.assertEqual(len(res["sentences"]), 3)
-        self.assertIn("sentiment", res)
-        self.assertEqual(len(res["sentiment"]["sentences"]), 3)
+
+    def test_nlp_analysis_includes_corpus_statistics(self):
+        text = "This is a short English sentence for analysis."
+        res = nlp.analyze(text)
+        stats = res["statistics"]
+        self.assertEqual(stats["characters"], len(text))
+        self.assertEqual(stats["characters_without_spaces"], len(text.replace(" ", "")))
+        self.assertEqual(stats["tokens"], res["token_count"])
+        self.assertEqual(stats["unique_tokens"], res["unique_tokens"])
+        self.assertEqual(stats["sentences"], res["sentence_count"])
+        self.assertEqual(stats["paragraphs"], 1)
+
+    def test_corpus_statistics_count_paragraphs_and_empty_text(self):
+        text = "First paragraph.\n\nSecond paragraph.\n\nThird paragraph."
+        token_data = {"token_count": 6, "unique_tokens": 5, "sentence_count": 3}
+        stats = nlp.compute_statistics(text, token_data)
+        self.assertEqual(stats["paragraphs"], 3)
+        self.assertEqual(stats["characters"], len(text))
+
+        empty_stats = nlp.compute_statistics("", {})
+        self.assertEqual(empty_stats["characters"], 0)
+        self.assertEqual(empty_stats["paragraphs"], 0)
 
     # ── 5. Named Entity Recognition (NER) ────────────────────────────────────
 
@@ -177,14 +280,10 @@ class TestMultilingualPipeline(unittest.TestCase):
             "metadata": {"source": "Test", "domain": "Technology", "license": "MIT"},
             "nlp": {
                 "language": "Tamil",
-                "language_display": "Tamil (100%)",
                 "token_count": 5,
                 "unique_tokens": 5,
                 "sentence_count": 1,
-                "sentiment": {"label": "நேர்மறை", "score": 0.9, "sentences": []},
-                "classification": {"predicted_category": "Technology", "score": 0.85, "all": []},
                 "top_keywords": ["தமிழ்", "கணினி"],
-                "entities": [{"text": "கொழும்பு", "label_en": "LOC", "label": "இடம்", "score": 0.95}],
                 "pos_distribution": {"NOUN": 3, "VERB": 2},
                 "sentences": ["தமிழ் வாழ்க."],
                 "token_details": [
@@ -195,9 +294,12 @@ class TestMultilingualPipeline(unittest.TestCase):
         }
         csv_str = csv_export.document_to_csv(doc)
         self.assertTrue(csv_str.startswith("\ufeff"))
-        self.assertIn("கொழும்பு", csv_str)
         self.assertIn("தமிழ்", csv_str)
         self.assertIn("=== DOCUMENT SUMMARY ===", csv_str)
+        self.assertNotIn("கொழும்பு", csv_str)
+        self.assertNotIn("NAMED ENTITIES", csv_str)
+        self.assertNotIn("SENTIMENT", csv_str)
+        self.assertNotIn("CLASSIFICATION", csv_str)
 
 
 if __name__ == "__main__":
