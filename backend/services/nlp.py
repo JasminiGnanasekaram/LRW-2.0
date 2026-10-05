@@ -287,72 +287,10 @@ def tokenize_and_tag(text: str) -> Dict[str, Any]:
     top_words = [[w, count] for w, count in word_freq.most_common(50)]
     top_keywords = [w for w, _ in top_words[:5]]
     return {'tokens': token_texts, 'token_count': len(token_texts), 'unique_tokens': unique_tokens, 'lemmas': lemmas, 'token_details': token_details[:5000], 'pos_distribution': dict(pos_counter), 'top_words': top_words, 'top_keywords': top_keywords, 'sentences': sentences, 'sentence_count': len(sentences)}
-SRI_LANKAN_LOCATIONS = {'colombo', 'sri lanka', 'jaffna', 'kandy', 'galle', 'batticaloa', 'trincomalee', 'negombo', 'anuradhapura', 'polonnaruwa', 'matara', 'badulla', 'ratnapura', 'nuwara eliya', 'kurunegala', 'kalutara', 'gampaha', 'puttalam', 'vavuniya', 'mannar', 'kilinochchi', 'mullaitivu', 'ampara', 'hambantota', 'monaragala', 'kegalle', 'matale', 'moratuwa', 'dehiwala', 'kotte', 'katunayake', 'sigiriya', 'கொழும்பு', 'இலங்கை', 'யாழ்ப்பாணம்', 'கண்டி', 'காலி', 'மட்டக்களப்பு', 'திருகோணமலை', 'நீர்கொழும்பு', 'அனுராதபுரம்', 'பொலன்னறுவை', 'மாத்தறை', 'பதுளை', 'இரத்தினபுரி', 'நுவரெலியா', 'குருநாகல்', 'களுத்துறை', 'கம்பஹா', 'புத்தளம்', 'வவுனியா', 'மன்னார்', 'கிளிநொச்சி', 'முல்லைத்தீவு', 'அம்பாறை', 'அம்பாந்தோட்டை', 'மொனராகலை', 'கேகாலை', 'மாத்தளை', 'மொறட்டுவ', 'தெகிவளை', 'கோட்டே', 'சீகிரியா', 'කොළඹ', 'ශ්\u200dරී ලංකාව', 'ශ්\u200dරී ලංකා', 'යාපනය', 'මහනුවර', 'ගාල්ල', 'මඩකලපුව', 'ත්\u200dරිකුණාමලය', 'මීගමුව', 'අනුරාධපුරය', 'පොළොන්නරුව', 'මාතර', 'බදුල්ල', 'රත්නපුරය', 'නුවරඑළිය', 'කුරුණෑගල', 'කළුතර', 'ගම්පහ', 'පුත්තලම', 'වවුනියාව', 'මන්නාරම', 'කිලිනොච්චිය', 'මුලතිව්', 'අම්පාර', 'හම්බන්තොට', 'මොණරාගල', 'කෑගල්ල', 'මාතලේ', 'මොරටුව', 'දෙහිවල', 'කෝට්ටේ', 'කටුනායක', 'සීගිරිය'}
-GLOBAL_LOCATIONS = {'india', 'united states', 'usa', 'uk', 'china', 'japan', 'australia', 'canada', 'london', 'new york', 'delhi', 'chennai', 'tamil nadu', 'singapore', 'malaysia', 'இந்தியா', 'அமெரிக்கா', 'சீனா', 'ஜப்பான்', 'லண்டன்', 'சென்னை', 'தமிழ்நாடு', 'ඉන්දියාව', 'ඇමරිකාව', 'චීනය', 'ජපානය', 'ලන්ඩන්', 'චෙන්නායි', 'සිංගප්පූරුව'}
-ORGANIZATION_KEYWORDS = {'university', 'ministry', 'department', 'bank', 'parliament', 'hospital', 'institute', 'corporation', 'authority', 'commission', 'board', 'plc', 'ltd', 'un', 'who', 'unesco', 'பல்கலைக்கழகம்', 'அமைச்சு', 'திணைக்களம்', 'வங்கி', 'பாராளுமன்றம்', 'வைத்தியசாலை', 'நிறுவனம்', 'ஆணைக்குழு', 'சபை', 'கூட்டுத்தாபனம்', 'විශ්වවිද්\u200dයාලය', 'අමාත්\u200dයාංශය', 'දෙපාර්තමේන්තුව', 'බැංකුව', 'පාර්ලිමේන්තුව', 'රෝහල', 'ආයතනය', 'කොමිසම', 'මණ්ඩලය', 'සංස්ථාව', 'සභාව'}
-PERSON_HONORIFICS = {'mr.', 'mr', 'mrs.', 'mrs', 'ms.', 'ms', 'dr.', 'dr', 'prof.', 'prof', 'rev.', 'rev', 'hon.', 'hon', 'president', 'prime minister', 'திரு', 'திருமதி', 'செல்வி', 'மருத்துவர்', 'பேராசிரியர்', 'அதிபர்', 'ஜனாதிபதி', 'பிரதமர்', 'මහතා', 'මිය', 'මෙනවිය', 'ආචාර්ය', 'මහාචාර්ය', 'පූජ්\u200dය', 'ජනාධිපති', 'අගමැති'}
+def extract_entities(text: str, lang: str = 'English') -> List[Dict[str, Any]]:
+    """Named Entity Recognition has been removed from the NLP pipeline."""
+    return []
 
-def extract_entities(text: str, lang: str='English') -> List[Dict[str, Any]]:
-    """
-    Multilingual NER: Extracts PERSON, LOCATION, ORGANIZATION, DATE, TIME, MONEY, and EVENT.
-    Uses rule-based gazetteers + patterns for English, Tamil, and Sinhala, supplemented with LLM if available.
-    """
-    entities = []
-    seen = set()
-
-    def _add(text_val: str, label_en: str, label_ta: str, label_si: str, label_default: str):
-        key = (text_val.strip().lower(), label_en)
-        if key in seen or len(text_val.strip()) < 2:
-            return
-        seen.add(key)
-        if lang == 'Tamil':
-            label_disp = label_ta
-        elif lang == 'Sinhala':
-            label_disp = label_si
-        else:
-            label_disp = label_default
-        entities.append({'text': text_val.strip(), 'label_en': label_en, 'label': label_disp, 'score': 0.95})
-    all_locations = SRI_LANKAN_LOCATIONS | GLOBAL_LOCATIONS
-    for loc in all_locations:
-        pattern = re.compile(f'\\b{re.escape(loc)}\\b', re.IGNORECASE)
-        for match in pattern.finditer(text):
-            _add(match.group(0), 'LOC', 'இடம்', 'ස්ථාන', 'Location')
-    money_pattern = re.compile('(?:Rs\\.?|LKR|\\$|€|£|¥|₹|ரூ\\.?|රු\\.?)\\s*[\\d,]+(?:\\.\\d+)?(?:\\s*(?:million|billion|crore|lakh|M|B|K|மில்லியன்|මිලියන))?', re.IGNORECASE)
-    for match in money_pattern.finditer(text):
-        _add(match.group(0), 'MONEY', 'பணம்', 'මුදල්', 'Money')
-    date_pattern = re.compile('\\b(?:\\d{1,2}[/-]\\d{1,2}[/-]\\d{2,4}|\\d{4}[/-]\\d{1,2}[/-]\\d{1,2}|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\.?\\s+\\d{1,2}(?:,\\s+\\d{4})?|\\d{1,2}\\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\.?\\s+\\d{4})\\b', re.IGNORECASE)
-    for match in date_pattern.finditer(text):
-        _add(match.group(0), 'DATE', 'தேதி', 'දිනය', 'Date')
-    time_pattern = re.compile('\\b\\d{1,2}:\\d{2}(?::\\d{2})?\\s*(?:AM|PM|am|pm)?\\b')
-    for match in time_pattern.finditer(text):
-        _add(match.group(0), 'TIME', 'நேரம்', 'වේලාව', 'Time')
-    for keyword in ORGANIZATION_KEYWORDS:
-        pattern = re.compile(f'([A-Za-z\\u0B80-\\u0BFF\\u0D80-\\u0DFF\\s]{{2,30}}\\b{re.escape(keyword)}\\b[A-Za-z\\u0B80-\\u0BFF\\u0D80-\\u0DFF\\s]{{0,20}})', re.IGNORECASE)
-        for match in pattern.finditer(text):
-            chunk = match.group(0).strip()
-            if 3 <= len(chunk.split()) <= 6:
-                _add(chunk, 'ORG', 'நிறுவனம்', 'සංවිධාන', 'Organization')
-    for honorific in PERSON_HONORIFICS:
-        pattern = re.compile(f'\\b{re.escape(honorific)}\\.?\\s+([A-Z\\u0B80-\\u0BFF\\u0D80-\\u0DFF][a-zA-Z\\u0B80-\\u0BFF\\u0D80-\\u0DFF\\s]{{2,30}})', re.IGNORECASE)
-        for match in pattern.finditer(text):
-            full_match = match.group(0).strip()
-            name_part = full_match.split()[1:]
-            if 1 <= len(name_part) <= 4:
-                _add(full_match, 'PER', 'நபர்', 'පුද්ගල', 'Person')
-    try:
-        from routes.summarize import get_groq_client, MODEL
-        client = get_groq_client()
-        resp = client.chat.completions.create(model=MODEL, messages=[{'role': 'system', 'content': 'Extract named entities from the text. Respond ONLY with JSON:\n{"entities": [{"text": "...", "label_en": "PER"|"ORG"|"LOC"|"DATE"|"TIME"|"MONEY"|"EVENT"|"MISC", "score": 1.0}]}'}, {'role': 'user', 'content': text[:3000]}], response_format={'type': 'json_object'}, temperature=0.1, max_tokens=512)
-        import json
-        data = json.loads(resp.choices[0].message.content)
-        for ent in data.get('entities', []):
-            if isinstance(ent, dict) and 'text' in ent and ('label_en' in ent):
-                label_map = {'PER': ('நபர்', 'පුද්ගල', 'Person'), 'LOC': ('இடம்', 'ස්ථාන', 'Location'), 'ORG': ('நிறுவனம்', 'සංවිධාන', 'Organization'), 'DATE': ('தேதி', 'දිනය', 'Date'), 'TIME': ('நேரம்', 'වේලාව', 'Time'), 'MONEY': ('பணம்', 'මුදල්', 'Money'), 'EVENT': ('நிகழ்வு', 'සිදුවීම', 'Event'), 'MISC': ('மற்றவை', 'වෙනත්', 'Other')}
-                ta_l, si_l, en_l = label_map.get(ent['label_en'], ('மற்றவை', 'වෙනත්', 'Other'))
-                _add(ent['text'], ent['label_en'], ta_l, si_l, en_l)
-    except Exception:
-        pass
-    return entities[:100]
 POSITIVE_WORDS = {'good', 'great', 'excellent', 'positive', 'success', 'successful', 'progress', 'growth', 'happy', 'best', 'wonderful', 'improvement', 'win', 'benefit', 'advance', 'support', 'joy', 'நல்ல', 'சிறந்த', 'வெற்றி', 'வளர்ச்சி', 'மகிழ்ச்சி', 'முன்னேற்றம்', 'நன்மை', 'உயர்', 'அழகு', 'பாராட்டு', 'சாதனை', 'நலம்', 'முயற்சி', 'ஆதரவு', 'மகிழ்வு', 'இனிமை', 'හොඳ', 'විශිෂ්ට', 'ජයග්\u200dරහණ', 'ජයග්\u200dරහණය', 'දියුණුව', 'දියුණු', 'සතුටු', 'සතුට', 'ප්\u200dරගති', 'ප්\u200dරගතිය', 'වාසි', 'වාසිය', 'උසස්', 'ලස්සන', 'ප්\u200dරශංසා', 'සාර්ථක', 'යහපත්', 'සහයෝග', 'සහයෝගය', 'ප්\u200dරීති', 'ප්\u200dරීතිමත්', 'වාසනාවන්ත', 'වාසනා'}
 NEGATIVE_WORDS = {'bad', 'terrible', 'negative', 'failure', 'failed', 'loss', 'problem', 'crisis', 'damage', 'danger', 'poor', 'decline', 'corruption', 'violence', 'threat', 'attack', 'மோசம்', 'தோல்வி', 'இழப்பு', 'பிரச்சனை', 'நெருக்கடி', 'சேதம்', 'ஆபத்து', 'வீழ்ச்சி', 'ஊழல்', 'வன்முறை', 'அச்சுறுத்தல்', 'துன்பம்', 'நோய்', 'கவலை', 'குறைவு', 'නරක', 'අසාර්ථක', 'පාඩු', 'පාඩුව', 'ගැටලු', 'ගැටලුව', 'අර්බුද', 'අර්බුදය', 'හානි', 'හානිය', 'අනතුරු', 'අනතුර', 'පිරිහීම', 'දූෂණ', 'දූෂණය', 'ප්\u200dරචණ්ඩ', 'ප්\u200dරචණ්ඩත්වය', 'තර්ජන', 'තර්ජනය', 'දුක්', 'දුක', 'රෝග', 'රෝගය', 'කරදර'}
 
@@ -487,16 +425,15 @@ def classify_text(text: str, lang: str='English') -> Dict[str, Any]:
     top_label_disp = DOMAIN_TRANSLATIONS.get(top_domain, {}).get('ta' if lang == 'Tamil' else 'si' if lang == 'Sinhala' else 'en', top_domain)
     return {'predicted_category': top_domain, 'predicted_label': top_label_disp, 'score': top_prob, 'probabilities': {item['label_en']: item['score'] for item in all_list}, 'all': all_list}
 
-def compute_statistics(text: str, token_data: Dict[str, Any], lang_data: Dict[str, Any], sentiment_data: Dict[str, Any], entities: List[Dict[str, Any]]) -> Dict[str, Any]:
+def compute_statistics(text: str, token_data: Dict[str, Any], lang_data: Dict[str, Any], sentiment_data: Dict[str, Any], entities: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     """
     Computes comprehensive structural and NLP statistics for the document.
     """
     chars = len(text)
     chars_no_spaces = len(re.sub('\\s+', '', text))
     paragraphs = [p for p in text.split('\n\n') if p.strip()]
-    entity_counts = Counter((e.get('label_en', 'MISC') for e in entities))
     lang_dist = {b['language']: b['percentage'] for b in lang_data.get('languages_detected', [])}
-    return {'characters': chars, 'characters_without_spaces': chars_no_spaces, 'tokens': token_data.get('token_count', 0), 'unique_tokens': token_data.get('unique_tokens', 0), 'sentences': token_data.get('sentence_count', 0), 'paragraphs': max(len(paragraphs), 1), 'language_distribution': lang_dist, 'pos_distribution': token_data.get('pos_distribution', {}), 'sentiment_distribution': sentiment_data.get('distribution', {}), 'entity_counts': dict(entity_counts)}
+    return {'characters': chars, 'characters_without_spaces': chars_no_spaces, 'tokens': token_data.get('token_count', 0), 'unique_tokens': token_data.get('unique_tokens', 0), 'sentences': token_data.get('sentence_count', 0), 'paragraphs': max(len(paragraphs), 1), 'language_distribution': lang_dist, 'pos_distribution': token_data.get('pos_distribution', {}), 'sentiment_distribution': sentiment_data.get('distribution', {})}
 
 def analyze(text: str, max_chars: int=100000) -> Dict[str, Any]:
     """
@@ -504,10 +441,9 @@ def analyze(text: str, max_chars: int=100000) -> Dict[str, Any]:
     1. Language Detection (multilingual awareness)
     2. Sentence Segmentation & Language-Aware Tokenization
     3. POS Tagging, Lemmatization, and Morphology
-    4. Named Entity Recognition (NER)
-    5. Sentiment Analysis (Document & Sentence levels)
-    6. Text Classification with Probability Distribution
-    7. Full Corpus Statistics
+    4. Sentiment Analysis (Document & Sentence levels)
+    5. Text Classification with Probability Distribution
+    6. Full Corpus Statistics
     """
     if not text:
         text = ''
@@ -515,16 +451,15 @@ def analyze(text: str, max_chars: int=100000) -> Dict[str, Any]:
     lang_data = detect_languages(truncated_text)
     primary_lang = lang_data['primary_language']
     token_results = tokenize_and_tag(truncated_text)
-    entities = extract_entities(truncated_text, lang=primary_lang)
     sentiment_results = analyze_sentiment(truncated_text, lang=primary_lang, sentences=token_results.get('sentences', []))
     classif_results = classify_text(truncated_text, lang=primary_lang)
-    stats = compute_statistics(truncated_text, token_data=token_results, lang_data=lang_data, sentiment_data=sentiment_results, entities=entities)
+    stats = compute_statistics(truncated_text, token_data=token_results, lang_data=lang_data, sentiment_data=sentiment_results)
     if lang_data.get('is_multilingual'):
         display_parts = [f"{b['language']} ({b['percentage']}%)" for b in lang_data.get('languages_detected', [])]
         lang_display = 'Multilingual: ' + ', '.join(display_parts)
     else:
         lang_display = primary_lang
-    return {'language': primary_lang, 'language_display': lang_display, 'language_detection': lang_data, 'tokens': token_results.get('tokens', []), 'token_count': token_results.get('token_count', 0), 'unique_tokens': token_results.get('unique_tokens', 0), 'lemmas': token_results.get('lemmas', []), 'top_keywords': token_results.get('top_keywords', []), 'token_details': token_results.get('token_details', []), 'pos_distribution': token_results.get('pos_distribution', {}), 'top_words': token_results.get('top_words', []), 'sentences': token_results.get('sentences', []), 'sentence_count': token_results.get('sentence_count', 0), 'entities': entities, 'sentiment': sentiment_results, 'classification': classif_results, 'statistics': stats}
+    return {'language': primary_lang, 'language_display': lang_display, 'language_detection': lang_data, 'tokens': token_results.get('tokens', []), 'token_count': token_results.get('token_count', 0), 'unique_tokens': token_results.get('unique_tokens', 0), 'lemmas': token_results.get('lemmas', []), 'top_keywords': token_results.get('top_keywords', []), 'token_details': token_results.get('token_details', []), 'pos_distribution': token_results.get('pos_distribution', {}), 'top_words': token_results.get('top_words', []), 'sentences': token_results.get('sentences', []), 'sentence_count': token_results.get('sentence_count', 0), 'sentiment': sentiment_results, 'classification': classif_results, 'statistics': stats}
 
 def detect_language(text: str) -> str:
     """Backward compatibility helper."""

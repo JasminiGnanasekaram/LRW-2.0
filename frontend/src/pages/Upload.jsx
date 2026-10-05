@@ -1,78 +1,215 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { uploadDocument, api } from "../api";
 
+const FILE_TYPES = [
+  { value: "text", label: "Text file", desc: ".txt", accept: ".txt" },
+  { value: "pdf", label: "PDF", desc: ".pdf", accept: ".pdf" },
+  { value: "image", label: "Image", desc: ".jpg, .png, .pdf", accept: ".jpg,.jpeg,.png,.webp,.bmp,.pdf" },
+  { value: "audio", label: "Audio", desc: ".mp3, .wav, .m4a", accept: ".mp3,.wav,.m4a,.ogg" },
+  { value: "url", label: "URL", desc: "web page" },
+];
+
+const DOMAINS = [
+  ["news", "News"],
+  ["science", "Science"],
+  ["law", "Law"],
+  ["technology", "Technology"],
+  ["health", "Health"],
+  ["education", "Education"],
+  ["finance", "Finance"],
+  ["business", "Business"],
+  ["sports", "Sports"],
+  ["entertainment", "Entertainment"],
+  ["government", "Government"],
+  ["research", "Research"],
+  ["other", "Other"],
+];
+
+const LICENSES = [
+  ["public-domain", "Public Domain"],
+  ["cc0", "CC0"],
+  ["cc-by", "CC BY"],
+  ["cc-by-sa", "CC BY-SA"],
+  ["cc-by-nc", "CC BY-NC"],
+  ["cc-by-nd", "CC BY-ND"],
+  ["mit", "MIT"],
+  ["apache-2.0", "Apache 2.0"],
+  ["gpl-3.0", "GPL 3.0"],
+  ["proprietary", "Proprietary"],
+  ["restricted", "Restricted"],
+  ["other", "Other"],
+];
+
+const EMPTY_META = {
+  source: "",
+  author: "",
+  publication_date: "",
+  domain: "",
+  category: "",
+  license: "",
+};
+
+const styles = {
+  typeGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 10 },
+  typeCard: (active) => ({
+    position: "relative",
+    display: "flex",
+    flexDirection: "column",
+    margin: 0,
+    padding: "12px 14px",
+    border: `2px solid ${active ? "var(--forest)" : "var(--border)"}`,
+    borderRadius: "var(--radius)",
+    background: active ? "var(--mint)" : "var(--paper)",
+    cursor: "pointer",
+    letterSpacing: 0,
+    textTransform: "none",
+    transition: "border-color 0.15s, background 0.15s",
+  }),
+  radio: { position: "absolute", opacity: 0, pointerEvents: "none" },
+  typeLabel: { marginBottom: 2, fontSize: 13, fontWeight: 600, color: "var(--ink)" },
+  typeDesc: { fontSize: 11, fontWeight: 400, color: "var(--ink-lt)" },
+  uploadZone: (dragging) => ({
+    position: "relative",
+    borderColor: dragging ? "var(--sage)" : undefined,
+    background: dragging ? "#fafdf9" : undefined,
+  }),
+  summaryLoading: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 16,
+    padding: "12px 16px",
+    borderRadius: "var(--radius)",
+    background: "var(--mint)",
+    fontSize: 14,
+    color: "var(--ink-mid)",
+  },
+  summary: {
+    marginTop: 16,
+    padding: "14px 16px",
+    borderLeft: "4px solid var(--forest)",
+    borderRadius: "var(--radius)",
+    background: "var(--mint)",
+    fontSize: 14,
+    lineHeight: 1.8,
+    color: "var(--ink)",
+  },
+  summaryHeading: { marginBottom: 6, fontSize: 13, fontWeight: 600, color: "var(--forest)" },
+  metaGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", columnGap: 20 },
+  actions: { display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 20 },
+};
+
+function Field({ id, label, required, children }) {
+  return (
+    <div className="field">
+      <label htmlFor={id}>
+        {label} {required && <span style={{ color: "var(--danger)" }}>*</span>}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+function SelectField({ id, label, placeholder, options, value, onChange, required }) {
+  return (
+    <Field id={id} label={label} required={required}>
+      <select
+        id={id}
+        value={value}
+        onChange={onChange}
+        required={required}
+        style={{ color: value ? "var(--ink)" : "var(--ink-lt)" }}
+      >
+        <option value="">{placeholder}</option>
+        {options.map(([optionValue, optionLabel]) => (
+          <option key={optionValue} value={optionValue}>
+            {optionLabel}
+          </option>
+        ))}
+      </select>
+    </Field>
+  );
+}
+
 export default function Upload() {
+  const navigate = useNavigate();
+  const fileInputRef = useRef(null);
+  const summaryRequestRef = useRef(0);
+
   const [fileType, setFileType] = useState("text");
   const [file, setFile] = useState(null);
   const [url, setUrl] = useState("");
-  const [meta, setMeta] = useState({
-    source: "", author: "", publication_date: "",
-    domain: "", category: "", license: "",
-  });
+  const [meta, setMeta] = useState(EMPTY_META);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-
-  // ── Summary states ──
+  const [dragging, setDragging] = useState(false);
   const [summary, setSummary] = useState("");
   const [summaryLoading, setSummaryLoading] = useState(false);
 
-  const navigate = useNavigate();
+  const accept = FILE_TYPES.find((type) => type.value === fileType)?.accept;
+  const updateMeta = (key) => (e) => setMeta((prev) => ({ ...prev, [key]: e.target.value }));
 
-  const getAcceptAttribute = () => {
-    if (fileType === "pdf")   return ".pdf";
-    if (fileType === "image") return ".jpg,.jpeg,.png,.webp,.bmp,.pdf";
-    if (fileType === "audio") return ".mp3,.wav,.m4a,.ogg";
-    if (fileType === "text")  return ".txt";
-    return "*";
+  const clearSummary = () => {
+    summaryRequestRef.current += 1;
+    setSummary("");
+    setSummaryLoading(false);
   };
 
-  // ── Fetch summary from local backend ──
-  const fetchSummary = async (selectedFile, selectedType, selectedUrl) => {
+  const fetchSummary = async (type, { file: selectedFile, url: selectedUrl }) => {
+    const requestId = ++summaryRequestRef.current;
     setSummaryLoading(true);
     setSummary("");
 
+    const formData = new FormData();
+    if (type === "url") formData.append("url", selectedUrl);
+    else formData.append("file", selectedFile);
+
     try {
-      const formData = new FormData();
-
-      if (selectedType === "url") {
-        formData.append("url", selectedUrl);
-        const { data } = await api.post("/summarize/url", formData);
-        setSummary(data.summary);
-
-      } else {
-        formData.append("file", selectedFile);
-        const endpoint = {
-          text:  "text",
-          pdf:   "pdf",
-          image: "image",
-          audio: "audio",
-        }[selectedType];
-
-        const { data } = await api.post(`/summarize/${endpoint}`, formData);
-        setSummary(data.summary);
+      const { data } = await api.post(`/summarize/${type}`, formData);
+      if (requestId === summaryRequestRef.current) setSummary(data.summary);
+    } catch {
+      if (requestId === summaryRequestRef.current) {
+        setSummary("Could not generate summary. Please try again.");
       }
-
-    } catch (err) {
-      setSummary("Could not generate summary. Please try again.");
     } finally {
-      setSummaryLoading(false);
+      if (requestId === summaryRequestRef.current) setSummaryLoading(false);
     }
+  };
+
+  const selectType = (value) => {
+    setFileType(value);
+    setFile(null);
+    clearSummary();
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const selectFile = (selected) => {
+    setFile(selected || null);
+    clearSummary();
+    if (selected) fetchSummary(fileType, { file: selected });
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setDragging(false);
+    selectFile(e.dataTransfer.files?.[0]);
+  };
+
+  const validate = () => {
+    if (!meta.source.trim()) return "Source is required.";
+    if (!meta.domain) return "Domain is required.";
+    if (!meta.license) return "License is required.";
+    if (fileType === "url" && !url.trim()) return "URL is required for URL uploads.";
+    if (fileType !== "url" && !file) return "Please choose a file to upload.";
+    return "";
   };
 
   const submit = async (e) => {
     e.preventDefault();
-    setError("");
-
-    if (!meta.source.trim()) return setError("Source is required.");
-    if (!meta.domain.trim())  return setError("Domain is required.");
-    if (!meta.license)        return setError("License is required.");
-
-    if (fileType === "url") {
-      if (!url.trim()) return setError("URL is required for URL uploads.");
-    } else {
-      if (!file) return setError("Please choose a file to upload.");
-    }
+    const validationError = validate();
+    setError(validationError);
+    if (validationError) return;
 
     setLoading(true);
     try {
@@ -84,321 +221,192 @@ export default function Upload() {
       });
       navigate(`/documents/${result.id}`);
     } catch (err) {
-      setError(
-        err.response?.data?.detail || err.message || "Upload failed. Please try again."
-      );
+      setError(err.response?.data?.detail || err.message || "Upload failed. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
-  const FILE_TYPES = [
-    { value: "text",  label: "Text file", desc: ".txt" },
-    { value: "pdf",   label: "PDF",       desc: ".pdf" },
-    { value: "image", label: "Image",     desc: ".jpg, .png, .pdf" },
-    { value: "audio", label: "Audio",     desc: ".mp3, .wav, .m4a" },
-    { value: "url",   label: "URL",       desc: "web page" },
-  ];
-
   return (
     <div className="page" style={{ maxWidth: 720 }}>
       <div className="page-header fade-up">
         <h1 className="page-title">Upload Document</h1>
-        <p className="page-subtitle">
-          Add a new document to your corpus for NLP processing
-        </p>
+        <p className="page-subtitle">Add a new document to your corpus for NLP processing</p>
       </div>
 
       <form onSubmit={submit}>
-
-        {/* ── Source type card ── */}
         <div className="card fade-up fade-up-1">
           <div className="card-title">Source type</div>
 
-          {/* File type selector buttons */}
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))",
-            gap: 10,
-          }}>
+          <div style={styles.typeGrid}>
             {FILE_TYPES.map(({ value, label, desc }) => (
-              <label
-                key={value}
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  padding: "12px 14px",
-                  border: `2px solid ${fileType === value ? "var(--forest)" : "var(--border)"}`,
-                  borderRadius: "var(--radius)",
-                  cursor: "pointer",
-                  background: fileType === value ? "var(--mint)" : "var(--paper)",
-                  transition: "border-color 0.15s, background 0.15s",
-                }}
-              >
+              <label key={value} style={styles.typeCard(fileType === value)}>
                 <input
                   type="radio"
                   name="file_type"
                   value={value}
                   checked={fileType === value}
-                  onChange={() => {
-                    setFileType(value);
-                    setFile(null);
-                    setSummary("");
-                  }}
-                  style={{ display: "none" }}
+                  onChange={() => selectType(value)}
+                  style={styles.radio}
                 />
-                <span style={{ fontWeight: 600, fontSize: 13, color: "var(--ink)", marginBottom: 2 }}>
-                  {label}
-                </span>
-                <span style={{ fontSize: 11, color: "var(--ink-lt)" }}>{desc}</span>
+                <span style={styles.typeLabel}>{label}</span>
+                <span style={styles.typeDesc}>{desc}</span>
               </label>
             ))}
           </div>
 
-          {/* File / URL input */}
           <div style={{ marginTop: 20 }}>
             {fileType === "url" ? (
-              <div className="field">
-                <label>URL</label>
+              <Field id="upload-url" label="URL">
                 <input
+                  id="upload-url"
                   type="url"
                   value={url}
+                  placeholder="https://example.com/article"
+                  required
                   onChange={(e) => {
                     setUrl(e.target.value);
-                    setSummary("");
+                    clearSummary();
                   }}
                   onBlur={(e) => {
-                    if (e.target.value.trim()) {
-                      fetchSummary(null, "url", e.target.value.trim());
-                    }
+                    const value = e.target.value.trim();
+                    if (value) fetchSummary("url", { url: value });
                   }}
-                  required
-                  placeholder="https://example.com/article"
                 />
-              </div>
+              </Field>
             ) : (
-              <div className="field">
-                <label>File</label>
+              <Field id="upload-file" label="File">
                 <div
                   className="upload-zone"
-                  onClick={() => document.getElementById("file-inp").click()}
-                  style={{ position: "relative" }}
+                  style={styles.uploadZone(dragging)}
+                  onClick={() => fileInputRef.current?.click()}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setDragging(true);
+                  }}
+                  onDragLeave={() => setDragging(false)}
+                  onDrop={handleDrop}
                 >
                   <input
-                    id="file-inp"
+                    id="upload-file"
+                    ref={fileInputRef}
                     type="file"
-                    accept={getAcceptAttribute()}
+                    accept={accept}
                     style={{ display: "none" }}
-                    onChange={(e) => {
-                      const selected = e.target.files[0];
-                      setFile(selected);
-                      setSummary("");
-                      if (selected) fetchSummary(selected, fileType, null);
-                    }}
-                    required
+                    onChange={(e) => selectFile(e.target.files[0])}
                   />
-                  <div style={{ fontSize: 28, marginBottom: 8 }}>📂</div>
-                  <div style={{ fontWeight: 600, fontSize: 14, color: "var(--ink-mid)" }}>
+                  <div style={{ marginBottom: 8, fontSize: 28 }}>📂</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink-mid)" }}>
                     {file ? file.name : "Click to choose a file"}
                   </div>
                   {!file && (
-                    <p className="muted" style={{ marginTop: 4 }}>or drag and drop</p>
+                    <p className="muted" style={{ marginTop: 4 }}>
+                      or drag and drop
+                    </p>
                   )}
                 </div>
-              </div>
+              </Field>
             )}
           </div>
 
-          {/* ── Summary Loading indicator ── */}
           {summaryLoading && (
-            <div style={{
-              marginTop: 16,
-              padding: "12px 16px",
-              background: "var(--mint)",
-              borderRadius: "var(--radius)",
-              fontSize: 14,
-              color: "var(--ink-mid)",
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-            }}>
-              <span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>⏳</span>
+            <div style={styles.summaryLoading} role="status">
+              <span>⏳</span>
               Generating content summary…
             </div>
           )}
 
-          {/* ── Summary Result block ── */}
           {summary && !summaryLoading && (
-            <div style={{
-              marginTop: 16,
-              padding: "14px 16px",
-              background: "var(--mint)",
-              borderLeft: "4px solid var(--forest)",
-              borderRadius: "var(--radius)",
-              fontSize: 14,
-              lineHeight: 1.8,
-              color: "var(--ink)",
-            }}>
-              <div style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                marginBottom: 6,
-                fontWeight: 600,
-                fontSize: 13,
-                color: "var(--forest)",
-              }}>
-                📋 Content Summary
-              </div>
-              <p style={{ margin: 0, color: "var(--ink)" }}>{summary}</p>
+            <div style={styles.summary}>
+              <div style={styles.summaryHeading}>📋 Content Summary</div>
+              <p>{summary}</p>
             </div>
           )}
-
         </div>
 
-        {/* ── Metadata card ── */}
-        <div className="card fade-up fade-up-2" style={{ marginTop: 20 }}>
+        <div className="card fade-up fade-up-2">
           <div className="card-title">
             Metadata{" "}
-            <span style={{ fontSize: 13, color: "var(--ink-lt)", fontWeight: 400 }}>
-              (* required)
-            </span>
+            <span style={{ fontSize: 13, fontWeight: 400, color: "var(--ink-lt)" }}>(* required)</span>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px 20px" }}>
+          <div style={styles.metaGrid}>
+            <Field id="meta-source" label="Source" required>
+              <input
+                id="meta-source"
+                type="text"
+                value={meta.source}
+                onChange={updateMeta("source")}
+                placeholder="e.g. Reuters"
+                required
+              />
+            </Field>
 
-            {/* Left column */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 15 }}>
-              <div className="field">
-                <label>SOURCE <span style={{ color: "var(--danger)" }}>*</span></label>
-                <input
-                  type="text"
-                  value={meta.source}
-                  onChange={(e) => setMeta({ ...meta, source: e.target.value })}
-                  placeholder="e.g. Reuters"
-                  required
-                />
-              </div>
-              <div className="field">
-                  <label>DOMAIN <span style={{ color: "var(--danger)" }}>*</span></label>
-                  <select
-                    value={meta.domain}
-                    onChange={(e) => setMeta({ ...meta, domain: e.target.value })}
-                    required
-                    style={{
-                      width: "100%",
-                      padding: "8px 12px",
-                      border: "1px solid var(--border)",
-                      borderRadius: "var(--radius)",
-                      background: "var(--paper)",
-                      color: meta.domain ? "var(--ink)" : "var(--ink-lt)",
-                      fontSize: 14,
-                      height: 38,
-                    }}
-                  >
-                    <option value="">Select domain...</option>
-                    <option value="news">News</option>
-                    <option value="science">Science</option>
-                    <option value="law">Law</option>
-                    <option value="technology">Technology</option>
-                    <option value="health">Health</option>
-                    <option value="education">Education</option>
-                    <option value="finance">Finance</option>
-                    <option value="business">Business</option>
-                    <option value="sports">Sports</option>
-                    <option value="entertainment">Entertainment</option>
-                    <option value="government">Government</option>
-                    <option value="research">Research</option>
-                    <option value="other">Other</option>
-                  </select>
-                </div>
-              <div className="field">
-                <label>PUBLICATION DATE</label>
-                <input
-                  type="date"
-                  value={meta.publication_date}
-                  onChange={(e) => setMeta({ ...meta, publication_date: e.target.value })}
-                  style={{ width: "100%" }}
-                />
-              </div>
-            </div>
+            <Field id="meta-author" label="Author">
+              <input
+                id="meta-author"
+                type="text"
+                value={meta.author}
+                onChange={updateMeta("author")}
+                placeholder="Author name"
+              />
+            </Field>
 
-            {/* Right column */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 15 }}>
-              <div className="field">
-                <label>AUTHOR</label>
-                <input
-                  type="text"
-                  value={meta.author}
-                  onChange={(e) => setMeta({ ...meta, author: e.target.value })}
-                  placeholder="Author name"
-                />
-              </div>
-              <div className="field">
-                <label>CATEGORY</label>
-                <input
-                  type="text"
-                  value={meta.category}
-                  onChange={(e) => setMeta({ ...meta, category: e.target.value })}
-                  placeholder="Category"
-                />
-              </div>
-              <div className="field">
-                  <label>LICENSE <span style={{ color: "var(--danger)" }}>*</span></label>
-                  <select
-                    value={meta.license}
-                    onChange={(e) => setMeta({ ...meta, license: e.target.value })}
-                    required
-                    style={{
-                      width: "100%",
-                      padding: "8px 12px",
-                      border: "1px solid var(--border)",
-                      borderRadius: "var(--radius)",
-                      background: "var(--paper)",
-                      color: meta.license ? "var(--ink)" : "var(--ink-lt)",
-                      fontSize: 14,
-                      height: 38,
-                    }}
-                  >
-                    <option value="">Select license...</option>
-                    <option value="public-domain">Public Domain</option>
-                    <option value="cc0">CC0</option>
-                    <option value="cc-by">CC BY</option>
-                    <option value="cc-by-sa">CC BY-SA</option>
-                    <option value="cc-by-nc">CC BY-NC</option>
-                    <option value="cc-by-nd">CC BY-ND</option>
-                    <option value="mit">MIT</option>
-                    <option value="apache-2.0">Apache 2.0</option>
-                    <option value="gpl-3.0">GPL 3.0</option>
-                    <option value="proprietary">Proprietary</option>
-                    <option value="restricted">Restricted</option>
-                    <option value="other">Other</option>
-                  </select>
-                </div>
-            </div>
+            <SelectField
+              id="meta-domain"
+              label="Domain"
+              placeholder="Select domain..."
+              options={DOMAINS}
+              value={meta.domain}
+              onChange={updateMeta("domain")}
+              required
+            />
+
+            <Field id="meta-category" label="Category">
+              <input
+                id="meta-category"
+                type="text"
+                value={meta.category}
+                onChange={updateMeta("category")}
+                placeholder="Category"
+              />
+            </Field>
+
+            <Field id="meta-date" label="Publication date">
+              <input
+                id="meta-date"
+                type="date"
+                value={meta.publication_date}
+                onChange={updateMeta("publication_date")}
+              />
+            </Field>
+
+            <SelectField
+              id="meta-license"
+              label="License"
+              placeholder="Select license..."
+              options={LICENSES}
+              value={meta.license}
+              onChange={updateMeta("license")}
+              required
+            />
           </div>
         </div>
 
-        {error && <div className="alert-error fade-up">{error}</div>}
+        {error && (
+          <div className="alert-error fade-up" role="alert">
+            {error}
+          </div>
+        )}
 
-        {/* ── Action buttons ── */}
-        <div
-          className="fade-up fade-up-3"
-          style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 20 }}
-        >
+        <div className="fade-up fade-up-3" style={styles.actions}>
           <button type="button" className="btn btn-ghost" onClick={() => navigate(-1)}>
             Cancel
           </button>
-          <button
-            disabled={loading}
-            type="submit"
-            className="btn btn-primary"
-            style={{ minWidth: 160 }}
-          >
+          <button type="submit" className="btn btn-primary" disabled={loading} style={{ minWidth: 160 }}>
             {loading ? "Processing…" : "Upload & Process →"}
           </button>
         </div>
-
       </form>
     </div>
   );

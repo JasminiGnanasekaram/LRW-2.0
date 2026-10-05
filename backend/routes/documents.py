@@ -287,7 +287,6 @@ async def get_document(doc_id: str, user: dict = Depends(get_current_user)):
             not analysis
             or "sentiment" not in analysis.get("data", {})
             or "classification" not in analysis.get("data", {})
-            or "entities" not in analysis.get("data", {})
             or "sentences" not in analysis.get("data", {})
         ):
             try:

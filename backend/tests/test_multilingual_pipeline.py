@@ -1,176 +1,193 @@
-"""
-Comprehensive Test Suite for Multilingual Document Processing & NLP Pipeline
-Uses standard Python unittest.
-"""
+"""Tests for the multilingual document processing and NLP pipeline."""
 
 import unittest
-from services import cleaning, nlp, summarizer, csv_export, extraction
+
+from services import cleaning, csv_export, nlp, summarizer
+
+ZWJ = "\u200d"
 
 
-class TestMultilingualPipeline(unittest.TestCase):
-
-    # ── 1. Unicode Cleaning & Preservation Tests ─────────────────────────────
-
-    def test_cleaning_preserves_sinhala_zwj(self):
-        """Verify that Zero-Width Joiner (U+200D) is preserved for Sinhala conjuncts."""
-        raw_sinhala = "ශ්‍රී ලංකා ප්‍රවෘත්ති විකාශය"
-        cleaned = cleaning.clean(raw_sinhala)
-        self.assertTrue("\u200d" in cleaned or "ශ්‍රී" in cleaned)
+class TestCleaning(unittest.TestCase):
+    def test_preserves_sinhala_zero_width_joiner(self):
+        cleaned = cleaning.clean("ශ්‍රී ලංකා ප්‍රවෘත්ති විකාශය")
+        self.assertIn(ZWJ, cleaned)
         self.assertIn("ශ්‍රී ලංකා", cleaned)
 
-    def test_cleaning_preserves_tamil_combining_marks(self):
-        """Verify that Tamil pulli and vowel modifiers are preserved intact."""
-        raw_tamil = "தமிழ் மொழி உலகின் மிகத் தொன்மையான மொழிகளில் ஒன்றாகும்."
-        cleaned = cleaning.clean(raw_tamil)
-        self.assertIn("தமிழ்", cleaned)
-        self.assertIn("மொழிகளில்", cleaned)
-        self.assertIn("ஒன்றாகும்", cleaned)
+    def test_preserves_tamil_combining_marks(self):
+        cleaned = cleaning.clean("தமிழ் மொழி உலகின் மிகத் தொன்மையான மொழிகளில் ஒன்றாகும்.")
+        for word in ("தமிழ்", "மொழிகளில்", "ஒன்றாகும்"):
+            self.assertIn(word, cleaned)
 
-    def test_cleaning_preserves_decimals_and_structure(self):
-        """Verify decimal numbers, abbreviations, and paragraph breaks are preserved."""
-        raw_text = "The budget is Rs. 1500.50 million.\n\nDr. A. B. Perera announced the result."
-        cleaned = cleaning.clean(raw_text)
+    def test_preserves_decimals_abbreviations_and_paragraphs(self):
+        cleaned = cleaning.clean(
+            "The budget is Rs. 1500.50 million.\n\nDr. A. B. Perera announced the result."
+        )
         self.assertIn("1500.50", cleaned)
-        self.assertTrue("Dr." in cleaned or "Dr" in cleaned)
+        self.assertIn("Dr.", cleaned)
         self.assertIn("\n\n", cleaned)
 
-    # ── 2. Language Detection Tests ──────────────────────────────────────────
 
-    def test_language_detection_english(self):
-        text = "The central bank announced new interest rates for commercial banks."
-        res = nlp.detect_languages(text)
-        self.assertEqual(res["primary_language"], "English")
-        self.assertEqual(res["primary_code"], "en")
-        self.assertFalse(res["is_multilingual"])
+class TestLanguageDetection(unittest.TestCase):
+    def test_single_language_documents(self):
+        cases = {
+            "English": ("en", "The central bank announced new interest rates for commercial banks."),
+            "Tamil": ("ta", "கொழும்பு பல்கலைக்கழகத்தில் புதிய தமிழ் மொழி ஆய்வு மையம் ஆரம்பிக்கப்பட்டுள்ளது."),
+            "Sinhala": ("si", "ශ්‍රී ලංකාවේ අධ්‍යාපන ක්ෂේත්‍රයේ නව සංවර්ධන ව්‍යාපෘති කිහිපයක් ආරම්භ කර ඇත."),
+        }
+        for language, (code, text) in cases.items():
+            with self.subTest(language=language):
+                result = nlp.detect_languages(text)
+                self.assertEqual(result["primary_language"], language)
+                self.assertEqual(result["primary_code"], code)
+                self.assertFalse(result["is_multilingual"])
 
-    def test_language_detection_tamil(self):
-        text = "கொழும்பு பல்கலைக்கழகத்தில் புதிய தமிழ் மொழி ஆய்வு மையம் ஆரம்பிக்கப்பட்டுள்ளது."
-        res = nlp.detect_languages(text)
-        self.assertEqual(res["primary_language"], "Tamil")
-        self.assertEqual(res["primary_code"], "ta")
-
-    def test_language_detection_sinhala(self):
-        text = "ශ්‍රී ලංකාවේ අධ්‍යාපන ක්ෂේත්‍රයේ නව සංවර්ධන ව්‍යාපෘති කිහිපයක් ආරම්භ කර ඇත."
-        res = nlp.detect_languages(text)
-        self.assertEqual(res["primary_language"], "Sinhala")
-        self.assertEqual(res["primary_code"], "si")
-
-    def test_language_detection_mixed(self):
-        text = (
+    def test_mixed_language_document(self):
+        result = nlp.detect_languages(
             "Sri Lanka is a beautiful island. "
             "இலங்கை ஒரு அழகான தீவு ஆகும். "
             "ශ්‍රී ලංකාව ඉතා සුන්දර දූපතකි."
         )
-        res = nlp.detect_languages(text)
-        self.assertTrue(res["is_multilingual"])
-        detected_langs = [d["language"] for d in res["languages_detected"]]
-        self.assertIn("English", detected_langs)
-        self.assertIn("Tamil", detected_langs)
-        self.assertIn("Sinhala", detected_langs)
+        self.assertTrue(result["is_multilingual"])
+        detected = {item["language"] for item in result["languages_detected"]}
+        self.assertEqual(detected, {"English", "Tamil", "Sinhala"})
 
-    # ── 3. Sentence Segmentation Tests ──────────────────────────────────────
+    def test_empty_input_defaults_to_english(self):
+        result = nlp.detect_languages("   ")
+        self.assertEqual(result["primary_language"], "English")
+        self.assertFalse(result["is_multilingual"])
 
-    def test_multilingual_sentence_segmentation(self):
-        text = (
+
+class TestSentenceSegmentation(unittest.TestCase):
+    def test_splits_across_scripts_without_breaking_abbreviations(self):
+        sentences = nlp.segment_sentences(
             "Dr. Silva visited Colombo at 10.30 AM. "
             "அவர் கொழும்பு பல்கலைக்கழகத்திற்கு சென்றார். "
             "ඔහු එහිදී නව පර්යේෂණ ආරම්භ කළේය."
         )
-        sentences = nlp.segment_sentences(text)
         self.assertEqual(len(sentences), 3)
         self.assertIn("Dr. Silva", sentences[0])
+        self.assertIn("10.30", sentences[0])
         self.assertIn("கொழும்பு", sentences[1])
         self.assertIn("පර්යේෂණ", sentences[2])
 
-    # ── 4. Tokenization, POS, Lemmatization, Morphology ─────────────────────
+    def test_keeps_decimal_numbers_intact(self):
+        sentences = nlp.segment_sentences("The rate is 3.5 percent. It rose again.")
+        self.assertEqual(len(sentences), 2)
+        self.assertIn("3.5", sentences[0])
 
-    def test_tamil_nlp_analysis(self):
-        text = "மாணவர்கள் கொழும்பு பல்கலைக்கழகத்தில் வேகமாகப் படித்து வெற்றி பெற்றார்கள்."
-        res = nlp.analyze(text)
-        self.assertEqual(res["language"], "Tamil")
-        self.assertGreater(res["token_count"], 0)
-        self.assertIn("NOUN", res["pos_distribution"])
-        self.assertIn("VERB", res["pos_distribution"])
-        
-        token_details = res["token_details"]
-        self.assertTrue(any(t["language"] == "ta" for t in token_details))
-        self.assertTrue(any("Tense=" in (t.get("morph") or "") for t in token_details))
+    def test_empty_input_returns_no_sentences(self):
+        self.assertEqual(nlp.segment_sentences(""), [])
 
-    def test_sinhala_nlp_analysis(self):
-        text = "ශිෂ්‍යයන් විශ්වවිද්‍යාලයේ ඉතා හොඳින් අධ්‍යාපනය ලබා ජයග්‍රහණය කළහ."
-        res = nlp.analyze(text)
-        self.assertEqual(res["language"], "Sinhala")
-        self.assertGreater(res["token_count"], 0)
-        self.assertIn("NOUN", res["pos_distribution"])
-        
-        token_details = res["token_details"]
-        self.assertTrue(any(t["language"] == "si" for t in token_details))
 
-    def test_mixed_document_nlp_analysis(self):
-        text = (
+class TestNlpAnalysis(unittest.TestCase):
+    def test_tamil_analysis(self):
+        result = nlp.analyze("மாணவர்கள் கொழும்பு பல்கலைக்கழகத்தில் வேகமாகப் படித்து வெற்றி பெற்றார்கள்.")
+        self.assertEqual(result["language"], "Tamil")
+        self.assertGreater(result["token_count"], 0)
+        self.assertIn("NOUN", result["pos_distribution"])
+        self.assertIn("VERB", result["pos_distribution"])
+
+        details = result["token_details"]
+        self.assertTrue(any(t["language"] == "ta" for t in details))
+        self.assertTrue(any("Tense=" in (t.get("morph") or "") for t in details))
+
+    def test_sinhala_analysis(self):
+        result = nlp.analyze("ශිෂ්‍යයන් විශ්වවිද්‍යාලයේ ඉතා හොඳින් අධ්‍යාපනය ලබා ජයග්‍රහණය කළහ.")
+        self.assertEqual(result["language"], "Sinhala")
+        self.assertGreater(result["token_count"], 0)
+        self.assertIn("NOUN", result["pos_distribution"])
+        self.assertTrue(any(t["language"] == "si" for t in result["token_details"]))
+
+    def test_mixed_document_analysis(self):
+        result = nlp.analyze(
             "Education is very important. "
             "கல்வி மிகவும் முக்கியமானது. "
             "අධ්‍යාපනය ඉතා වැදගත් වේ."
         )
-        res = nlp.analyze(text)
-        self.assertTrue(res["language_detection"]["is_multilingual"])
-        self.assertGreater(res["token_count"], 5)
-        self.assertEqual(len(res["sentences"]), 3)
-        self.assertIn("sentiment", res)
-        self.assertEqual(len(res["sentiment"]["sentences"]), 3)
+        self.assertTrue(result["language_detection"]["is_multilingual"])
+        self.assertGreater(result["token_count"], 5)
+        self.assertEqual(len(result["sentences"]), 3)
+        self.assertEqual(len(result["sentiment"]["sentences"]), 3)
 
-    # ── 5. Named Entity Recognition (NER) ────────────────────────────────────
 
-    def test_multilingual_ner(self):
-        text = (
+class TestEntityRecognition(unittest.TestCase):
+    def test_extracts_entities_across_scripts(self):
+        entities = nlp.extract_entities(
             "Dr. Perera arrived in Colombo on August 19, 2026 and paid Rs. 50000. "
             "திரு. ரமணன் யாழ்ப்பாணம் சென்றார். "
             "මහාචාර්ය ජයවර්ධන මහනුවර සංචාරය කළේය."
         )
-        entities = nlp.extract_entities(text)
-        entity_texts = [e["text"] for e in entities]
-        
-        self.assertTrue(any("Colombo" in e or "கொழும்பு" in e or "Colombo" in entity_texts for e in entity_texts))
-        self.assertTrue(any("யாழ்ப்பாணம்" in e for e in entity_texts))
-        self.assertTrue(any("මහනුවර" in e for e in entity_texts))
-        self.assertTrue(any("Rs." in e or "50000" in e for e in entity_texts))
+        found = {(e["text"], e["label_en"]) for e in entities}
+        expected = {
+            ("Dr. Perera", "PER"),
+            ("Colombo", "LOC"),
+            ("August 19, 2026", "DATE"),
+            ("Rs. 50000", "MONEY"),
+            ("திரு. ரமணன்", "PER"),
+            ("யாழ்ப்பாணம்", "LOC"),
+            ("මහාචාර්ය ජයවර්ධන", "PER"),
+            ("මහනුවර", "LOC"),
+        }
+        self.assertLessEqual(expected, found)
 
-    # ── 6. Sentiment & Classification ───────────────────────────────────────
+    def test_does_not_treat_common_words_as_entities(self):
+        entities = nlp.extract_entities("Who said the main plan failed? Nobody knows.")
+        self.assertEqual(entities, [])
 
-    def test_sentiment_positive_tamil(self):
-        text = "இந்த திட்டம் மக்களுக்கு மிகப்பெரிய நன்மைகளையும் வெற்றியையும் மகிழ்ச்சியையும் தந்துள்ளது."
-        res = nlp.analyze_sentiment(text, lang="Tamil")
-        self.assertTrue(res["label"] == "நேர்மறை" or res["label_en"] == "positive")
-        self.assertGreaterEqual(res["score"], 0.6)
 
-    def test_sentiment_positive_sinhala(self):
-        text = "මෙම නව ව්‍යාපෘතිය ජනතාවට විශාල ජයග්‍රහණයක් සහ සතුටක් ගෙන දුන්නේය."
-        res = nlp.analyze_sentiment(text, lang="Sinhala")
-        self.assertTrue(res["label"] == "ධනාත්මක" or res["label_en"] == "positive")
-        self.assertGreaterEqual(res["score"], 0.6)
+class TestSentimentAndClassification(unittest.TestCase):
+    def test_positive_tamil_sentiment(self):
+        result = nlp.analyze_sentiment(
+            "இந்த திட்டம் மக்களுக்கு மிகப்பெரிய நன்மைகளையும் வெற்றியையும் மகிழ்ச்சியையும் தந்துள்ளது.",
+            lang="Tamil",
+        )
+        self.assertEqual(result["label_en"], "positive")
+        self.assertEqual(result["label"], "நேர்மறை")
+        self.assertGreaterEqual(result["score"], 0.6)
 
-    def test_text_classification_technology(self):
-        text = "The new software application uses artificial intelligence and modern computer systems."
-        res = nlp.classify_text(text)
-        self.assertEqual(res["predicted_category"], "Technology")
-        self.assertIn("Technology", res["probabilities"])
+    def test_positive_sinhala_sentiment(self):
+        result = nlp.analyze_sentiment(
+            "මෙම නව ව්‍යාපෘතිය ජනතාවට විශාල ජයග්‍රහණයක් සහ සතුටක් ගෙන දුන්නේය.",
+            lang="Sinhala",
+        )
+        self.assertEqual(result["label_en"], "positive")
+        self.assertEqual(result["label"], "ධනාත්මක")
+        self.assertGreaterEqual(result["score"], 0.6)
 
-    # ── 7. Summarization Tests ───────────────────────────────────────────────
+    def test_classifies_technology_text(self):
+        result = nlp.classify_text(
+            "The new software application uses artificial intelligence and modern computer systems."
+        )
+        self.assertEqual(result["predicted_category"], "Technology")
+        self.assertIn("Technology", result["probabilities"])
+        self.assertAlmostEqual(sum(result["probabilities"].values()), 1.0, places=2)
 
-    def test_multilingual_summary(self):
-        tamil_doc = (
+    def test_classification_ignores_substring_matches(self):
+        result = nlp.classify_text("He said the main plan failed.")
+        self.assertEqual(result["predicted_category"], "Other")
+
+
+class TestSummarizer(unittest.TestCase):
+    def test_tamil_summary_is_extractive(self):
+        document = (
             "கொழும்பு பல்கலைக்கழகத்தில் புதிய கணினி ஆய்வு கூடம் திறக்கப்பட்டுள்ளது. "
             "மாணவர்கள் இதன் மூலம் நவீன தொழில்நுட்பங்களை கற்றுக்கொள்ள முடியும். "
             "ஆராய்ச்சியாளர்கள் பல புதிய மென்பொருட்களை உருவாக்க திட்டமிட்டுள்ளனர்."
         )
-        summary = summarizer.get_text_summary(tamil_doc)
+        summary = summarizer.get_text_summary(document)
         self.assertGreater(len(summary), 10)
-        self.assertTrue("பல்கலைக்கழகத்தில்" in summary or "மாணவர்கள்" in summary or "தொழில்நுட்பங்களை" in summary)
+        self.assertTrue(
+            any(sentence in document for sentence in nlp.segment_sentences(summary))
+        )
 
-    # ── 8. CSV & JSON Export Tests ───────────────────────────────────────────
+    def test_empty_input_returns_placeholder(self):
+        self.assertEqual(summarizer.get_text_summary(""), "No text available to summarize.")
 
-    def test_csv_export_utf8_bom(self):
-        doc = {
+
+class TestCsvExport(unittest.TestCase):
+    @staticmethod
+    def _sample_document():
+        return {
             "filename": "test_multilingual.txt",
             "file_type": "text",
             "created_at": "2026-08-19",
@@ -184,18 +201,20 @@ class TestMultilingualPipeline(unittest.TestCase):
                 "sentiment": {"label": "நேர்மறை", "score": 0.9, "sentences": []},
                 "classification": {"predicted_category": "Technology", "score": 0.85, "all": []},
                 "top_keywords": ["தமிழ்", "கணினி"],
-                "entities": [{"text": "கொழும்பு", "label_en": "LOC", "label": "இடம்", "score": 0.95}],
                 "pos_distribution": {"NOUN": 3, "VERB": 2},
                 "sentences": ["தமிழ் வாழ்க."],
-                "token_details": [
-                    {"token": "தமிழ்", "normalized": "தமிழ்", "lemma": "தமிழ்", "pos": "NOUN", "tag": "NOUN", "language": "ta", "sentence_id": 1, "morph": "Case=Nom"}
-                ],
+                "token_details": [{
+                    "token": "தமிழ்", "normalized": "தமிழ்", "lemma": "தமிழ்", "pos": "NOUN",
+                    "tag": "NOUN", "language": "ta", "sentence_id": 1, "morph": "Case=Nom",
+                }],
                 "statistics": {"characters": 50, "characters_without_spaces": 40, "paragraphs": 1},
-            }
+            },
         }
-        csv_str = csv_export.document_to_csv(doc)
+
+    def test_csv_has_utf8_bom_and_preserves_unicode(self):
+        csv_str = csv_export.document_to_csv(self._sample_document())
         self.assertTrue(csv_str.startswith("\ufeff"))
-        self.assertIn("கொழும்பு", csv_str)
+        self.assertIn("நேர்மறை", csv_str)
         self.assertIn("தமிழ்", csv_str)
         self.assertIn("=== DOCUMENT SUMMARY ===", csv_str)
 

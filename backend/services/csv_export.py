@@ -15,7 +15,6 @@ def document_to_csv(doc: dict) -> str:
     meta = doc.get("metadata") or {}
     tokens = nlp.get("token_details") or []
     sentences = nlp.get("sentences") or []
-    entities = nlp.get("entities") or []
     sentiment = nlp.get("sentiment") or {}
     classif = nlp.get("classification") or {}
     stats = nlp.get("statistics") or {}
@@ -69,21 +68,7 @@ def document_to_csv(doc: dict) -> str:
             ])
         writer.writerow([])
 
-    # Section 4: Named Entities
-    if entities:
-        writer.writerow(["=== NAMED ENTITIES ==="])
-        writer.writerow(["#", "Entity Text", "Category Code", "Category", "Confidence"])
-        for i, e in enumerate(entities, 1):
-            writer.writerow([
-                i,
-                e.get("text", ""),
-                e.get("label_en", ""),
-                e.get("label", ""),
-                e.get("score", ""),
-            ])
-        writer.writerow([])
-
-    # Section 5: Sentence-Level Sentiment & Analysis
+    # Section 4: Sentence-Level Sentiment & Analysis
     sent_list = sentiment.get("sentences") or []
     if sent_list:
         writer.writerow(["=== SENTENCE-LEVEL SENTIMENT ==="])
@@ -104,7 +89,7 @@ def document_to_csv(doc: dict) -> str:
             writer.writerow([i, s if isinstance(s, str) else ""])
         writer.writerow([])
 
-    # Section 6: POS Distribution
+    # Section 5: POS Distribution
     pos_dist = nlp.get("pos_distribution") or {}
     if pos_dist:
         writer.writerow(["=== PART-OF-SPEECH DISTRIBUTION ==="])
@@ -113,7 +98,7 @@ def document_to_csv(doc: dict) -> str:
             writer.writerow([pos, count])
         writer.writerow([])
 
-    # Section 7: Top Words Frequency
+    # Section 6: Top Words Frequency
     top_words = nlp.get("top_words") or []
     if top_words:
         writer.writerow(["=== TOP WORDS ==="])
@@ -125,7 +110,7 @@ def document_to_csv(doc: dict) -> str:
                 writer.writerow([i, item.get("word", ""), item.get("count", "")])
         writer.writerow([])
 
-    # Section 8: Detailed Token Analysis
+    # Section 7: Detailed Token Analysis
     if tokens:
         writer.writerow(["=== TOKEN-LEVEL ANALYSIS ==="])
         writer.writerow([
