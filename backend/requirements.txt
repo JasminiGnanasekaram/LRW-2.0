@@ -21,6 +21,8 @@ requests>=2.32.0
 
 # NLP
 spacy>=3.8.0
+groq>=0.11.0
+langdetect>=1.0.9
 
 # --- Optional (comment out the line below if install fails on Python 3.14) ---
 # Audio Speech-to-Text — depends on ctranslate2 which may not yet have 3.14 wheels.

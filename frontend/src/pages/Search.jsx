@@ -1,10 +1,24 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { searchDocuments } from "../api";
 
 const POS_OPTIONS = ["", "NOUN", "VERB", "ADJ", "ADV", "PROPN", "PRON", "DET", "ADP", "NUM"];
 const FILE_TYPES = ["", "text", "pdf", "image", "audio", "url"];
-const LICENSES = ["", "open", "research", "restricted"];
+const LICENSES = [
+  { value: "", label: "Any" },
+  { value: "public-domain", label: "Public Domain" },
+  { value: "cc0", label: "CC0" },
+  { value: "cc-by", label: "CC BY" },
+  { value: "cc-by-sa", label: "CC BY-SA" },
+  { value: "cc-by-nc", label: "CC BY-NC" },
+  { value: "cc-by-nd", label: "CC BY-ND" },
+  { value: "mit", label: "MIT" },
+  { value: "apache-2.0", label: "Apache 2.0" },
+  { value: "gpl-3.0", label: "GPL 3.0" },
+  { value: "proprietary", label: "Proprietary" },
+  { value: "restricted", label: "Restricted" },
+  { value: "other", label: "Other" }
+];
 
 export default function Search() {
   const [filters, setFilters] = useState({
@@ -18,9 +32,13 @@ export default function Search() {
 
   const upd = (k, v) => setFilters((f) => ({ ...f, [k]: v }));
 
-  const submit = async (e) => {
-    e.preventDefault();
-    if (!filters.q.trim()) return;
+  const runSearch = async () => {
+    const hasActiveFilters = [filters.pos, filters.file_type, filters.domain, filters.license, filters.date_from, filters.date_to]
+      .some(Boolean);
+    if (!filters.q.trim() && !hasActiveFilters) {
+      setResults(null);
+      return;
+    }
     setLoading(true); setError("");
     try {
       const params = Object.fromEntries(
@@ -31,6 +49,19 @@ export default function Search() {
     } catch (err) {
       setError(err.response?.data?.detail || "Search failed.");
     } finally { setLoading(false); }
+  };
+
+  // Live search: auto-run when filters change (debounced at 300ms)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      runSearch();
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [filters]);
+
+  const submit = (e) => {
+    if (e) e.preventDefault();
+    runSearch();
   };
 
   const activeFilterCount = [filters.pos, filters.file_type, filters.domain, filters.license, filters.date_from, filters.date_to]
@@ -84,7 +115,7 @@ export default function Search() {
                 <div>
                   <label className="label">License</label>
                   <select value={filters.license} onChange={(e) => upd("license", e.target.value)}>
-                    {LICENSES.map((p) => <option key={p} value={p}>{p || "Any"}</option>)}
+                    {LICENSES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
                   </select>
                 </div>
               </div>
@@ -115,7 +146,7 @@ export default function Search() {
             <span style={{ fontFamily: "var(--font-head)", fontSize: 18, color: "var(--forest)" }}>
               {results.count} result{results.count !== 1 ? "s" : ""}
             </span>
-            <span className="muted">for "{results.query}"</span>
+            <span className="muted">for {results.query ? `"${results.query}"` : "all matching documents"}</span>
           </div>
 
           {results.results.length === 0 && (

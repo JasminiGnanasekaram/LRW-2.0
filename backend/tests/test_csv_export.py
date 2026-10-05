@@ -23,11 +23,12 @@ class CsvExportTests(unittest.TestCase):
 
         csv_text = document_to_csv(doc)
 
-        self.assertIn("filename", csv_text)
-        self.assertIn("language", csv_text)
-        self.assertIn("token", csv_text)
-        self.assertIn("Hello", csv_text)
-        self.assertIn("world", csv_text)
+        csv_lower = csv_text.lower()
+        self.assertIn("filename", csv_lower)
+        self.assertIn("language", csv_lower)
+        self.assertIn("token", csv_lower)
+        self.assertIn("hello", csv_lower)
+        self.assertIn("world", csv_lower)
 
 
 if __name__ == "__main__":

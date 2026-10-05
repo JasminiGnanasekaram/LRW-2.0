@@ -55,6 +55,21 @@ def process_document(self, job_id: str, raw_doc_id: str, file_type: str,
             "created_at": datetime.utcnow(),
         })
 
+        # Generate and save summary
+        summary = ""
+        try:
+            from routes.summarize import summarize
+            summary = summarize(cleaned_text[:5000])
+        except Exception as e:
+            import logging
+            logging.warning(f"Failed to generate summary during celery processing: {e}")
+            summary = ""
+
+        _sync_db.raw_documents.update_one(
+            {"_id": ObjectId(raw_doc_id)},
+            {"$set": {"summary": summary}}
+        )
+
         _set_status(job_id, status="completed", cleaned_document_id=cleaned_res.inserted_id)
         return {"status": "completed", "raw_document_id": raw_doc_id}
     except Exception as e:

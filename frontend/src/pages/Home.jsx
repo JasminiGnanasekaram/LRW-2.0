@@ -102,11 +102,7 @@ function tagWord(word) {
     return POS_DICT[cleanWord];
   }
 
-  if (
-    cleanWord.endsWith("ing") ||
-    cleanWord.endsWith("ed") ||
-    (cleanWord.endsWith("es") && cleanWord.length > 3)
-  ) {
+  if (cleanWord.endsWith("ing") || cleanWord.endsWith("ed") || cleanWord.endsWith("es") || cleanWord.endsWith("s") && cleanWord.length > 3) {
     return "VERB";
   }
   if (cleanWord.endsWith("ly")) {
@@ -165,7 +161,7 @@ export default function Home() {
         </div>
 
         <h1 className="hero-title">
-          Build, analyze and explore your <span style={{ color: "var(--sage)", textDecoration: "underline", textDecorationColor: "rgba(143,184,154,0.4)" }}>language corpus</span>
+          Build, analyze and explore your <span style={{ color: "var(--sage)", textDecoration: "underline", decorationColor: "rgba(143,184,154,0.4)" }}>language corpus</span>
         </h1>
 
         <p className="hero-subtitle">
@@ -429,10 +425,15 @@ export default function Home() {
       }}>
         <span style={{ fontFamily: "var(--font-head)", fontSize: 18, fontWeight: 700, color: "rgba(255,255,255,0.5)", letterSpacing: "-0.01em" }}>LRW</span>
         <div style={{ display: "flex", gap: 24 }}>
-          {["Privacy Policy", "Terms of Service", "Contact Support"].map(label => (
-            <span key={label} style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", cursor: "default" }}>
-              {label}
-            </span>
+          {[
+            { label: "Privacy Policy", path: "/privacy" },
+            { label: "Terms of Service", path: "/terms" },
+            { label: "Contact Support", path: "/contact" }
+          ].map(l => (
+            <Link key={l.label} to={l.path} style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", textDecoration: "none", transition: "color 0.2s" }}
+              onMouseEnter={(e) => e.currentTarget.style.color = "#fff"}
+              onMouseLeave={(e) => e.currentTarget.style.color = "rgba(255,255,255,0.4)"}
+            >{l.label}</Link>
           ))}
         </div>
         <span style={{ fontSize: 13, color: "rgba(255,255,255,0.3)" }}>&copy; {new Date().getFullYear()} Language Resource Workspace</span>
