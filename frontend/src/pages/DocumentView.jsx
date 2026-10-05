@@ -22,11 +22,11 @@ const LANG_COLORS = {
 function PdfTypeBadge({ pdfType }) {
   if (!pdfType) return null;
   const config = {
-    text_only: { label: "Text Only PDF", bg: "#e8f5e9", color: "#2d6a4f", icon: "📄" },
-    text_image: { label: "Text + Images PDF", bg: "#fff8e1", color: "#b45309", icon: "🖼️" },
-    image_only: { label: "Scanned / Image PDF", bg: "#fce4ec", color: "#c62828", icon: "📷" },
+    text_only: { label: "Text Only PDF", bg: "#e8f5e9", color: "#2d6a4f" },
+    text_image: { label: "Text + Images PDF", bg: "#fff8e1", color: "#b45309" },
+    image_only: { label: "Scanned / Image PDF", bg: "#fce4ec", color: "#c62828" },
   };
-  const c = config[pdfType] || { label: pdfType, bg: "#f5f5f5", color: "#555", icon: "📄" };
+  const c = config[pdfType] || { label: pdfType, bg: "#f5f5f5", color: "#555"};
   return (
     <span style={{
       display: "inline-flex", alignItems: "center", gap: 6, background: c.bg,
@@ -559,8 +559,8 @@ export default function DocumentView({ uiLang: uiLangProp }) {
 
   const TABS = [
   { key: "overview",  label: { English: "Overview",       Tamil: "கண்ணோட்டம்",                Sinhala: "දළ විශ්ලේෂණය"     } },
-  { key: "cleaned",   label: { English: "Cleaned Text",   Tamil: "சுத்திகரிக்கப்பட்ட உரை",   Sinhala: "පිරිසිදු කළ පෙළ"  } },
   { key: "raw",       label: { English: "Raw Text",       Tamil: "அசல் உரை",                  Sinhala: "අමු පෙළ"           } },
+  { key: "cleaned",   label: { English: "Cleaned Text",   Tamil: "சுத்திகரிக்கப்பட்ட உரை",   Sinhala: "පිරිසිදු කළ පෙළ"  } },
   { key: "nlp",       label: { English: "NLP Data",       Tamil: "NLP தரவு",                  Sinhala: "NLP දත්ත"          } },
   { key: "charts",    label: { English: "Charts",         Tamil: "வரைபடங்கள்",                Sinhala: "ප්‍රස්තාර"         } },
   { key: "metadata",  label: { English: "Metadata",       Tamil: "மெட்டாடேட்டா",              Sinhala: "පාර-දත්ත"          } },
@@ -659,77 +659,77 @@ export default function DocumentView({ uiLang: uiLangProp }) {
           </div>
         );
 
-      case "sentiment":
-        return (
-          <div>
-            <SectionDesc desc={t(currentSection?.desc)} />
-            <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap", marginBottom: 24 }}>
-              <span style={{
-                background: sentimentColor(sentiment),
-                borderRadius: 8, padding: "12px 24px", fontSize: 18, fontWeight: 700, color: "var(--ink)"
-              }}>
-                {sentiment.label || "Neutral"}
-              </span>
-              <div>
-                <div style={{ fontSize: 12, color: "var(--ink-lt)", marginBottom: 4 }}>
-                  {isTamil ? "நம்பிக்கை அளவு" : isSinhala ? "විශ්වාසනීයත්වය" : "Confidence"}
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div style={{ width: 140, height: 8, background: "var(--border)", borderRadius: 99, overflow: "hidden" }}>
-                    <div style={{
-                      width: `${((sentiment.confidence || sentiment.score || 0.5) * 100).toFixed(0)}%`,
-                      height: "100%", background: "var(--forest)", borderRadius: 99
-                    }} />
-                  </div>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: "var(--forest)" }}>
-                    {((sentiment.confidence || sentiment.score || 0.5) * 100).toFixed(1)}%
-                  </span>
-                </div>
-              </div>
-            </div>
+                  // case "sentiment":
+                  //   return (
+                  //     <div>
+                  //       <SectionDesc desc={t(currentSection?.desc)} />
+                  //       <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap", marginBottom: 24 }}>
+                  //         <span style={{
+                  //           background: sentimentColor(sentiment),
+                  //           borderRadius: 8, padding: "12px 24px", fontSize: 18, fontWeight: 700, color: "var(--ink)"
+                  //         }}>
+                  //           {sentiment.label || "Neutral"}
+                  //         </span>
+                  //         <div>
+                  //           <div style={{ fontSize: 12, color: "var(--ink-lt)", marginBottom: 4 }}>
+                  //             {isTamil ? "நம்பிக்கை அளவு" : isSinhala ? "විශ්වාසනීයත්වය" : "Confidence"}
+                  //           </div>
+                  //           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  //             <div style={{ width: 140, height: 8, background: "var(--border)", borderRadius: 99, overflow: "hidden" }}>
+                  //               <div style={{
+                  //                 width: `${((sentiment.confidence || sentiment.score || 0.5) * 100).toFixed(0)}%`,
+                  //                 height: "100%", background: "var(--forest)", borderRadius: 99
+                  //               }} />
+                  //             </div>
+                  //             <span style={{ fontSize: 14, fontWeight: 700, color: "var(--forest)" }}>
+                  //               {((sentiment.confidence || sentiment.score || 0.5) * 100).toFixed(1)}%
+                  //             </span>
+                  //           </div>
+                  //         </div>
+                  //       </div>
 
-            {/* Sentence-level sentiment list */}
-            {sentiment.sentences?.length > 0 && (
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: "var(--ink)" }}>
-                  📑 {isTamil ? "வாக்கிய வாரியான உணர்வு" : isSinhala ? "වාක්‍ය මට්ටමේ හැඟීම්" : "Sentence-by-Sentence Sentiment"}
-                </div>
-                <div style={scrollBox}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                    <thead>
-                      <tr>
-                        <th style={{ ...th, width: 35 }}>#</th>
-                        <th style={th}>{isTamil ? "வாக்கியம்" : isSinhala ? "වාක්‍යය" : "Sentence"}</th>
-                        <th style={{ ...th, width: 90 }}>{isTamil ? "மொழி" : isSinhala ? "භාෂාව" : "Lang"}</th>
-                        <th style={{ ...th, width: 100 }}>{isTamil ? "உணர்வு" : isSinhala ? "හැඟීම" : "Sentiment"}</th>
-                        <th style={{ ...th, width: 80 }}>{isTamil ? "மதிப்பெண்" : isSinhala ? "ලකුණ" : "Score"}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {sentiment.sentences.map((s, i) => (
-                        <tr key={i}>
-                          <td style={{ ...tdStyle(i % 2), color: "var(--ink-lt)" }}>{i + 1}</td>
-                          <td style={tdStyle(i % 2)}>{s.sentence}</td>
-                          <td style={tdStyle(i % 2)}><span className="badge" style={{ fontSize: 11 }}>{s.language}</span></td>
-                          <td style={tdStyle(i % 2)}>
-                            <span style={{
-                              display: "inline-block", padding: "2px 8px", borderRadius: 4,
-                              background: s.sentiment === "Positive" ? "#dcfce7" : s.sentiment === "Negative" ? "#fee2e2" : "#fef9c3",
-                              fontSize: 12, fontWeight: 600
-                            }}>
-                              {s.sentiment}
-                            </span>
-                          </td>
-                          <td style={{ ...tdStyle(i % 2), fontWeight: 600 }}>{(s.confidence * 100).toFixed(0)}%</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </div>
-        );
+        //     {/* Sentence-level sentiment list */}
+        //     {sentiment.sentences?.length > 0 && (
+        //       <div>
+        //         <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: "var(--ink)" }}>
+        //           {isTamil ? "வாக்கிய வாரியான உணர்வு" : isSinhala ? "වාක්‍ය මට්ටමේ හැඟීම්" : "Sentence-by-Sentence Sentiment"}
+        //         </div>
+        //         <div style={scrollBox}>
+        //           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+        //             <thead>
+        //               <tr>
+        //                 <th style={{ ...th, width: 35 }}>#</th>
+        //                 <th style={th}>{isTamil ? "வாக்கியம்" : isSinhala ? "වාක්‍යය" : "Sentence"}</th>
+        //                 <th style={{ ...th, width: 90 }}>{isTamil ? "மொழி" : isSinhala ? "භාෂාව" : "Lang"}</th>
+        //                 <th style={{ ...th, width: 100 }}>{isTamil ? "உணர்வு" : isSinhala ? "හැඟීම" : "Sentiment"}</th>
+        //                 <th style={{ ...th, width: 80 }}>{isTamil ? "மதிப்பெண்" : isSinhala ? "ලකුණ" : "Score"}</th>
+        //               </tr>
+        //             </thead>
+        //             <tbody>
+        //               {sentiment.sentences.map((s, i) => (
+        //                 <tr key={i}>
+        //                   <td style={{ ...tdStyle(i % 2), color: "var(--ink-lt)" }}>{i + 1}</td>
+        //                   <td style={tdStyle(i % 2)}>{s.sentence}</td>
+        //                   <td style={tdStyle(i % 2)}><span className="badge" style={{ fontSize: 11 }}>{s.language}</span></td>
+        //                   <td style={tdStyle(i % 2)}>
+        //                     <span style={{
+        //                       display: "inline-block", padding: "2px 8px", borderRadius: 4,
+        //                       background: s.sentiment === "Positive" ? "#dcfce7" : s.sentiment === "Negative" ? "#fee2e2" : "#fef9c3",
+        //                       fontSize: 12, fontWeight: 600
+        //                     }}>
+        //                       {s.sentiment}
+        //                     </span>
+        //                   </td>
+        //                   <td style={{ ...tdStyle(i % 2), fontWeight: 600 }}>{(s.confidence * 100).toFixed(0)}%</td>
+        //                 </tr>
+        //               ))}
+        //             </tbody>
+        //           </table>
+        //         </div>
+        //       </div>
+        //     )}
+        //   </div>
+        // );
 
       case "classification":
         return (
@@ -743,7 +743,7 @@ export default function DocumentView({ uiLang: uiLangProp }) {
                 display: "inline-block", background: "var(--mint)", border: "1.5px solid var(--forest)",
                 borderRadius: 8, padding: "8px 18px", fontSize: 16, fontWeight: 700, color: "var(--forest)"
               }}>
-                🏷️ {classif.predicted_label || classif.predicted_category || "General"}
+                {classif.predicted_label || classif.predicted_category || "General"}
               </span>
             </div>
 
@@ -915,7 +915,7 @@ export default function DocumentView({ uiLang: uiLangProp }) {
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 10 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--ink)" }}>
-                    🔍 {isTamil ? "சொற்கள் வாரியான இலக்கண விபரம்" : isSinhala ? "වචන අනුව ව්‍යාකරණ විස්තරය" : "Words by Part-of-Speech"}
+                    {isTamil ? "சொற்கள் வாரியான இலக்கண விபரம்" : isSinhala ? "වචන අනුව ව්‍යාකරණ විස්තරය" : "Words by Part-of-Speech"}
                   </h4>
                   {selectedPosFilter && (
                     <button
@@ -1203,7 +1203,7 @@ export default function DocumentView({ uiLang: uiLangProp }) {
               title="Download JSON format"
               onClick={() => exportDocument(id, "json", doc.filename?.split(".")[0] || "document")}
             >
-              📥 JSON
+              JSON
             </button>
             <button
               className="btn btn-ghost btn-sm"
@@ -1211,7 +1211,7 @@ export default function DocumentView({ uiLang: uiLangProp }) {
               title="Download CSV format"
               onClick={() => exportDocument(id, "csv", doc.filename?.split(".")[0] || "document")}
             >
-              📥 CSV
+              CSV
             </button>
           </div>
         </div>
@@ -1236,7 +1236,7 @@ export default function DocumentView({ uiLang: uiLangProp }) {
                 fontSize: 12, fontWeight: 700, color: "var(--forest)",
                 textTransform: "uppercase", letterSpacing: 1, marginBottom: 8
               }}>
-                📋 {isTamil ? "ஆவண சுருக்கம்" : isSinhala ? "ලේඛන සාරාංශය" : "Document Summary"}
+                {isTamil ? "ஆவண சுருக்கம்" : isSinhala ? "ලේඛන සාරාංශය" : "Document Summary"}
               </div>
               <p style={{ margin: 0, fontSize: 15, lineHeight: 1.7, color: "var(--ink)" }}>
                 {doc.summary || "No summary available."}
@@ -1273,7 +1273,7 @@ export default function DocumentView({ uiLang: uiLangProp }) {
                   fontSize: 12, fontWeight: 700, color: "var(--forest)",
                   textTransform: "uppercase", letterSpacing: 1, marginBottom: 10
                 }}>
-                  🔑 {isTamil ? "முக்கிய குறிச்சொற்கள்" : isSinhala ? "ප්‍රධාන මූල පද" : "Top Keywords"}
+                  {isTamil ? "முக்கிய குறிச்சொற்கள்" : isSinhala ? "ප්‍රධාන මූල පද" : "Top Keywords"}
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                   {nlp.top_keywords.map((kw, i) => (
@@ -1297,7 +1297,7 @@ export default function DocumentView({ uiLang: uiLangProp }) {
                 <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
                   <button className="btn btn-ghost btn-sm"
                     onClick={() => { setMetaForm({ ...doc.metadata }); setEditingMeta(true); setMetaMsg(""); }}>
-                    ✏️ Edit Metadata
+                    Edit Metadata
                   </button>
                 </div>
                 <pre className="snippet">{JSON.stringify(doc.metadata, null, 2)}</pre>
@@ -1359,7 +1359,7 @@ export default function DocumentView({ uiLang: uiLangProp }) {
                   </div>
                 </div>
                 {metaMsg && (
-                  <div className={metaMsg.startsWith("✅") ? "alert-success" : "alert-error"}
+                  <div className={metaMsg.startsWith("") ? "alert-success" : "alert-error"}
                     style={{ marginBottom: 12 }}>{metaMsg}</div>
                 )}
                 <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>

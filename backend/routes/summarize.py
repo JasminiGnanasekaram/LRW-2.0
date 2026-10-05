@@ -12,6 +12,7 @@ router = APIRouter(prefix="/summarize", tags=["summarize"])
 
 # ── Groq setup ────────────────────────────────────────
 import os
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 client = Groq(api_key=os.getenv("GROQ_API_KEY", ""))
 # Groq client configured elsewhere
 MODEL = "llama-3.3-70b-versatile"
@@ -33,25 +34,59 @@ def compress_image(image_bytes: bytes, mime_type: str = None) -> str:
         # If PIL fails, just return raw base64
         return base64.b64encode(image_bytes).decode("utf-8")
 
+
+
+def _rule_based_summary(text: str) -> str:
+    import re
+    if not text or not text.strip():
+        return "No content available for summary."
+    if any("\u0B80" <= c <= "\u0BFF" for c in text):
+        sentences = re.split(r'[।\.\n]+', text.strip())
+    else:
+        sentences = re.split(r'(?<=[.!?])\s+', text.strip())
+    meaningful = []
+    for s in sentences:
+        s = s.strip()
+        if len(s) < 20:
+            continue
+        letter_ratio = sum(c.isalpha() for c in s) / max(len(s), 1)
+        if letter_ratio < 0.35:
+            continue
+        meaningful.append(s)
+    if not meaningful:
+        return text.strip()[:200] + ("..." if len(text) > 200 else "")
+    summary = " ".join(meaningful[:2])
+    return summary[:300] + "..." if len(summary) > 300 else summary
+
+
+
+
 # ── Helper: summarize text ────────────────────────────
 def summarize(text: str) -> str:
-    response = client.chat.completions.create(
-        model=MODEL,
-        messages=[
-            {
-                "role": "system",
-                "content": "You are a summarizer. Respond with exactly 2 informative sentences. Each sentence must be under 20 words. Never exceed 2 sentences."
-            },
-            {
-                "role": "user",
-                "content": PROMPT + text
-            }
-        ],
-        max_tokens=80,
-        temperature=0.3,
-    )
-    return response.choices[0].message.content
-
+    # If no API key — use rule-based fallback instead of crashing
+    if not GROQ_API_KEY or GROQ_API_KEY.strip() == "":
+        return _rule_based_summary(text)
+    try:
+        client = Groq(api_key=GROQ_API_KEY)
+        response = client.chat.completions.create(
+            model=MODEL,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a summarizer. Respond with exactly 2 short sentences under 20 words each."
+                },
+                {
+                    "role": "user",
+                    "content": f"Summarize in 2 sentences:\n\n{text[:5000]}"
+                }
+            ],
+            max_tokens=80,
+            temperature=0.3,
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        print(f"[Groq] Failed: {e} — using fallback", flush=True)
+        return _rule_based_summary(text)
 
 # ── Helper: summarize image (base64) ─────────────────
 def summarize_image_b64(b64: str) -> str:

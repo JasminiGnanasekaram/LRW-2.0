@@ -354,11 +354,8 @@ async def upload(
                 pdf_type = None
 
     if not raw_text or not raw_text.strip():
-        raise HTTPException(
-            status_code=422,
-            detail="No text could be extracted from this source. "
-                   "For scanned PDFs or images, check that OCR is installed.",
-        )
+        print(f"[upload] Warning: No text extracted from {filename} — saving anyway", flush=True)
+        raw_text = ""
 
     # 2. Save source + raw doc
     src = await sources_col.insert_one({
