@@ -112,109 +112,26 @@ def _get_english_nlp():
 def _tokenize_english_regex(text: str) -> List[str]:
     """Fallback regex tokenizer for English."""
     return re.findall("[A-Za-z0-9]+(?:'[A-Za-z]+)?|[^\\w\\s]", text)
-TAMIL_PRONOUNS = {'நான்': ('PRON', 'நான்', 'Case=Nom|Number=Sing|Person=1'), 'நாம்': ('PRON', 'நாம்', 'Case=Nom|Number=Plur|Person=1'), 'நாங்கள்': ('PRON', 'நாங்கள்', 'Case=Nom|Number=Plur|Person=1'), 'நீ': ('PRON', 'நீ', 'Case=Nom|Number=Sing|Person=2'), 'நீங்கள்': ('PRON', 'நீங்கள்', 'Case=Nom|Number=Plur|Person=2'), 'அவன்': ('PRON', 'அவன்', 'Case=Nom|Gender=Masc|Number=Sing|Person=3'), 'அவள்': ('PRON', 'அவள்', 'Case=Nom|Gender=Fem|Number=Sing|Person=3'), 'அவர்': ('PRON', 'அவர்', 'Case=Nom|Number=Sing|Person=3|Polite=Yes'), 'அவர்கள்': ('PRON', 'அவர்கள்', 'Case=Nom|Number=Plur|Person=3'), 'அது': ('PRON', 'அது', 'Case=Nom|Gender=Neut|Number=Sing|Person=3'), 'அவை': ('PRON', 'அவை', 'Case=Nom|Gender=Neut|Number=Plur|Person=3'), 'இது': ('PRON', 'இது', 'Case=Nom|Gender=Neut|Number=Sing|Person=3'), 'இவை': ('PRON', 'இவை', 'Case=Nom|Gender=Neut|Number=Plur|Person=3'), 'இவன்': ('PRON', 'இவன்', 'Case=Nom|Gender=Masc|Number=Sing|Person=3'), 'இவள்': ('PRON', 'இவள்', 'Case=Nom|Gender=Fem|Number=Sing|Person=3'), 'இவர்': ('PRON', 'இவர்', 'Case=Nom|Number=Sing|Person=3|Polite=Yes'), 'யார்': ('PRON', 'யார்', 'PronType=Int'), 'என்ன': ('PRON', 'என்ன', 'PronType=Int'), 'எது': ('PRON', 'எது', 'PronType=Int'), 'தான்': ('PRON', 'தான்', 'PronType=Prs|Reflex=Yes'), 'தாம்': ('PRON', 'தாம்', 'PronType=Prs|Reflex=Yes')}
-TAMIL_CONJUNCTIONS = {'மற்றும்', 'ஆனால்', 'அல்லது', 'எனவே', 'ஆகையால்', 'ஆயினும்', 'மேலும்', 'எனினும்', 'ஆனாலும்', 'ஆகவே', 'உடன்', 'என்று'}
-TAMIL_POSTPOSITIONS = {'இடம்', 'குறித்து', 'பற்றி', 'பொழுது', 'போது', 'வரை', 'பின்', 'முன்', 'உள்', 'வெளியே', 'மேல்', 'கீழ்', 'இடையே', 'நடுவில்', 'சார்பாக'}
-TAMIL_VERB_ROOTS = {'செய்': 'செய்', 'படி': 'படி', 'எழுது': 'எழுது', 'பார்': 'பார்', 'முன்னேறு': 'முன்னேறு', 'முன்னேறுங்': 'முன்னேறு', 'முன்னேறுங்கள்': 'முன்னேறு', 'வலுப்படுத்து': 'வலுப்படுத்து', 'வலுப்படுத்தும்': 'வலுப்படுத்து', 'மறக்கு': 'மறக்கு', 'மறக்க': 'மறக்கு', 'மறக்காதீர்': 'மறக்கு', 'மறக்காதீர்கள்': 'மறக்கு', 'மாறு': 'மாறு', 'மாறும்': 'மாறு', 'மாற்று': 'மாற்று', 'மாற்றும்': 'மாற்று', 'வாழ்': 'வாழ்', 'வாழ': 'வாழ்', 'வாழும்': 'வாழ்', 'வாழ்க': 'வாழ்', 'வா': 'வா', 'போ': 'போ', 'இரு': 'இரு', 'கொள்': 'கொள்', 'கொடு': 'கொடு', 'சொல்': 'சொல்', 'கூறு': 'கூறு', 'நட': 'நட', 'நில்': 'நில்', 'கேள்': 'கேள்', 'உருவாக்கு': 'உருவாக்கு', 'பயன்படுத்து': 'பயன்படுத்து', 'தெரிவி': 'தெரிவி', 'படிக்கு': 'படிக்கு', 'செல்': 'செல்', 'பெறு': 'பெறு'}
-TAMIL_COMMON_VERBS = {'ஆரோக்கியமாக': ('ADV', 'ஆரோக்கியம்', ''), 'ஆரோக்கியமா': ('ADV', 'ஆரோக்கியம்', ''), 'ஆரோக்கியமாகும்': ('VERB', 'இரு', 'Tense=Fut|VerbForm=Part'), 'ஆரோக்கியமாகிறது': ('VERB', 'இரு', 'Tense=Pres|Gender=Neut|Number=Sing|Person=3'), 'ஆரோக்கியமானது': ('VERB', 'இரு', 'Tense=Past|Gender=Neut|Number=Sing'), 'ஆரோக்கியமாகி': ('VERB', 'இரு', 'VerbForm=Part|Aspect=Perf'), 'கடினமாக': ('ADV', 'கடினம்', ''), 'கடினமா': ('ADV', 'கடினம்', ''), 'கடினமாகும்': ('VERB', 'இரு', 'Tense=Fut|VerbForm=Part'), 'கடினமாகிறது': ('VERB', 'இரு', 'Tense=Pres|Gender=Neut|Number=Sing|Person=3'), 'கடினமானது': ('VERB', 'இரு', 'Tense=Past|Gender=Neut|Number=Sing'), 'கடினமாகி': ('VERB', 'இரு', 'VerbForm=Part|Aspect=Perf'), 'சுலபமாக': ('ADV', 'சுலபம்', ''), 'சுலபமா': ('ADV', 'சுலபம்', ''), 'சுலபமாகும்': ('VERB', 'இரு', 'Tense=Fut|VerbForm=Part'), 'சாத்தியமாக': ('ADV', 'சாத்தியம்', ''), 'சாத்தியமா': ('ADV', 'சாத்தியம்', ''), 'சாத்தியமாகும்': ('VERB', 'இரு', 'Tense=Fut|VerbForm=Part'), 'தெளிவாக': ('ADV', 'தெளிவு', ''), 'தெளிவா': ('ADV', 'தெளிவு', ''), 'தெளிவாகும்': ('VERB', 'இரு', 'Tense=Fut|VerbForm=Part'), 'அவசியமாக': ('ADV', 'அவசியம்', ''), 'அவசியமா': ('ADV', 'அவசியம்', ''), 'அவசியமாகும்': ('VERB', 'இரு', 'Tense=Fut|VerbForm=Part'), 'வாழக்கூடாது': ('VERB', 'வாழ்', 'Mood=Proh|Polarity=Neg'), 'வாழலாம்': ('VERB', 'வாழ்', 'Mood=Pot'), 'வாழ்க': ('VERB', 'வாழ்', 'Mood=Opt'), 'வாழ்கிறார்': ('VERB', 'வாழ்', 'Tense=Pres|Number=Sing|Person=3|Polite=Yes'), 'வாழ்கிறார்கள்': ('VERB', 'வாழ்', 'Tense=Pres|Number=Plur|Person=3'), 'வாழ்கிறது': ('VERB', 'வாழ்', 'Tense=Pres|Gender=Neut|Number=Sing|Person=3'), 'வாழ்ந்தார்': ('VERB', 'வாழ்', 'Tense=Past|Number=Sing|Person=3|Polite=Yes'), 'வாழ்ந்தார்கள்': ('VERB', 'வாழ்', 'Tense=Past|Number=Plur|Person=3'), 'வாழ்ந்தது': ('VERB', 'வாழ்', 'Tense=Past|Gender=Neut|Number=Sing'), 'வாழ்ந்து': ('VERB', 'வாழ்', 'VerbForm=Part|Aspect=Perf'), 'வாழ': ('VERB', 'வாழ்', 'VerbForm=Inf'), 'வாழும்': ('VERB', 'வாழ்', 'Tense=Fut|VerbForm=Part'), 'வாழுங்கள்': ('VERB', 'வாழ்', 'Mood=Imp|Number=Plur|Person=2|Polite=Yes'), 'வாழ்': ('VERB', 'வாழ்', 'Mood=Imp|Number=Sing|Person=2'), 'செய்யக்கூடாது': ('VERB', 'செய்', 'Mood=Proh|Polarity=Neg'), 'போகக்கூடாது': ('VERB', 'போ', 'Mood=Proh|Polarity=Neg'), 'வரக்கூடாது': ('VERB', 'வா', 'Mood=Proh|Polarity=Neg'), 'பார்க்கக்கூடாது': ('VERB', 'பார்', 'Mood=Proh|Polarity=Neg'), 'படிக்கக்கூடாது': ('VERB', 'படி', 'Mood=Proh|Polarity=Neg'), 'மாறும்': ('VERB', 'மாறு', 'Tense=Fut|VerbForm=Part'), 'மாறுகிறது': ('VERB', 'மாறு', 'Tense=Pres|Gender=Neut|Number=Sing|Person=3'), 'மாறுகிறார்': ('VERB', 'மாறு', 'Tense=Pres|Number=Sing|Person=3|Polite=Yes'), 'மாறுகிறார்கள்': ('VERB', 'மாறு', 'Tense=Pres|Number=Plur|Person=3'), 'மாறியது': ('VERB', 'மாறு', 'Tense=Past|Gender=Neut|Number=Sing'), 'மாறினார்': ('VERB', 'மாறு', 'Tense=Past|Number=Sing|Person=3|Polite=Yes'), 'மாறினர்': ('VERB', 'மாறு', 'Tense=Past|Number=Plur|Person=3'), 'மாறி': ('VERB', 'மாறு', 'VerbForm=Part|Aspect=Perf'), 'மாற': ('VERB', 'மாறு', 'VerbForm=Inf'), 'மாறு': ('VERB', 'மாறு', 'Mood=Imp|Number=Sing|Person=2'), 'மாறுங்கள்': ('VERB', 'மாறு', 'Mood=Imp|Number=Plur|Person=2|Polite=Yes'), 'மாற்றும்': ('VERB', 'மாற்று', 'Tense=Fut|VerbForm=Part'), 'மாற்றுகிறது': ('VERB', 'மாற்று', 'Tense=Pres|Gender=Neut|Number=Sing|Person=3'), 'மாற்றினார்': ('VERB', 'மாற்று', 'Tense=Past|Number=Sing|Person=3|Polite=Yes'), 'மாற்றி': ('VERB', 'மாற்று', 'VerbForm=Part|Aspect=Perf'), 'மாற்ற': ('VERB', 'மாற்று', 'VerbForm=Inf'), 'வலுப்படுத்தும்': ('VERB', 'வலுப்படுத்து', 'Tense=Fut|VerbForm=Part'), 'வலுப்படுத்துகிறது': ('VERB', 'வலுப்படுத்து', 'Tense=Pres|Gender=Neut|Number=Sing|Person=3'), 'வலுப்படுத்துகிறார்': ('VERB', 'வலுப்படுத்து', 'Tense=Pres|Number=Sing|Person=3|Polite=Yes'), 'வலுப்படுத்துகிறார்கள்': ('VERB', 'வலுப்படுத்து', 'Tense=Pres|Number=Plur|Person=3'), 'வலுப்படுத்தியது': ('VERB', 'வலுப்படுத்து', 'Tense=Past|Gender=Neut|Number=Sing'), 'வலுப்படுத்தினார்': ('VERB', 'வலுப்படுத்து', 'Tense=Past|Number=Sing|Person=3|Polite=Yes'), 'வலுப்படுத்தினர்': ('VERB', 'வலுப்படுத்து', 'Tense=Past|Number=Plur|Person=3'), 'வலுப்படுத்தி': ('VERB', 'வலுப்படுத்து', 'VerbForm=Part|Aspect=Perf'), 'வலுப்படுத்த': ('VERB', 'வலுப்படுத்து', 'VerbForm=Inf'), 'வலுப்படுத்து': ('VERB', 'வலுப்படுத்து', 'Mood=Imp|Number=Sing|Person=2'), 'வலுப்படுத்துங்கள்': ('VERB', 'வலுப்படுத்து', 'Mood=Imp|Number=Plur|Person=2|Polite=Yes'), 'மறக்காதீர்கள்': ('VERB', 'மறக்கு', 'Mood=Imp|Polarity=Neg|Number=Plur|Person=2|Polite=Yes'), 'மறக்காதீர்': ('VERB', 'மறக்கு', 'Mood=Imp|Polarity=Neg|Number=Sing|Person=2|Polite=Yes'), 'மறக்காதே': ('VERB', 'மறக்கு', 'Mood=Imp|Polarity=Neg|Number=Sing|Person=2'), 'மறக்காமல்': ('VERB', 'மறக்கு', 'VerbForm=Part|Polarity=Neg'), 'மறந்து': ('VERB', 'மறக்கு', 'VerbForm=Part|Aspect=Perf'), 'மறந்தார்': ('VERB', 'மறக்கு', 'Tense=Past|Number=Sing|Person=3|Polite=Yes'), 'மறந்தார்கள்': ('VERB', 'மறக்கு', 'Tense=Past|Number=Plur|Person=3'), 'மறந்தது': ('VERB', 'மறக்கு', 'Tense=Past|Gender=Neut|Number=Sing'), 'மறக்கிறார்': ('VERB', 'மறக்கு', 'Tense=Pres|Number=Sing|Person=3|Polite=Yes'), 'மறக்கிறார்கள்': ('VERB', 'மறக்கு', 'Tense=Pres|Number=Plur|Person=3'), 'மறக்கும்': ('VERB', 'மறக்கு', 'Tense=Fut|VerbForm=Part'), 'மறக்க': ('VERB', 'மறக்கு', 'VerbForm=Inf'), 'முன்னேறுங்கள்': ('VERB', 'முன்னேறு', 'Mood=Imp|Number=Plur|Person=2|Polite=Yes'), 'முன்னேறுங்': ('VERB', 'முன்னேறு', 'Mood=Imp|Number=Plur|Person=2'), 'முன்னேறு': ('VERB', 'முன்னேறு', 'Mood=Imp|Number=Sing|Person=2'), 'முன்னேறி': ('VERB', 'முன்னேறு', 'VerbForm=Part|Aspect=Perf'), 'முன்னேறியது': ('VERB', 'முன்னேறு', 'Tense=Past|Gender=Neut|Number=Sing'), 'முன்னேறினார்': ('VERB', 'முன்னேறு', 'Tense=Past|Number=Sing|Person=3|Polite=Yes'), 'முன்னேறினார்கள்': ('VERB', 'முன்னேறு', 'Tense=Past|Number=Plur|Person=3'), 'முன்னேறினர்': ('VERB', 'முன்னேறு', 'Tense=Past|Number=Plur|Person=3'), 'முன்னேறுகிறார்': ('VERB', 'முன்னேறு', 'Tense=Pres|Number=Sing|Person=3|Polite=Yes'), 'முன்னேறுகிறார்கள்': ('VERB', 'முன்னேறு', 'Tense=Pres|Number=Plur|Person=3'), 'முன்னேறும்': ('VERB', 'முன்னேறு', 'Tense=Fut|VerbForm=Part'), 'முன்னேற': ('VERB', 'முன்னேறு', 'VerbForm=Inf'), 'செய்யுங்கள்': ('VERB', 'செய்', 'Mood=Imp|Number=Plur|Person=2|Polite=Yes'), 'படியுங்கள்': ('VERB', 'படி', 'Mood=Imp|Number=Plur|Person=2|Polite=Yes'), 'எழுதுங்கள்': ('VERB', 'எழுது', 'Mood=Imp|Number=Plur|Person=2|Polite=Yes'), 'வாருங்கள்': ('VERB', 'வா', 'Mood=Imp|Number=Plur|Person=2|Polite=Yes'), 'பாருங்கள்': ('VERB', 'பார்', 'Mood=Imp|Number=Plur|Person=2|Polite=Yes'), 'செய்து': ('VERB', 'செய்', 'VerbForm=Part|Aspect=Perf'), 'செய்தார்': ('VERB', 'செய்', 'Tense=Past|Number=Sing|Person=3|Polite=Yes'), 'செய்தனர்': ('VERB', 'செய்', 'Tense=Past|Number=Plur|Person=3'), 'செய்தான்': ('VERB', 'செய்', 'Tense=Past|Gender=Masc|Number=Sing|Person=3'), 'செய்தாள்': ('VERB', 'செய்', 'Tense=Past|Gender=Fem|Number=Sing|Person=3'), 'செய்தது': ('VERB', 'செய்', 'Tense=Past|Gender=Neut|Number=Sing|Person=3'), 'செய்கிறார்': ('VERB', 'செய்', 'Tense=Pres|Number=Sing|Person=3|Polite=Yes'), 'செய்கிறார்கள்': ('VERB', 'செய்', 'Tense=Pres|Number=Plur|Person=3'), 'செய்கிறது': ('VERB', 'செய்', 'Tense=Pres|Gender=Neut|Number=Sing|Person=3'), 'செய்வார்': ('VERB', 'செய்', 'Tense=Fut|Number=Sing|Person=3|Polite=Yes'), 'செய்வார்கள்': ('VERB', 'செய்', 'Tense=Fut|Number=Plur|Person=3'), 'செய்ய': ('VERB', 'செய்', 'VerbForm=Inf'), 'செய்யும்': ('VERB', 'செய்', 'Tense=Fut|VerbForm=Part'), 'படித்து': ('VERB', 'படி', 'VerbForm=Part|Aspect=Perf'), 'படித்தார்': ('VERB', 'படி', 'Tense=Past|Number=Sing|Person=3|Polite=Yes'), 'படித்தார்கள்': ('VERB', 'படி', 'Tense=Past|Number=Plur|Person=3'), 'படிக்க': ('VERB', 'படி', 'VerbForm=Inf'), 'எழுதி': ('VERB', 'எழுது', 'VerbForm=Part|Aspect=Perf'), 'எழுதினார்': ('VERB', 'எழுது', 'Tense=Past|Number=Sing|Person=3|Polite=Yes'), 'எழுதினார்கள்': ('VERB', 'எழுது', 'Tense=Past|Number=Plur|Person=3'), 'பெற்று': ('VERB', 'பெறு', 'VerbForm=Part|Aspect=Perf'), 'பெற்றார்': ('VERB', 'பெறு', 'Tense=Past|Number=Sing|Person=3|Polite=Yes'), 'பெற்றார்கள்': ('VERB', 'பெறு', 'Tense=Past|Number=Plur|Person=3'), 'பெற்றனர்': ('VERB', 'பெறு', 'Tense=Past|Number=Plur|Person=3'), 'வந்து': ('VERB', 'வா', 'VerbForm=Part|Aspect=Perf'), 'வந்தார்': ('VERB', 'வா', 'Tense=Past|Number=Sing|Person=3|Polite=Yes'), 'வந்தார்கள்': ('VERB', 'வா', 'Tense=Past|Number=Plur|Person=3'), 'வருகிறார்': ('VERB', 'வா', 'Tense=Pres|Number=Sing|Person=3|Polite=Yes'), 'வருவார்': ('VERB', 'வா', 'Tense=Fut|Number=Sing|Person=3|Polite=Yes'), 'வர': ('VERB', 'வா', 'VerbForm=Inf'), 'போய்': ('VERB', 'போ', 'VerbForm=Part|Aspect=Perf'), 'சென்று': ('VERB', 'செல்', 'VerbForm=Part|Aspect=Perf'), 'சென்றார்': ('VERB', 'செல்', 'Tense=Past|Number=Sing|Person=3|Polite=Yes'), 'சென்றார்கள்': ('VERB', 'செல்', 'Tense=Past|Number=Plur|Person=3'), 'பார்த்து': ('VERB', 'பார்', 'VerbForm=Part|Aspect=Perf'), 'பார்த்தார்': ('VERB', 'பார்', 'Tense=Past|Number=Sing|Person=3|Polite=Yes'), 'இரு': ('VERB', 'இரு', 'Mood=Imp|Number=Sing|Person=2'), 'இருங்கள்': ('VERB', 'இரு', 'Mood=Imp|Number=Plur|Person=2|Polite=Yes'), 'இருக்க': ('VERB', 'இரு', 'VerbForm=Inf'), 'இருந்து': ('VERB', 'இரு', 'VerbForm=Part|Aspect=Perf'), 'இருந்தார்': ('VERB', 'இரு', 'Tense=Past|Number=Sing|Person=3|Polite=Yes'), 'இருந்தார்கள்': ('VERB', 'இரு', 'Tense=Past|Number=Plur|Person=3'), 'இருந்தது': ('VERB', 'இரு', 'Tense=Past|Gender=Neut|Number=Sing'), 'இருந்தனர்': ('VERB', 'இரு', 'Tense=Past|Number=Plur|Person=3'), 'இருக்கிறார்': ('VERB', 'இரு', 'Tense=Pres|Number=Sing|Person=3|Polite=Yes'), 'இருக்கிறார்கள்': ('VERB', 'இரு', 'Tense=Pres|Number=Plur|Person=3'), 'இருக்கிறது': ('VERB', 'இரு', 'Tense=Pres|Gender=Neut|Number=Sing|Person=3'), 'இருக்கின்றன': ('VERB', 'இரு', 'Tense=Pres|Gender=Neut|Number=Plur|Person=3'), 'இருப்பார்': ('VERB', 'இரு', 'Tense=Fut|Number=Sing|Person=3|Polite=Yes'), 'இருப்பார்கள்': ('VERB', 'இரு', 'Tense=Fut|Number=Plur|Person=3'), 'இருக்கும்': ('VERB', 'இரு', 'Tense=Fut|VerbForm=Part'), 'இருக்கலாம்': ('VERB', 'இரு', 'Mood=Pot'), 'இருக்கக்கூடாது': ('VERB', 'இரு', 'Mood=Proh|Polarity=Neg'), 'உள்ளது': ('VERB', 'உள்', 'Tense=Pres|Gender=Neut|Number=Sing|Person=3'), 'உள்ளன': ('VERB', 'உள்', 'Tense=Pres|Gender=Neut|Number=Plur|Person=3'), 'இல்லை': ('VERB', 'இல்லை', 'Polarity=Neg'), 'வேண்டும்': ('VERB', 'வேண்டு', 'Mood=Des'), 'முடியும்': ('VERB', 'முடி', 'Mood=Pot'), 'முடியாது': ('VERB', 'முடி', 'Mood=Pot|Polarity=Neg')}
-TAMIL_COMMON_NOUNS = {'உனக்காக': ('PRON', 'நீ', 'Case=Ben|Number=Sing|Person=2'), 'உனக்கு': ('PRON', 'நீ', 'Case=Dat|Number=Sing|Person=2'), 'உன்னை': ('PRON', 'நீ', 'Case=Acc|Number=Sing|Person=2'), 'உன்னால்': ('PRON', 'நீ', 'Case=Ins|Number=Sing|Person=2'), 'உன்னுடன்': ('PRON', 'நீ', 'Case=Com|Number=Sing|Person=2'), 'உன்னில்': ('PRON', 'நீ', 'Case=Loc|Number=Sing|Person=2'), 'உன்': ('PRON', 'நீ', 'Case=Gen|Number=Sing|Person=2'), 'எனக்காக': ('PRON', 'நான்', 'Case=Ben|Number=Sing|Person=1'), 'எனக்கு': ('PRON', 'நான்', 'Case=Dat|Number=Sing|Person=1'), 'என்னை': ('PRON', 'நான்', 'Case=Acc|Number=Sing|Person=1'), 'என்னால்': ('PRON', 'நான்', 'Case=Ins|Number=Sing|Person=1'), 'என்னுடன்': ('PRON', 'நான்', 'Case=Com|Number=Sing|Person=1'), 'என்னில்': ('PRON', 'நான்', 'Case=Loc|Number=Sing|Person=1'), 'என்': ('PRON', 'நான்', 'Case=Gen|Number=Sing|Person=1'), 'உங்களுக்காக': ('PRON', 'நீங்கள்', 'Case=Ben|Number=Plur|Person=2'), 'உங்களுக்கு': ('PRON', 'நீங்கள்', 'Case=Dat|Number=Plur|Person=2'), 'உங்களை': ('PRON', 'நீங்கள்', 'Case=Acc|Number=Plur|Person=2'), 'உங்களால்': ('PRON', 'நீங்கள்', 'Case=Ins|Number=Plur|Person=2'), 'உங்களுடன்': ('PRON', 'நீங்கள்', 'Case=Com|Number=Plur|Person=2'), 'உங்கள்': ('PRON', 'நீங்கள்', 'Case=Gen|Number=Plur|Person=2'), 'நமக்கு': ('PRON', 'நாம்', 'Case=Dat|Number=Plur|Person=1'), 'நம்மை': ('PRON', 'நாம்', 'Case=Acc|Number=Plur|Person=1'), 'நம்மால்': ('PRON', 'நாம்', 'Case=Ins|Number=Plur|Person=1'), 'நம்முடன்': ('PRON', 'நாம்', 'Case=Com|Number=Plur|Person=1'), 'நம்': ('PRON', 'நாம்', 'Case=Gen|Number=Plur|Person=1'), 'எங்களுக்கு': ('PRON', 'நாங்கள்', 'Case=Dat|Number=Plur|Person=1'), 'எங்களை': ('PRON', 'நாங்கள்', 'Case=Acc|Number=Plur|Person=1'), 'எங்கள்': ('PRON', 'நாங்கள்', 'Case=Gen|Number=Plur|Person=1'), 'அவருக்கு': ('PRON', 'அவர்', 'Case=Dat|Number=Sing|Person=3|Polite=Yes'), 'அவரை': ('PRON', 'அவர்', 'Case=Acc|Number=Sing|Person=3|Polite=Yes'), 'அவரால்': ('PRON', 'அவர்', 'Case=Ins|Number=Sing|Person=3|Polite=Yes'), 'அவருடன்': ('PRON', 'அவர்', 'Case=Com|Number=Sing|Person=3|Polite=Yes'), 'அவர்கள்': ('PRON', 'அவர்', 'Case=Nom|Number=Plur|Person=3'), 'அதை': ('PRON', 'அது', 'Case=Acc|Gender=Neut|Number=Sing|Person=3'), 'அதற்கு': ('PRON', 'அது', 'Case=Dat|Gender=Neut|Number=Sing|Person=3'), 'அதில்': ('PRON', 'அது', 'Case=Loc|Gender=Neut|Number=Sing|Person=3'), 'அதன்': ('PRON', 'அது', 'Case=Gen|Gender=Neut|Number=Sing|Person=3'), 'அதால்': ('PRON', 'அது', 'Case=Ins|Gender=Neut|Number=Sing|Person=3'), 'இதை': ('PRON', 'இது', 'Case=Acc|Gender=Neut|Number=Sing|Person=3'), 'இதற்கு': ('PRON', 'இது', 'Case=Dat|Gender=Neut|Number=Sing|Person=3'), 'இதில்': ('PRON', 'இது', 'Case=Loc|Gender=Neut|Number=Sing|Person=3'), 'இதன்': ('PRON', 'இது', 'Case=Gen|Gender=Neut|Number=Sing|Person=3'), 'ஆரோக்கியம்': ('NOUN', 'ஆரோக்கியம்', 'Case=Nom|Number=Sing'), 'ஆரோக்கியமாக': ('ADV', 'ஆரோக்கியம்', ''), 'ஆரோக்கியமா': ('ADV', 'ஆரோக்கியம்', ''), 'ஆரோக்கியத்தை': ('NOUN', 'ஆரோக்கியம்', 'Case=Acc|Number=Sing'), 'ஆரோக்கியத்திற்கு': ('NOUN', 'ஆரோக்கியம்', 'Case=Dat|Number=Sing'), 'ஆரோக்கியத்தில்': ('NOUN', 'ஆரோக்கியம்', 'Case=Loc|Number=Sing'), 'ஆரோக்கியத்துடன்': ('NOUN', 'ஆரோக்கியம்', 'Case=Com|Number=Sing'), 'ஆரோக்கியத்தின்': ('NOUN', 'ஆரோக்கியம்', 'Case=Gen|Number=Sing'), 'கவனம்': ('NOUN', 'கவனம்', 'Case=Nom|Number=Sing'), 'கவனமாக': ('ADV', 'கவனம்', ''), 'கவனமா': ('ADV', 'கவனம்', ''), 'கவனத்தை': ('NOUN', 'கவனம்', 'Case=Acc|Number=Sing'), 'கவனத்துடன்': ('NOUN', 'கவனம்', 'Case=Com|Number=Sing'), 'கவனத்தில்': ('NOUN', 'கவனம்', 'Case=Loc|Number=Sing'), 'கவனத்திற்கு': ('NOUN', 'கவனம்', 'Case=Dat|Number=Sing'), 'கவனத்தின்': ('NOUN', 'கவனம்', 'Case=Gen|Number=Sing'), 'உயரம்': ('NOUN', 'உயரம்', 'Case=Nom|Number=Sing'), 'உயரமாக': ('ADV', 'உயரம்', ''), 'உயரமா': ('ADV', 'உயரம்', ''), 'உயரத்தை': ('NOUN', 'உயரம்', 'Case=Acc|Number=Sing'), 'உயரத்தில்': ('NOUN', 'உயரம்', 'Case=Loc|Number=Sing'), 'உயரத்திற்கு': ('NOUN', 'உயரம்', 'Case=Dat|Number=Sing'), 'உயரத்தின்': ('NOUN', 'உயரம்', 'Case=Gen|Number=Sing'), 'கடினம்': ('NOUN', 'கடினம்', 'Case=Nom|Number=Sing'), 'கடினமாக': ('ADV', 'கடினம்', ''), 'கடினமா': ('ADV', 'கடினம்', ''), 'கடினத்தை': ('NOUN', 'கடினம்', 'Case=Acc|Number=Sing'), 'கடினத்தில்': ('NOUN', 'கடினம்', 'Case=Loc|Number=Sing'), 'சுலபம்': ('NOUN', 'சுலபம்', 'Case=Nom|Number=Sing'), 'சுலபமாக': ('ADV', 'சுலபம்', ''), 'சுலபமா': ('ADV', 'சுலபம்', ''), 'சாத்தியம்': ('NOUN', 'சாத்தியம்', 'Case=Nom|Number=Sing'), 'சாத்தியமாக': ('ADV', 'சாத்தியம்', ''), 'சாத்தியமா': ('ADV', 'சாத்தியம்', ''), 'தெளிவு': ('NOUN', 'தெளிவு', 'Case=Nom|Number=Sing'), 'தெளிவாக': ('ADV', 'தெளிவு', ''), 'தெளிவா': ('ADV', 'தெளிவு', ''), 'அவசியம்': ('NOUN', 'அவசியம்', 'Case=Nom|Number=Sing'), 'அவசியமாக': ('ADV', 'அவசியம்', ''), 'அவசியமா': ('ADV', 'அவசியம்', ''), 'நேரம்': ('NOUN', 'நேரம்', 'Case=Nom|Number=Sing'), 'நேரத்தில்': ('NOUN', 'நேரம்', 'Case=Loc|Number=Sing'), 'நேரத்திற்கு': ('NOUN', 'நேரம்', 'Case=Dat|Number=Sing'), 'நேரமாக': ('ADV', 'நேரம்', ''), 'வாழ்க்கை': ('NOUN', 'வாழ்க்கை', 'Case=Nom|Number=Sing'), 'வாழ்க்கையில்': ('NOUN', 'வாழ்க்கை', 'Case=Loc|Number=Sing'), 'வாழ்க்கையை': ('NOUN', 'வாழ்க்கை', 'Case=Acc|Number=Sing'), 'வாழ்க்கையின்': ('NOUN', 'வாழ்க்கை', 'Case=Gen|Number=Sing'), 'மனம்': ('NOUN', 'மனம்', 'Case=Nom|Number=Sing'), 'மனதில்': ('NOUN', 'மனம்', 'Case=Loc|Number=Sing'), 'மனதை': ('NOUN', 'மனம்', 'Case=Acc|Number=Sing'), 'மனதின்': ('NOUN', 'மனம்', 'Case=Gen|Number=Sing'), 'மனதிற்கு': ('NOUN', 'மனம்', 'Case=Dat|Number=Sing'), 'உடல்': ('NOUN', 'உடல்', 'Case=Nom|Number=Sing'), 'உடலில்': ('NOUN', 'உடல்', 'Case=Loc|Number=Sing'), 'உடலை': ('NOUN', 'உடல்', 'Case=Acc|Number=Sing'), 'உடலின்': ('NOUN', 'உடல்', 'Case=Gen|Number=Sing')}
 
-def _analyze_tamil_word(word: str) -> Tuple[str, str, str, str]:
-    """
-    Returns (pos, tag, lemma, morph_features) for a Tamil word.
-    """
-    if all((c in '.,!?;:|।॥\'"()[]{}<>-–—/\\@#$%&*+=_~^`' for c in word)):
-        return ('PUNCT', 'PUNCT', word, '')
-    if word.isdigit() or re.match('^\\d+[\\d,.]*$', word):
-        return ('NUM', 'NUM', word, 'NumType=Card')
-    if word in TAMIL_PRONOUNS:
-        pos, lemma, morph = TAMIL_PRONOUNS[word]
-        return (pos, pos, lemma, morph)
-    if word in TAMIL_CONJUNCTIONS:
-        return ('CONJ', 'CCONJ', word, '')
-    if word in TAMIL_POSTPOSITIONS:
-        return ('ADP', 'POSTP', word, '')
-    if word in TAMIL_COMMON_NOUNS:
-        pos, lemma, morph = TAMIL_COMMON_NOUNS[word]
-        return (pos, pos, lemma, morph)
-    if word in TAMIL_COMMON_VERBS:
-        pos, lemma, morph = TAMIL_COMMON_VERBS[word]
-        return (pos, pos, lemma, morph)
-    verb_suffixes = [('கொண்டிருக்கிறார்கள்', 'Tense=Pres|Aspect=Prog|Number=Plur|Person=3'), ('கொண்டிருக்கிறார்', 'Tense=Pres|Aspect=Prog|Number=Sing|Person=3|Polite=Yes'), ('கொண்டிருந்தது', 'Tense=Past|Aspect=Prog|Gender=Neut|Number=Sing'), ('கொண்டிருந்தனர்', 'Tense=Past|Aspect=Prog|Number=Plur|Person=3'), ('கின்றார்கள்', 'Tense=Pres|Number=Plur|Person=3'), ('கிறார்கள்', 'Tense=Pres|Number=Plur|Person=3'), ('க்கிறார்கள்', 'Tense=Pres|Number=Plur|Person=3'), ('கின்றார்', 'Tense=Pres|Number=Sing|Person=3|Polite=Yes'), ('கிறார்', 'Tense=Pres|Number=Sing|Person=3|Polite=Yes'), ('க்கிறார்', 'Tense=Pres|Number=Sing|Person=3|Polite=Yes'), ('கின்றது', 'Tense=Pres|Gender=Neut|Number=Sing|Person=3'), ('கிறது', 'Tense=Pres|Gender=Neut|Number=Sing|Person=3'), ('க்கிறது', 'Tense=Pres|Gender=Neut|Number=Sing|Person=3'), ('விட்டார்கள்', 'Tense=Past|Aspect=Perf|Number=Plur|Person=3'), ('விட்டனர்', 'Tense=Past|Aspect=Perf|Number=Plur|Person=3'), ('விட்டார்', 'Tense=Past|Aspect=Perf|Number=Sing|Person=3|Polite=Yes'), ('ட்டார்கள்', 'Tense=Past|Number=Plur|Person=3'), ('ந்தார்கள்', 'Tense=Past|Number=Plur|Person=3'), ('னார்கள்', 'Tense=Past|Number=Plur|Person=3'), ('வார்கள்', 'Tense=Fut|Number=Plur|Person=3'), ('ப்பார்கள்', 'Tense=Fut|Number=Plur|Person=3'), ('த்தார்', 'Tense=Past|Number=Sing|Person=3|Polite=Yes'), ('ந்தார்', 'Tense=Past|Number=Sing|Person=3|Polite=Yes'), ('னார்', 'Tense=Past|Number=Sing|Person=3|Polite=Yes'), ('வார்', 'Tense=Fut|Number=Sing|Person=3|Polite=Yes'), ('ப்பார்', 'Tense=Fut|Number=Sing|Person=3|Polite=Yes'), ('ந்தது', 'Tense=Past|Gender=Neut|Number=Sing'), ('ட்டது', 'Tense=Past|Gender=Neut|Number=Sing'), ('னது', 'Tense=Past|Gender=Neut|Number=Sing'), ('வில்லை', 'Polarity=Neg'), ('க்கப்பட', 'Voice=Pass|VerbForm=Inf'), ('ப்பட்டது', 'Voice=Pass|Tense=Past|Gender=Neut|Number=Sing'), ('பட்டது', 'Voice=Pass|Tense=Past|Gender=Neut|Number=Sing'), ('க்காதீர்கள்', 'Mood=Imp|Polarity=Neg|Number=Plur|Person=2|Polite=Yes'), ('ாதீர்கள்', 'Mood=Imp|Polarity=Neg|Number=Plur|Person=2|Polite=Yes'), ('க்காதீர்', 'Mood=Imp|Polarity=Neg|Number=Sing|Person=2|Polite=Yes'), ('ாதீர்', 'Mood=Imp|Polarity=Neg|Number=Sing|Person=2|Polite=Yes'), ('க்காதே', 'Mood=Imp|Polarity=Neg|Number=Sing|Person=2'), ('ாதே', 'Mood=Imp|Polarity=Neg|Number=Sing|Person=2'), ('க்காமல்', 'VerbForm=Part|Polarity=Neg'), ('ாமல்', 'VerbForm=Part|Polarity=Neg'), ('ப்படுத்தும்', 'Tense=Fut|VerbForm=Part'), ('ப்படுத்துகிறது', 'Tense=Pres|Gender=Neut|Number=Sing|Person=3'), ('ப்படுத்துகிறார்', 'Tense=Pres|Number=Sing|Person=3|Polite=Yes'), ('ப்படுத்துகிறார்கள்', 'Tense=Pres|Number=Plur|Person=3'), ('ப்படுத்தியது', 'Tense=Past|Gender=Neut|Number=Sing'), ('ப்படுத்தினார்', 'Tense=Past|Number=Sing|Person=3|Polite=Yes'), ('ப்படுத்தினர்', 'Tense=Past|Number=Plur|Person=3'), ('ப்படுத்தி', 'VerbForm=Part|Aspect=Perf'), ('ப்படுத்த', 'VerbForm=Inf'), ('ப்படுத்து', 'Mood=Imp|Number=Sing|Person=2'), ('ப்படுத்துங்கள்', 'Mood=Imp|Number=Plur|Person=2|Polite=Yes'), ('மாகும்', 'Tense=Fut|VerbForm=Part'), ('ஆகும்', 'Tense=Fut|VerbForm=Part'), ('மாகிறது', 'Tense=Pres|Gender=Neut|Number=Sing|Person=3'), ('ஆகிறது', 'Tense=Pres|Gender=Neut|Number=Sing|Person=3'), ('மாகி', 'VerbForm=Part|Aspect=Perf'), ('ஆகி', 'VerbForm=Part|Aspect=Perf'), ('ுங்கள்', 'Mood=Imp|Number=Plur|Person=2|Polite=Yes'), ('ுங்', 'Mood=Imp|Number=Plur|Person=2'), ('க்கக்கூடாது', 'Mood=Proh|Polarity=Neg'), ('க்கூடாது', 'Mood=Proh|Polarity=Neg'), ('க்கலாம்', 'Mood=Pot'), ('லாம்', 'Mood=Pot'), ('க்க', 'VerbForm=Inf'), ('க', 'VerbForm=Inf')]
-    for suffix, morph in verb_suffixes:
-        if word.endswith(suffix) and len(word) > len(suffix) + 1:
-            base = word[:-len(suffix)]
-            if base in TAMIL_VERB_ROOTS:
-                base = TAMIL_VERB_ROOTS[base]
-            elif base + 'ு' in TAMIL_VERB_ROOTS:
-                base = TAMIL_VERB_ROOTS[base + 'ு']
-            return ('VERB', 'VERB', base, morph)
-    adj_suffixes = ['ஆன', 'வான', 'மான', 'யான', 'கான', 'இல்லாத', 'உள்ள', 'நல்ல']
-    for s in adj_suffixes:
-        if word.endswith(s) and len(word) > len(s):
-            base = word[:-len(s)]
-            if s == 'மான' and base + 'ம்' in TAMIL_COMMON_NOUNS:
-                base = base + 'ம்'
-            return ('ADJ', 'ADJ', base if len(base) >= 2 else word, '')
-    adv_suffixes = ['யாக', 'வாக', 'றாக', 'ஆகக்', 'மாக', 'காக', 'தாக', 'ஆக', 'மா', 'வா', 'யா']
-    for s in adv_suffixes:
-        if word.endswith(s) and len(word) > len(s):
-            base = word[:-len(s)]
-            if s in ('மாக', 'மா') and base + 'ம்' in TAMIL_COMMON_NOUNS:
-                base = base + 'ம்'
-            elif s in ('வாக', 'வா') and base + 'வு' in TAMIL_COMMON_NOUNS:
-                base = base + 'வு'
-            return ('ADV', 'ADV', base if len(base) >= 2 else word, '')
-    noun_cases = [('களிலிருந்து', 'Case=Abl|Number=Plur'), ('களுக்கு', 'Case=Dat|Number=Plur'), ('களுடன்', 'Case=Com|Number=Plur'), ('களில்', 'Case=Loc|Number=Plur'), ('களை', 'Case=Acc|Number=Plur'), ('களும்', 'Case=Nom|Number=Plur|Definiteness=Def'), ('கள்', 'Case=Nom|Number=Plur'), ('இலிருந்து', 'Case=Abl|Number=Sing'), ('உக்கு', 'Case=Dat|Number=Sing'), ('க்கு', 'Case=Dat|Number=Sing'), ('உடன்', 'Case=Com|Number=Sing'), ('இல்', 'Case=Loc|Number=Sing'), ('இன்', 'Case=Gen|Number=Sing'), ('ஆல்', 'Case=Ins|Number=Sing'), ('ஐ', 'Case=Acc|Number=Sing')]
-    for s, morph in noun_cases:
-        if word.endswith(s) and len(word) > len(s) + 1:
-            lemma = word[:-len(s)]
-            return ('NOUN', 'NOUN', lemma, morph)
-    return ('NOUN', 'NOUN', word, 'Case=Nom|Number=Sing')
-SINHALA_PRONOUNS = {'මම': ('PRON', 'මම', 'Case=Nom|Number=Sing|Person=1'), 'අපි': ('PRON', 'අපි', 'Case=Nom|Number=Plur|Person=1'), 'ඔයා': ('PRON', 'ඔයා', 'Case=Nom|Number=Sing|Person=2'), 'ඔබ': ('PRON', 'ඔබ', 'Case=Nom|Number=Sing|Person=2|Polite=Yes'), 'ඔබලා': ('PRON', 'ඔබ', 'Case=Nom|Number=Plur|Person=2'), 'ඔහු': ('PRON', 'ඔහු', 'Case=Nom|Gender=Masc|Number=Sing|Person=3'), 'ඇය': ('PRON', 'ඇය', 'Case=Nom|Gender=Fem|Number=Sing|Person=3'), 'එයා': ('PRON', 'එයා', 'Case=Nom|Number=Sing|Person=3'), 'එය': ('PRON', 'එය', 'Case=Nom|Gender=Neut|Number=Sing|Person=3'), 'ඔවුන්': ('PRON', 'ඔවුන්', 'Case=Nom|Number=Plur|Person=3'), 'මේ': ('PRON', 'මේ', 'PronType=Dem'), 'මෙය': ('PRON', 'මෙය', 'PronType=Dem|Number=Sing'), 'මේවා': ('PRON', 'මේවා', 'PronType=Dem|Number=Plur'), 'ඒ': ('PRON', 'ඒ', 'PronType=Dem'), 'අර': ('PRON', 'අර', 'PronType=Dem'), 'කවුද': ('PRON', 'කවුද', 'PronType=Int'), 'මොකක්ද': ('PRON', 'මොකක්ද', 'PronType=Int'), 'කුමක්ද': ('PRON', 'කුමක්ද', 'PronType=Int')}
-SINHALA_CONJUNCTIONS = {'සහ', 'හා', 'නමුත්', 'එහෙත්', 'නැතහොත්', 'හෝ', 'එබැවින්', 'එමනිසා', 'නිසා', 'නම්', 'විට', 'පසු', 'මෙන්', 'සේ'}
-SINHALA_POSTPOSITIONS = {'ගැන', 'පිළිබඳ', 'සඳහා', 'වෙනුවෙන්', 'මත', 'තුළ', 'යට', 'අතර', 'ළඟ', 'සමඟ', 'සහිත', 'කෙරෙහි', 'වෙත', 'දක්වා'}
-SINHALA_ADJECTIVES = {'හොඳ', 'නරක', 'ලස්සන', 'අලුත්', 'පරණ', 'ලොකු', 'කුඩා', 'මහත්', 'ප්\u200dරධාන', 'විශේෂ', 'වැදගත්', 'ජාතික', 'ජාත්\u200dයන්තර', 'රාජ්\u200dය', 'පෞද්ගලික', 'නව', 'උසස්', 'දුප්පත්', 'පොහොසත්', 'ශක්තිමත්'}
-SINHALA_ADVERBS = {'ඉක්මනින්', 'හොඳින්', 'සෙමින්', 'නිතරම', 'කවදාවත්', 'පමණක්', 'නැවත', 'දැන්', 'පසුව', 'එතැන', 'මෙතැන', 'ඉතා', 'බොහෝ', 'වඩාත්'}
+try:
+    from services.lemmatizer import (
+        analyze_tamil_word,
+        analyze_sinhala_word,
+        lemmatize_english,
+        refine_english_lemma,
+    )
+except ImportError:
+    from .lemmatizer import (
+        analyze_tamil_word,
+        analyze_sinhala_word,
+        lemmatize_english,
+        refine_english_lemma,
+    )
 
-def _analyze_sinhala_word(word: str) -> Tuple[str, str, str, str]:
-    """
-    Returns (pos, tag, lemma, morph_features) for a Sinhala word.
-    """
-    if all((c in '.,!?;:|।॥\'"()[]{}<>-–—/\\@#$%&*+=_~^`' for c in word)):
-        return ('PUNCT', 'PUNCT', word, '')
-    if word.isdigit() or re.match('^\\d+[\\d,.]*$', word):
-        return ('NUM', 'NUM', word, 'NumType=Card')
-    if word in SINHALA_PRONOUNS:
-        pos, lemma, morph = SINHALA_PRONOUNS[word]
-        return (pos, pos, lemma, morph)
-    if word in SINHALA_CONJUNCTIONS:
-        return ('CONJ', 'CCONJ', word, '')
-    if word in SINHALA_POSTPOSITIONS:
-        return ('ADP', 'POSTP', word, '')
-    if word in SINHALA_ADJECTIVES:
-        return ('ADJ', 'ADJ', word, '')
-    if word in SINHALA_ADVERBS:
-        return ('ADV', 'ADV', word, '')
-    verb_suffixes = [('ගත්තෙමු', 'Tense=Past|Number=Plur|Person=1'), ('ගත්තෙමි', 'Tense=Past|Number=Sing|Person=1'), ('ගත්තා', 'Tense=Past|Aspect=Perf'), ('න්නෙමු', 'Tense=Fut|Number=Plur|Person=1'), ('න්නෙමි', 'Tense=Fut|Number=Sing|Person=1'), ('නවාය', 'Tense=Pres|Mood=Ind'), ('නවා', 'Tense=Pres|Mood=Ind'), ('නෙවා', 'Tense=Pres|Mood=Ind'), ('කළා', 'Tense=Past|Mood=Ind'), ('කරනවා', 'Tense=Pres|Mood=Ind'), ('කරන', 'VerbForm=Part|Tense=Pres'), ('කරලා', 'VerbForm=Part|Aspect=Perf'), ('කරපු', 'VerbForm=Part|Tense=Past'), ('කරමින්', 'VerbForm=Part|Aspect=Prog'), ('ලැබේ', 'Tense=Pres|Voice=Pass'), ('ලැබූ', 'Tense=Past|Voice=Pass'), ('වෙයි', 'Tense=Pres|Mood=Ind'), ('වෙන්න', 'VerbForm=Inf'), ('වූයේය', 'Tense=Past|Person=3'), ('විය', 'Tense=Past|Person=3'), ('යයි', 'Tense=Pres|Person=3'), ('යති', 'Tense=Pres|Number=Plur|Person=3'), ('න්නට', 'VerbForm=Inf'), ('න්න', 'VerbForm=Inf'), ('ති', 'Tense=Pres|Number=Plur|Person=3'), ('තී', 'Tense=Pres|Gender=Fem|Number=Sing|Person=3')]
-    for s, morph in verb_suffixes:
-        if word.endswith(s) and len(word) > len(s) + 1:
-            lemma = word[:-len(s)]
-            return ('VERB', 'VERB', lemma, morph)
-    adj_suffixes = ['සහගත', 'ශීලී', 'පූර්ණ', 'මය', 'කාරී', 'මයවූ']
-    for s in adj_suffixes:
-        if word.endswith(s) and len(word) > len(s):
-            return ('ADJ', 'ADJ', word[:-len(s)], '')
-    adv_suffixes = ['ආකාරයෙන්', 'ලෙස', 'පරිද්දෙන්', 'අයුරින්']
-    for s in adv_suffixes:
-        if word.endswith(s) and len(word) > len(s):
-            return ('ADV', 'ADV', word[:-len(s)], '')
-    noun_cases = [('වල්වලින්', 'Case=Abl|Number=Plur'), ('වල්වලට', 'Case=Dat|Number=Plur'), ('වල්වල', 'Case=Gen|Number=Plur'), ('වල්', 'Number=Plur'), ('යන්ට', 'Case=Dat|Number=Plur'), ('යන්ගේ', 'Case=Gen|Number=Plur'), ('යන්', 'Number=Plur'), ('ගෙන්', 'Case=Abl|Number=Sing'), ('ගේ', 'Case=Gen|Number=Sing'), ('ට', 'Case=Dat|Number=Sing'), ('ගැන', 'Case=Loc|Number=Sing'), ('ක්', 'Definiteness=Indef|Number=Sing'), ('ක', 'Definiteness=Indef|Case=Gen'), ('කු', 'Definiteness=Indef|Gender=Masc')]
-    for s, morph in noun_cases:
-        if word.endswith(s) and len(word) > len(s) + 1:
-            lemma = word[:-len(s)]
-            return ('NOUN', 'NOUN', lemma, morph)
-    return ('NOUN', 'NOUN', word, 'Case=Nom|Number=Sing')
+# Backward compatibility aliases for former internal functions
+_analyze_tamil_word = analyze_tamil_word
+_analyze_sinhala_word = analyze_sinhala_word
+
 
 def tokenize_and_tag(text: str) -> Dict[str, Any]:
     """
@@ -241,52 +158,110 @@ def tokenize_and_tag(text: str) -> Dict[str, Any]:
                     token_texts.append(text_clean)
                     word_freq[text_clean.lower()] += 1
                 pos_counter[pos] += 1
-                lemmas.append(token.lemma_ or text_clean)
-                token_details.append({'token': text_clean, 'text': text_clean, 'normalized': text_clean.lower(), 'lemma': token.lemma_ or text_clean, 'pos': pos, 'tag': token.tag_ or pos, 'morph': str(token.morph) if token.morph else '', 'language': 'en', 'sentence_id': sent_id, 'is_stop': bool(token.is_stop)})
+                lemma = refine_english_lemma(text_clean, token.lemma_, pos)
+                lemmas.append(lemma)
+                token_details.append({
+                    'token': text_clean,
+                    'text': text_clean,
+                    'normalized': text_clean.lower(),
+                    'lemma': lemma,
+                    'pos': pos,
+                    'tag': token.tag_ or pos,
+                    'morph': str(token.morph) if token.morph else '',
+                    'language': 'en',
+                    'sentence_id': sent_id,
+                    'is_stop': bool(token.is_stop),
+                })
         elif sent_lang == 'Tamil':
-            raw_tokens = re.findall('[\\u0B80-\\u0BFF\\u200C\\u200D]+|[a-zA-Z0-9]+|[^\\w\\s]', sent)
+            raw_tokens = re.findall('[\u0B80-\u0BFF\u200C\u200D]+|[a-zA-Z0-9]+|[^\w\s]', sent)
             for raw_tok in raw_tokens:
                 tok = raw_tok.strip()
                 if not tok:
                     continue
-                pos, tag, lemma, morph = _analyze_tamil_word(tok)
+                pos, tag, lemma, morph = analyze_tamil_word(tok)
                 if pos != 'PUNCT':
                     token_texts.append(tok)
                     word_freq[tok] += 1
                 pos_counter[pos] += 1
                 lemmas.append(lemma)
-                token_details.append({'token': tok, 'text': tok, 'normalized': tok, 'lemma': lemma, 'pos': pos, 'tag': tag, 'morph': morph, 'language': 'ta', 'sentence_id': sent_id, 'is_stop': False})
+                token_details.append({
+                    'token': tok,
+                    'text': tok,
+                    'normalized': tok,
+                    'lemma': lemma,
+                    'pos': pos,
+                    'tag': tag,
+                    'morph': morph,
+                    'language': 'ta',
+                    'sentence_id': sent_id,
+                    'is_stop': False,
+                })
         elif sent_lang == 'Sinhala':
-            raw_tokens = re.findall('[\\u0D80-\\u0DFF\\u200C\\u200D]+|[a-zA-Z0-9]+|[^\\w\\s]', sent)
+            raw_tokens = re.findall('[\u0D80-\u0DFF\u200C\u200D]+|[a-zA-Z0-9]+|[^\w\s]', sent)
             for raw_tok in raw_tokens:
                 tok = raw_tok.strip()
                 if not tok:
                     continue
-                pos, tag, lemma, morph = _analyze_sinhala_word(tok)
+                pos, tag, lemma, morph = analyze_sinhala_word(tok)
                 if pos != 'PUNCT':
                     token_texts.append(tok)
                     word_freq[tok] += 1
                 pos_counter[pos] += 1
                 lemmas.append(lemma)
-                token_details.append({'token': tok, 'text': tok, 'normalized': tok, 'lemma': lemma, 'pos': pos, 'tag': tag, 'morph': morph, 'language': 'si', 'sentence_id': sent_id, 'is_stop': False})
+                token_details.append({
+                    'token': tok,
+                    'text': tok,
+                    'normalized': tok,
+                    'lemma': lemma,
+                    'pos': pos,
+                    'tag': tag,
+                    'morph': morph,
+                    'language': 'si',
+                    'sentence_id': sent_id,
+                    'is_stop': False,
+                })
         else:
             raw_tokens = _tokenize_english_regex(sent)
             for raw_tok in raw_tokens:
                 tok = raw_tok.strip()
                 if not tok:
                     continue
-                is_punct = all((c in '.,!?;:|।॥\'"()[]{}<>-–—/\\@#$%&*+=_~^`' for c in tok))
+                is_punct = all(c in '.,!?;:|।॥\'"()[]{}<>-–—/\\@#$%&*+=_~^`' for c in tok)
                 pos = 'PUNCT' if is_punct else 'NUM' if tok.isdigit() else 'NOUN'
+                lemma = tok if is_punct else lemmatize_english(tok, pos)
                 if not is_punct:
                     token_texts.append(tok)
                     word_freq[tok.lower()] += 1
                 pos_counter[pos] += 1
-                lemmas.append(tok)
-                token_details.append({'token': tok, 'text': tok, 'normalized': tok.lower(), 'lemma': tok, 'pos': pos, 'tag': pos, 'morph': '', 'language': 'en', 'sentence_id': sent_id, 'is_stop': False})
+                lemmas.append(lemma)
+                token_details.append({
+                    'token': tok,
+                    'text': tok,
+                    'normalized': tok.lower(),
+                    'lemma': lemma,
+                    'pos': pos,
+                    'tag': pos,
+                    'morph': '',
+                    'language': 'en',
+                    'sentence_id': sent_id,
+                    'is_stop': False,
+                })
     unique_tokens = len({t.lower() for t in token_texts})
     top_words = [[w, count] for w, count in word_freq.most_common(50)]
     top_keywords = [w for w, _ in top_words[:5]]
-    return {'tokens': token_texts, 'token_count': len(token_texts), 'unique_tokens': unique_tokens, 'lemmas': lemmas, 'token_details': token_details[:5000], 'pos_distribution': dict(pos_counter), 'top_words': top_words, 'top_keywords': top_keywords, 'sentences': sentences, 'sentence_count': len(sentences)}
+    return {
+        'tokens': token_texts,
+        'token_count': len(token_texts),
+        'unique_tokens': unique_tokens,
+        'lemmas': lemmas,
+        'token_details': token_details[:5000],
+        'pos_distribution': dict(pos_counter),
+        'top_words': top_words,
+        'top_keywords': top_keywords,
+        'sentences': sentences,
+        'sentence_count': len(sentences),
+    }
+
 def extract_entities(text: str, lang: str = 'English') -> List[Dict[str, Any]]:
     """Named Entity Recognition has been removed from the NLP pipeline."""
     return []
