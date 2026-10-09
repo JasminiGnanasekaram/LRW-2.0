@@ -7,19 +7,8 @@ import {
 import { getDocument, exportDocument, updateDocumentMetadata } from "../api";
 
 const PIE_COLORS = ["#1a3a2a", "#4a7c59", "#8fb89a", "#d4e8d0", "#2d5a3d", "#6aaa80", "#b0d8b8", "#386641"];
-const SENTIMENT_COLORS = { positive: "#22c55e", neutral: "#eab308", negative: "#ef4444" };
-const LANG_COLORS = { English: "#3b82f6", Tamil: "#f97316", Sinhala: "#10b981", Other: "#8b5cf6" };
 
 const NLP_SECTIONS = [
-  {
-    key: "language",
-    label: { English: "Language Detection", Tamil: "மொழி கண்டறிதல்", Sinhala: "භාෂා හඳුනාගැනීම" },
-    desc: {
-      English: "Detects primary and secondary languages, script proportions, and multilingual presence.",
-      Tamil: "முதன்மை மற்றும் இரண்டாம் நிலை மொழிகள், எழுத்து விகிதங்கள் மற்றும் பன்மொழித் தன்மையைக் கண்டறிகிறது.",
-      Sinhala: "ප්‍රාථමික හා ද්විතීයික භාෂා, අක්ෂර අනුපාත සහ බහුභාෂා පැවැත්ම හඳුනා ගනී.",
-    },
-  },
   {
     key: "tokens",
     label: { English: "Tokenization", Tamil: "சொல் பிரித்தல்", Sinhala: "ටෝකනීකරණය" },
@@ -66,24 +55,6 @@ const NLP_SECTIONS = [
     },
   },
   {
-    key: "sentiment",
-    label: { English: "Sentiment Analysis", Tamil: "உணர்வு பகுப்பாய்வு", Sinhala: "හැඟීම් විශ්ලේෂණය" },
-    desc: {
-      English: "Evaluates overall and sentence-by-sentence emotional polarity (Positive, Negative, or Neutral).",
-      Tamil: "முழு ஆவணம் மற்றும் வாக்கிய வாரியான உணர்வு நிலையை (நேர்மறை, எதிர்மறை, நடுநிலை) மதிப்பிடுகிறது.",
-      Sinhala: "සමස්ත සහ එක් එක් වාක්‍ය මට්ටමේ හැඟීම් ස්වභාවය (ධනාත්මක, සෘණාත්මක හෝ මධ්‍යස්ථ) ඇගයීමට ලක් කරයි.",
-    },
-  },
-  {
-    key: "classification",
-    label: { English: "Text Classification", Tamil: "உரை வகைப்பாடு", Sinhala: "පෙළ වර්ගීකරණය" },
-    desc: {
-      English: "Categorizes the text into domain topics (Politics, Sports, Business, Technology, Education, etc.) with probabilities.",
-      Tamil: "உரையை அதன் தலைப்பு அடிப்படையில் (அரசியல், விளையாட்டு, வணிகம், தொழில்நுட்பம், கல்வி) வகைப்படுத்துகிறது.",
-      Sinhala: "අන්තර්ගතය මත පදනම්ව පෙළ ක්ෂේත්‍ර කාණ්ඩවලට (දේශපාලන, ක්‍රීඩා, ව්‍යාපාරික, තාක්ෂණය, අධ්‍යාපනය ආදී) වර්ගීකරණය කරයි.",
-    },
-  },
-  {
     key: "statistics",
     label: { English: "Corpus Statistics", Tamil: "புள்ளிவிவரங்கள்", Sinhala: "සංඛ්‍යාලේඛන" },
     desc: {
@@ -96,9 +67,9 @@ const NLP_SECTIONS = [
     key: "charts",
     label: { English: "Visual Charts", Tamil: "வரைபடங்கள்", Sinhala: "ප්‍රස්ථාර" },
     desc: {
-      English: "Interactive visual distributions for language proportions, sentiment polarity, grammatical POS categories, and topic classification.",
-      Tamil: "மொழி பகிர்வு, உணர்வு நிலை, சொல் வகைகள் மற்றும் வகைப்பாடு ஆகியவற்றின் ஊடாடும் வரைபடங்கள்.",
-      Sinhala: "භාෂා බෙදාහැරීම, හැඟීම්, පද වර්ග සහ වර්ගීකරණය පිළිබඳ අන්තර්ක්‍රියාකාරී ප්‍රස්ථාර.",
+      English: "Interactive visual distributions for grammatical POS categories.",
+      Tamil: "சொல் வகைகளின் ஊடாடும் வரைபடங்கள்.",
+      Sinhala: "පද වර්ග පිළිබඳ අන්තර්ක්‍රියාකාරී ප්‍රස්ථාර.",
     },
   },
 ];
@@ -229,13 +200,6 @@ const getPosDesc = (tag, lang) => {
   return lang === "Tamil" ? info.desc_ta : lang === "Sinhala" ? info.desc_si : info.desc_en;
 };
 
-const sentimentBg = (value) => {
-  const raw = String(value || "").toLowerCase();
-  if (raw.includes("pos") || raw.includes("நேர்மறை") || raw.includes("ධනාත්මක")) return "#dcfce7";
-  if (raw.includes("neg") || raw.includes("எதிர்மறை") || raw.includes("සෘණාත්මක")) return "#fee2e2";
-  return "#fef9c3";
-};
-
 const translateMorph = (morph, lang) => {
   if (!morph) return "";
   const labels = MORPH_LABELS[lang] || MORPH_LABELS.English;
@@ -340,64 +304,6 @@ function ChartCard({ title, children }) {
       <div style={{ width: "100%", height: 240 }}>
         <ResponsiveContainer>{children}</ResponsiveContainer>
       </div>
-    </div>
-  );
-}
-
-function LanguageSection({ nlp, tr, desc }) {
-  const langDet = nlp.language_detection || {};
-  const stats = nlp.statistics || {};
-  const detected = langDet.languages_detected || [];
-  const colorFor = (name, i) => LANG_COLORS[name] || PIE_COLORS[i % PIE_COLORS.length];
-
-  return (
-    <div>
-      <SectionDesc desc={desc} />
-      <div style={{ marginBottom: 20, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <span style={{
-          background: "var(--mint)", color: "var(--forest)",
-          borderRadius: 8, padding: "10px 20px", fontSize: 16, fontWeight: 700,
-        }}>
-          {nlp.language_display || nlp.language}
-        </span>
-        {langDet.is_multilingual && (
-          <span className="badge" style={{ background: "#e0f2fe", color: "#0369a1", fontWeight: 600 }}>
-            {tr("Multilingual Document", "பன்மொழி ஆவணம்", "බහුභාෂා ලේඛනය")}
-          </span>
-        )}
-      </div>
-
-      {detected.length > 0 && (
-        <div style={{ marginBottom: 24 }}>
-          <div style={{ fontSize: 12, color: "var(--ink-lt)", marginBottom: 8, fontWeight: 600 }}>
-            {tr("Language Distribution", "மொழி விகிதங்கள்", "භාෂා අනුපාතය")}
-          </div>
-          <div style={{ height: 12, display: "flex", borderRadius: 99, overflow: "hidden", background: "#e2e8f0" }}>
-            {detected.map((l, i) => (
-              <div
-                key={l.language}
-                title={`${l.language}: ${l.percentage}%`}
-                style={{ width: `${l.percentage}%`, background: colorFor(l.language, i) }}
-              />
-            ))}
-          </div>
-          <div style={{ display: "flex", gap: 16, marginTop: 10, flexWrap: "wrap" }}>
-            {detected.map((l, i) => (
-              <span key={l.language} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12 }}>
-                <span style={{ width: 8, height: 8, borderRadius: "50%", background: colorFor(l.language, i) }} />
-                <strong>{l.language}</strong> ({l.percentage}%)
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <StatGrid min={130}>
-        <StatTile centered label={tr("Tokens", "சொற்கள்", "ටෝකන්")} value={nlp.token_count?.toLocaleString()} />
-        <StatTile centered label={tr("Unique", "தனித்துவமானவை", "අනන්‍ය")} value={nlp.unique_tokens?.toLocaleString()} />
-        <StatTile centered label={tr("Sentences", "வாக்கியங்கள்", "වාක්‍ය")} value={nlp.sentence_count} />
-        <StatTile centered label={tr("Characters", "எழுத்துக்கள்", "අක්ෂර")} value={stats.characters?.toLocaleString()} />
-      </StatGrid>
     </div>
   );
 }
@@ -651,100 +557,6 @@ function MorphSection({ nlp, lang, tr, desc }) {
   );
 }
 
-function SentimentSection({ nlp, tr, desc }) {
-  const sentiment = nlp.sentiment || {};
-  const sentences = sentiment.sentences || [];
-  const confidence = sentiment.confidence ?? sentiment.score ?? 0.5;
-
-  return (
-    <div>
-      <SectionDesc desc={desc} />
-      <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap", marginBottom: 24 }}>
-        <span style={{
-          background: sentimentBg(sentiment.label_en || sentiment.label),
-          borderRadius: 8, padding: "12px 24px", fontSize: 18, fontWeight: 700, color: "var(--ink)",
-        }}>
-          {sentiment.label || "Neutral"}
-        </span>
-        <div>
-          <div style={{ fontSize: 12, color: "var(--ink-lt)", marginBottom: 4 }}>
-            {tr("Confidence", "நம்பிக்கை அளவு", "විශ්වාසනීයත්වය")}
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <ProgressBar percent={Math.round(confidence * 100)} width={140} />
-            <span style={{ fontSize: 14, fontWeight: 700, color: "var(--forest)" }}>
-              {(confidence * 100).toFixed(1)}%
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {sentences.length > 0 && (
-        <div>
-          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: "var(--ink)" }}>
-            {tr("Sentence-by-Sentence Sentiment", "வாக்கிய வாரியான உணர்வு", "වාක්‍ය මට්ටමේ හැඟීම්")}
-          </div>
-          <ScrollTable
-            headers={[
-              { label: tr("Sentence", "வாக்கியம்", "වාක්‍යය") },
-              { label: tr("Lang", "மொழி", "භාෂාව"), width: 90 },
-              { label: tr("Sentiment", "உணர்வு", "හැඟීම"), width: 100 },
-              { label: tr("Score", "மதிப்பெண்", "ලකුණ"), width: 80 },
-            ]}
-            rows={sentences.map((s) => [
-              s.sentence,
-              <span className="badge" style={{ fontSize: 11 }}>{s.language}</span>,
-              <span style={{
-                display: "inline-block", padding: "2px 8px", borderRadius: 4,
-                background: sentimentBg(s.sentiment), fontSize: 12, fontWeight: 600,
-              }}>
-                {s.sentiment}
-              </span>,
-              <strong>{Math.round((s.confidence ?? s.score ?? 0) * 100)}%</strong>,
-            ])}
-          />
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ClassificationSection({ nlp, tr, desc }) {
-  const classif = nlp.classification || {};
-
-  return (
-    <div>
-      <SectionDesc desc={desc} />
-      <div style={{ marginBottom: 20 }}>
-        <div style={{ fontSize: 12, color: "var(--ink-lt)", marginBottom: 4 }}>
-          {tr("Top Predicted Category", "கணிக்கப்பட்ட முதன்மை வகை", "පුරෝකථනය කළ ප්‍රධාන ක්ෂේත්‍රය")}
-        </div>
-        <span style={{
-          display: "inline-block", background: "var(--mint)", border: "1.5px solid var(--forest)",
-          borderRadius: 8, padding: "8px 18px", fontSize: 16, fontWeight: 700, color: "var(--forest)",
-        }}>
-          {classif.predicted_label || classif.predicted_category || "General"}
-        </span>
-      </div>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 10, maxWidth: 480 }}>
-        {(classif.all || []).map((c, i) => {
-          const percent = (c.score || 0) * 100;
-          return (
-            <div key={c.label_en || i} style={{ background: "var(--bg-lt)", borderRadius: 6, padding: "8px 12px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 4 }}>
-                <span style={{ fontWeight: i === 0 ? 700 : 500 }}>{c.label || c.label_en}</span>
-                <span style={{ fontWeight: 600, color: "var(--forest)" }}>{percent.toFixed(1)}%</span>
-              </div>
-              <ProgressBar percent={percent} height={6} color={i === 0 ? "var(--forest)" : "#94a3b8"} />
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 function StatisticsSection({ nlp, tr, desc }) {
   const stats = nlp.statistics || {};
   const tiles = [
@@ -769,17 +581,6 @@ function StatisticsSection({ nlp, tr, desc }) {
 }
 
 function ChartsSection({ nlp, lang, tr, desc }) {
-  const langChartData = (nlp.language_detection?.languages_detected || []).map((l) => ({
-    name: l.language,
-    value: l.percentage,
-  }));
-
-  const sentimentChartData = Object.entries(nlp.sentiment?.distribution || {}).map(([key, value]) => ({
-    name: key.charAt(0).toUpperCase() + key.slice(1),
-    value,
-    color: SENTIMENT_COLORS[key.toLowerCase()] || "#94a3b8",
-  }));
-
   const posChartData = Object.entries(nlp.pos_distribution || {})
     .map(([pos, count]) => ({
       name: getPosLabel(pos, lang),
@@ -789,37 +590,12 @@ function ChartsSection({ nlp, lang, tr, desc }) {
     .sort((a, b) => b.count - a.count)
     .slice(0, 8);
 
-  const classifChartData = (nlp.classification?.all || []).slice(0, 6).map((c) => ({
-    category: c.label || c.label_en,
-    score: Math.round((c.score || 0) * 100),
-  }));
-
   const pieLabel = (entry) => `${entry.name} (${entry.value}%)`;
 
   return (
     <div>
       <SectionDesc desc={desc} />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20 }}>
-        <ChartCard title={tr("Language Breakdown", "மொழிப் பகிர்வு", "භාෂා බෙදාහැරීම")}>
-          <PieChart>
-            <Pie data={langChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={pieLabel}>
-              {langChartData.map((entry, i) => (
-                <Cell key={entry.name} fill={LANG_COLORS[entry.name] || PIE_COLORS[i % PIE_COLORS.length]} />
-              ))}
-            </Pie>
-            <Tooltip /><Legend />
-          </PieChart>
-        </ChartCard>
-
-        <ChartCard title={tr("Sentiment Distribution", "உணர்வு விகிதங்கள்", "හැඟීම් අනුපාතය")}>
-          <PieChart>
-            <Pie data={sentimentChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} label={pieLabel}>
-              {sentimentChartData.map((entry) => <Cell key={entry.name} fill={entry.color} />)}
-            </Pie>
-            <Tooltip /><Legend />
-          </PieChart>
-        </ChartCard>
-
         <ChartCard title={tr("Part-of-Speech Distribution", "சொல் வகைப் பகிர்வு (POS)", "පද වර්ග බෙදාහැරීම (POS)")}>
           <BarChart data={posChartData}>
             <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={0} angle={-15} textAnchor="end" height={45} />
@@ -828,35 +604,23 @@ function ChartsSection({ nlp, lang, tr, desc }) {
             <Bar dataKey="count" fill="var(--forest)" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ChartCard>
-
-        <ChartCard title={tr("Classification Probabilities (%)", "உரை வகைப்பாடு நிகழ்தகவு", "වර්ගීකරණ සම්භාවිතාව")}>
-          <BarChart data={classifChartData} layout="vertical" margin={{ left: 20 }}>
-            <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11 }} />
-            <YAxis type="category" dataKey="category" tick={{ fontSize: 11 }} width={90} />
-            <Tooltip />
-            <Bar dataKey="score" fill="#4a7c59" radius={[0, 4, 4, 0]} />
-          </BarChart>
-        </ChartCard>
       </div>
     </div>
   );
 }
 
 const SECTION_COMPONENTS = {
-  language: LanguageSection,
   tokens: TokensSection,
   sentences: SentencesSection,
   pos: PosSection,
   lemma: LemmaSection,
   morph: MorphSection,
-  sentiment: SentimentSection,
-  classification: ClassificationSection,
   statistics: StatisticsSection,
   charts: ChartsSection,
 };
 
 function NlpTab({ nlp, lang, tr }) {
-  const [sectionKey, setSectionKey] = useState("language");
+  const [sectionKey, setSectionKey] = useState("tokens");
   const section = NLP_SECTIONS.find((s) => s.key === sectionKey);
   const Section = SECTION_COMPONENTS[sectionKey];
 
