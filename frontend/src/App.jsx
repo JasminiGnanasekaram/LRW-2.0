@@ -241,7 +241,7 @@ function formatRole(role) {
 
 function ProtectedRoute({ children, role }) {
   const user = currentUser();
-  if (!user) return <Navigate to="/home" replace />;
+  if (!user) return <Navigate to="/login" replace />;
   if (role && user.role !== role) return <Navigate to="/" replace />;
   return children;
 }

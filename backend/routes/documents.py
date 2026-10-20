@@ -70,10 +70,14 @@ async def _doc_out(raw, cleaned=None, meta=None, analysis=None):
         "pdf_type":     raw.get("pdf_type"),
         "raw_text":     raw_text,
         "cleaned_text": cleaned.get("text") if cleaned else None,
-        "metadata":     meta.get("data") if meta else None,
-        "nlp":          analysis.get("data") if analysis else None,
-        "summary":      summary,
-        "created_at":   raw.get("created_at"),
+        "metadata":      meta.get("data") if meta else None,
+        "nlp":           analysis.get("data") if analysis else None,
+        "summary":       summary,
+        "crawled_pages": raw.get("crawled_pages") or [],
+        "total_available_pages": raw.get("total_available_pages"),
+        "created_at":    raw.get("created_at"),
+        "is_crawled_subpage": bool(raw.get("is_crawled_subpage")),
+        "parent_document_id": str(raw.get("parent_document_id")) if raw.get("parent_document_id") else None,
     }
 
 
@@ -84,6 +88,7 @@ async def upload(
     file_type: str = Form(...),   # text | pdf | image | audio | url
     url: Optional[str] = Form(None),
     metadata: Optional[str] = Form(None),  # JSON string
+    summary: Optional[str] = Form(None),
     user: dict = Depends(get_current_user),
 ):
     """Upload a document or URL. Runs extraction + cleaning + NLP synchronously."""
@@ -231,16 +236,16 @@ async def upload(
     }
     await nlp_analysis_col.insert_one(analysis_doc)
 
-    # 7. Generate Summary
-    summary = ""
-    try:
-        from fastapi.concurrency import run_in_threadpool
-        from .summarize import summarize
-        summary = await run_in_threadpool(summarize, cleaned_text[:5000])
-    except Exception as e:
-        import logging
-        logging.getLogger("uvicorn.error").warning(f"Failed to generate summary during upload: {e}")
-        summary = ""
+    # 7. Generate Summary if not provided from upload preview
+    if not summary:
+        try:
+            from fastapi.concurrency import run_in_threadpool
+            from .summarize import summarize
+            summary = await run_in_threadpool(summarize, cleaned_text[:5000])
+        except Exception as e:
+            import logging
+            logging.getLogger("uvicorn.error").warning(f"Failed to generate summary during upload: {e}")
+            summary = ""
 
     await raw_documents_col.update_one(
         {"_id": raw_res.inserted_id},
@@ -255,7 +260,10 @@ async def upload(
 @router.get("/")
 async def list_documents(user: dict = Depends(get_current_user), limit: int = 50):
     cursor = raw_documents_col.find(
-        {"user_id": ObjectId(user["id"])}
+        {
+            "user_id": ObjectId(user["id"]),
+            "is_crawled_subpage": {"$ne": True},
+        }
     ).sort("created_at", -1).limit(limit)
 
     out = []

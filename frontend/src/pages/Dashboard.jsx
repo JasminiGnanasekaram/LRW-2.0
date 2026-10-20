@@ -39,6 +39,8 @@ export default function Dashboard() {
     }
   };
 
+  const displayDocs = docs.filter((d) => !d.is_crawled_subpage && !d.metadata?.is_crawled_subpage);
+
   return (
     <div className="page">
       <div
@@ -55,7 +57,7 @@ export default function Dashboard() {
           <h1 className="page-title">Your Documents</h1>
           {!loading && (
             <p className="page-subtitle">
-              {docs.length} document{docs.length !== 1 ? "s" : ""} in your corpus
+              {displayDocs.length} document{displayDocs.length !== 1 ? "s" : ""} in your corpus
             </p>
           )}
         </div>
@@ -75,7 +77,7 @@ export default function Dashboard() {
         {loading && <p className="muted" style={{ padding: "24px 0" }}>Loading…</p>}
         {error && <div className="alert-error">{error}</div>}
 
-        {!loading && docs.length === 0 && (
+        {!loading && displayDocs.length === 0 && (
           <div className="empty-state">
             <div className="empty-state-icon">📄</div>
             <div className="empty-state-title">No documents yet</div>
@@ -86,7 +88,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        {docs.length > 0 && (
+        {displayDocs.length > 0 && (
           <div className="table-wrap">
             <table>
               <thead>
@@ -99,7 +101,7 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                {docs.map((d) => (
+                {displayDocs.map((d) => (
                   <tr key={d.id}>
                     <td style={{ fontWeight: 500 }}>{d.filename}</td>
                     <td><span className="badge">{d.file_type}</span></td>

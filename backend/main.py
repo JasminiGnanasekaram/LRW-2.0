@@ -7,7 +7,7 @@ import os
 from config import get_settings
 from database import init_indexes
 # 1. Add summarize to imports
-from routes import auth, documents, search, admin, jobs, summarize 
+from routes import auth, documents, search, admin, jobs, summarize, crawl
 
 settings = get_settings()
 
@@ -66,7 +66,7 @@ app.include_router(admin.router)
 app.include_router(jobs.router)
 # 2. Register the summarize router
 app.include_router(summarize.router) 
-
+app.include_router(crawl.router)
 
 @app.get("/")
 async def root():

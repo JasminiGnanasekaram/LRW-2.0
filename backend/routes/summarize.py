@@ -13,7 +13,7 @@ from services.summarizer import get_text_summary
 router = APIRouter(prefix="/summarize", tags=["summarize"])
 settings = get_settings()
 
-MODEL = "llama-3.3-70b-versatile"
+MODEL = "qwen/qwen3.8-27b"
 
 
 def get_groq_client():
@@ -92,7 +92,10 @@ def summarize(text: str) -> str:
             max_tokens=250 if lang != "English" else 80,
             temperature=0.3,
         )
-        return response.choices[0].message.content
+        result = (response.choices[0].message.content or "").strip()
+        if result:
+            return result
+        return get_text_summary(text)
     except Exception as e:
         # Fallback to local extractive summary if Groq fails or API key is not configured
         print(f"[Summarize] Groq AI failed ({e}), using extractive summarizer fallback.", flush=True)
@@ -103,7 +106,7 @@ def summarize_image_b64(b64: str) -> str:
     try:
         client = get_groq_client()
         response = client.chat.completions.create(
-            model="llama-3.2-11b-vision-preview",
+            model="openai/gpt-oss-120b",
             messages=[
                 {
                     "role": "system",

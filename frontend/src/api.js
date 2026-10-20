@@ -93,12 +93,13 @@ export async function uploadAvatar(file) {
   return data.user;
 }
 
-export function uploadDocument({ file, fileType, url, metadata }) {
+export function uploadDocument({ file, fileType, url, metadata, summary }) {
   const form = new FormData();
   form.append("file_type", fileType);
   if (file) form.append("file", file);
   if (url) form.append("url", url);
   if (metadata) form.append("metadata", JSON.stringify(metadata));
+  if (summary) form.append("summary", summary);
   return unwrap(api.post("/documents/upload", form));
 }
 
@@ -146,4 +147,8 @@ export const adminListUsers = () => unwrap(api.get("/admin/users"));
 export const adminUpdateUser = (id, patch) => unwrap(api.patch(`/admin/users/${id}`, patch));
 export const adminDeleteUser = (id) => unwrap(api.delete(`/admin/users/${id}`));
 
-export const getJob = (id) => unwrap(api.get(`/jobs/${id}`));
+export const crawlWebsite = (url, max_pages = 10, document_id = null) =>
+  unwrap(api.post("/crawl", { url, max_pages, document_id }));
+
+export const discoverPages = (url, document_id = null) =>
+  unwrap(api.get("/crawl/discover", { params: { url, document_id } }));

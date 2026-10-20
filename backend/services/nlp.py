@@ -173,7 +173,7 @@ def tokenize_and_tag(text: str) -> Dict[str, Any]:
                     'is_stop': bool(token.is_stop),
                 })
         elif sent_lang == 'Tamil':
-            raw_tokens = re.findall('[\u0B80-\u0BFF\u200C\u200D]+|[a-zA-Z0-9]+|[^\w\s]', sent)
+            raw_tokens = re.findall(r'[\u0B80-\u0BFF\u200C\u200D]+|[a-zA-Z0-9]+|[^\w\s]', sent)
             for raw_tok in raw_tokens:
                 tok = raw_tok.strip()
                 if not tok:
@@ -197,7 +197,7 @@ def tokenize_and_tag(text: str) -> Dict[str, Any]:
                     'is_stop': False,
                 })
         elif sent_lang == 'Sinhala':
-            raw_tokens = re.findall('[\u0D80-\u0DFF\u200C\u200D]+|[a-zA-Z0-9]+|[^\w\s]', sent)
+            raw_tokens = re.findall(r'[\u0D80-\u0DFF\u200C\u200D]+|[a-zA-Z0-9]+|[^\w\s]', sent)
             for raw_tok in raw_tokens:
                 tok = raw_tok.strip()
                 if not tok:

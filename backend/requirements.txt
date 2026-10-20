@@ -16,6 +16,9 @@ bcrypt>=4.2.0
 pdfplumber>=0.11.0
 Pillow>=11.0.0
 pytesseract>=0.3.13
+# Audio Speech-to-Text
+faster-whisper>=1.0.3
+av>=11,<19
 beautifulsoup4>=4.12.3
 requests>=2.32.0
 

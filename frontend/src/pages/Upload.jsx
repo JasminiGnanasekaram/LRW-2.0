@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { uploadDocument, api } from "../api";
 
@@ -161,25 +161,51 @@ export default function Upload() {
     setSummaryLoading(true);
     setSummary("");
 
-    const formData = new FormData();
-    if (type === "url") formData.append("url", selectedUrl);
-    else formData.append("file", selectedFile);
-
     try {
-      const { data } = await api.post(`/summarize/${type}`, formData);
-      if (requestId === summaryRequestRef.current) setSummary(data.summary);
-    } catch {
+      let response;
+      if (type === "url") {
+        const targetUrl = (selectedUrl || url || "").trim();
+        if (!targetUrl) return;
+        const formData = new FormData();
+        formData.append("url", targetUrl);
+        response = await api.post(`/summarize/url`, formData);
+      } else {
+        if (!selectedFile && !file) return;
+        const formData = new FormData();
+        formData.append("file", selectedFile || file);
+        response = await api.post(`/summarize/${type}`, formData);
+      }
       if (requestId === summaryRequestRef.current) {
-        setSummary("Could not generate summary. Please try again.");
+        setSummary(response.data.summary || "No summary generated.");
+      }
+    } catch (err) {
+      if (requestId === summaryRequestRef.current) {
+        const detail = err.response?.data?.detail;
+        setSummary(detail || "Could not generate summary. Please try again.");
       }
     } finally {
       if (requestId === summaryRequestRef.current) setSummaryLoading(false);
     }
   };
 
+  // Automatically trigger summary generation when a valid URL is typed or pasted
+  useEffect(() => {
+    if (fileType !== "url") return;
+    const trimmed = url.trim();
+    if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) return;
+    if (trimmed.length < 10) return;
+
+    const timer = setTimeout(() => {
+      fetchSummary("url", { url: trimmed });
+    }, 600);
+
+    return () => clearTimeout(timer);
+  }, [url, fileType]);
+
   const selectType = (value) => {
     setFileType(value);
     setFile(null);
+    setUrl("");
     clearSummary();
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
@@ -218,7 +244,13 @@ export default function Upload() {
         fileType,
         url: fileType === "url" ? url.trim() : undefined,
         metadata: meta,
+        summary: summary || undefined,
       });
+      // Ensure clean state for the new URL document
+      try {
+        sessionStorage.removeItem("lrw_crawler_last_results");
+        sessionStorage.removeItem("lrw_crawler_last_status");
+      } catch {}
       navigate(`/documents/${result.id}`);
     } catch (err) {
       setError(err.response?.data?.detail || err.message || "Upload failed. Please try again.");
@@ -258,21 +290,35 @@ export default function Upload() {
           <div style={{ marginTop: 20 }}>
             {fileType === "url" ? (
               <Field id="upload-url" label="URL">
-                <input
-                  id="upload-url"
-                  type="url"
-                  value={url}
-                  placeholder="https://example.com/article"
-                  required
-                  onChange={(e) => {
-                    setUrl(e.target.value);
-                    clearSummary();
-                  }}
-                  onBlur={(e) => {
-                    const value = e.target.value.trim();
-                    if (value) fetchSummary("url", { url: value });
-                  }}
-                />
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <input
+                    id="upload-url"
+                    type="url"
+                    value={url}
+                    placeholder="https://example.com/article"
+                    required
+                    style={{ flex: 1 }}
+                    onChange={(e) => {
+                      setUrl(e.target.value);
+                    }}
+                    onBlur={(e) => {
+                      const value = e.target.value.trim();
+                      if (value && !summary && !summaryLoading) fetchSummary("url", { url: value });
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    disabled={!url.trim() || summaryLoading}
+                    onClick={() => {
+                      const value = url.trim();
+                      if (value) fetchSummary("url", { url: value });
+                    }}
+                    style={{ whiteSpace: "nowrap", padding: "8px 14px", height: "100%" }}
+                  >
+                    {summaryLoading ? "Summarizing…" : "⚡ Summarize"}
+                  </button>
+                </div>
               </Field>
             ) : (
               <Field id="upload-file" label="File">
