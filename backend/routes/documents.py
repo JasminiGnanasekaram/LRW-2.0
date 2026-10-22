@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, UploadFile, File, Form, Body, HTTPException
 from fastapi.responses import JSONResponse, PlainTextResponse
 from datetime import datetime
+from collections import Counter
 from bson import ObjectId
 import json
 import re
@@ -366,6 +367,111 @@ async def update_document_metadata(
         await document_metadata_col.insert_one(meta_doc)
 
     return {"detail": "Metadata updated successfully", "metadata": metadata_update}
+
+
+# ── Update document NLP data ──────────────────────────────────────────
+@router.patch("/{doc_id}/nlp")
+async def update_document_nlp(
+    doc_id: str,
+    nlp_update: dict = Body(...),
+    user: dict = Depends(get_current_user),
+):
+    """Update NLP analysis data for a document, supporting per-token or batch word edits."""
+    try:
+        raw = await raw_documents_col.find_one({"_id": ObjectId(doc_id)})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid document ID")
+
+    if not raw:
+        raise HTTPException(status_code=404, detail="Not found")
+    if str(raw["user_id"]) != user["id"] and user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    cleaned = await cleaned_documents_col.find_one({"raw_document_id": raw["_id"]})
+    if not cleaned:
+        raise HTTPException(status_code=404, detail="Cleaned document not found")
+
+    analysis = await nlp_analysis_col.find_one({"cleaned_document_id": cleaned["_id"]})
+    current_data = analysis.get("data") if analysis else {}
+    if not isinstance(current_data, dict):
+        current_data = {}
+
+    # Targeted token / word update
+    if "token_index" in nlp_update or "word" in nlp_update:
+        token_details = list(current_data.get("token_details") or [])
+        token_index = nlp_update.get("token_index")
+        word = nlp_update.get("word")
+        new_pos = nlp_update.get("pos")
+        new_lemma = nlp_update.get("lemma")
+        new_morph = nlp_update.get("morph")
+        apply_all = bool(nlp_update.get("apply_all", False))
+
+        target_word = word.strip().lower() if word else ""
+        updated_count = 0
+
+        for idx, tk in enumerate(token_details):
+            if not isinstance(tk, dict):
+                continue
+            tk_text = (tk.get("token") or tk.get("text") or "").strip().lower()
+            match = False
+
+            if apply_all and target_word:
+                if tk_text == target_word:
+                    match = True
+            elif token_index is not None and idx == token_index:
+                match = True
+            elif not apply_all and target_word and tk_text == target_word and updated_count == 0:
+                match = True
+
+            if match:
+                if new_pos is not None:
+                    tk["pos"] = new_pos
+                    tk["tag"] = new_pos
+                if new_lemma is not None:
+                    tk["lemma"] = new_lemma
+                if new_morph is not None:
+                    tk["morph"] = new_morph
+                updated_count += 1
+                if not apply_all:
+                    break
+
+        current_data["token_details"] = token_details
+
+        # Recompute pos_distribution
+        pos_counter = Counter()
+        for tk in token_details:
+            if isinstance(tk, dict):
+                p = tk.get("pos")
+                if p:
+                    pos_counter[p] += 1
+        current_data["pos_distribution"] = dict(pos_counter)
+
+        # Recompute lemmas
+        current_data["lemmas"] = [
+            tk.get("lemma") for tk in token_details if isinstance(tk, dict) and tk.get("lemma")
+        ]
+
+    elif "nlp" in nlp_update and isinstance(nlp_update["nlp"], dict):
+        current_data.update(nlp_update["nlp"])
+    else:
+        current_data.update(nlp_update)
+
+    if analysis:
+        await nlp_analysis_col.update_one(
+            {"_id": analysis["_id"]},
+            {"$set": {"data": current_data, "updated_at": datetime.utcnow()}},
+        )
+    else:
+        res = await nlp_analysis_col.insert_one({
+            "cleaned_document_id": cleaned["_id"],
+            "data": current_data,
+            "created_at": datetime.utcnow(),
+        })
+
+    return {
+        "detail": "NLP analysis updated successfully",
+        "nlp": current_data,
+    }
 
 
 # ── Delete document ───────────────────────────────────────────────────

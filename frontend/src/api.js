@@ -106,6 +106,7 @@ export const listDocuments = () => unwrap(api.get("/documents/"));
 export const getDocument = (id) => unwrap(api.get(`/documents/${id}`));
 export const deleteDocument = (id) => unwrap(api.delete(`/documents/${id}`));
 export const updateDocumentMetadata = (id, metadata) => unwrap(api.patch(`/documents/${id}/metadata`, metadata));
+export const updateDocumentNlp = (id, nlpUpdate) => unwrap(api.patch(`/documents/${id}/nlp`, nlpUpdate));
 
 function saveBlob(blob, filename) {
   const objectUrl = URL.createObjectURL(blob);

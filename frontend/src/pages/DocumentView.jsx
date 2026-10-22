@@ -4,7 +4,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
 } from "recharts";
-import { getDocument, exportDocument, updateDocumentMetadata } from "../api";
+import { getDocument, exportDocument, updateDocumentMetadata, updateDocumentNlp } from "../api";
 
 const PIE_COLORS = ["#1a3a2a", "#4a7c59", "#8fb89a", "#d4e8d0", "#2d5a3d", "#6aaa80", "#b0d8b8", "#386641"];
 
@@ -14,7 +14,7 @@ const NLP_SECTIONS = [
     label: { English: "Tokenization", Tamil: "சொல் பிரித்தல்", Sinhala: "ටෝකනීකරණය" },
     desc: {
       English: "Segments the text into individual normalized word tokens.",
-      Tamil: "உரையை சீராக்கப்பட்ட தனித்தனி சொற்களாகப் பிரிக்கிறது.",
+      Tamil: "சொல் பிரித்தல் என்பது ஒரு தொடரில் அல்லது வாக்கியத்தில் உள்ள சொற்களை அவற்றின் பொருள் மாறாமலும், இலக்கண முறைப்படியும் தனித்தனிச் சொற்களாகப் பிரிப்பதைக் குறிக்கும்.",
       Sinhala: "පෙළ ප්‍රමිතිගත තනි වචන ටෝකන බවට වෙන් කරයි.",
     },
   },
@@ -23,7 +23,7 @@ const NLP_SECTIONS = [
     label: { English: "Sentences", Tamil: "வாக்கியங்கள்", Sinhala: "වාක්‍ය" },
     desc: {
       English: "Multilingual sentence segmentation handling punctuation, abbreviations, and decimal numbers.",
-      Tamil: "நிறுத்தற்குறிகள், சுருக்கங்கள் மற்றும் தசம எண்களைப் பாதுகாத்து வாக்கியங்களைப் பிரிக்கிறது.",
+      Tamil: "வாக்கியம் என்பது இலக்கண விதிகளுக்குட்பட்டு ஒன்றுக்கு மேற்பட்ட சொற்கள் இணைந்து முழுமையான பொருளைத் தருவதாகும்.",
       Sinhala: "විරාම ලකුණු, කෙටි යෙදුම් සහ දශම සංඛ්‍යා නිවැරදිව කළමනාකරණය කරමින් වාක්‍ය වෙන් කරයි.",
     },
   },
@@ -41,7 +41,7 @@ const NLP_SECTIONS = [
     label: { English: "Lemmatization", Tamil: "வேர்ச்சொல்", Sinhala: "ලේමටීකරණය" },
     desc: {
       English: "Reduces inflected words to their base dictionary roots across English, Tamil, and Sinhala.",
-      Tamil: "வார்த்தைகளை அவற்றின் அடிப்படை வேர்ச்சொல் வடிவத்திற்கு மாற்றுகிறது.",
+      Tamil: "வேர்ச்சொல் என்பது ஒரு மொழியில் மேலும் பிரிக்க இயலாத, பிற சொற்கள் உருவாகக் காரணமாக அமையும் அடிப்படையான மூலச்சொல் ஆகும்.",
       Sinhala: "වචනවල අර්ථය වෙනස් නොකර ඒවායේ මූලික ශබ්දකෝෂ ස්වරූපයට අඩු කරයි.",
     },
   },
@@ -50,7 +50,7 @@ const NLP_SECTIONS = [
     label: { English: "Morphological Analysis", Tamil: "உருபியல் பகுப்பாய்வு", Sinhala: "රූප විද්‍යාත්මක විශ්ලේෂණය" },
     desc: {
       English: "Extracts grammatical features including grammatical Case, Number, Tense, and Person.",
-      Tamil: "வேற்றுமை, எண், காலம் மற்றும் நபர் போன்ற உருபியல் கூறுகளை பகுப்பாய்வு செய்கிறது.",
+      Tamil: "உருபியல் பகுப்பாய்வு என்பது சொற்களின் கட்டமைப்பு, அவற்றின் தோற்றம் மற்றும் அவை எவ்வாறு உருவாகின்றன என்பதைப் பற்றி ஆராயும் ஒரு பகுப்பாய்வு முறை ஆகும்.",
       Sinhala: "විභක්ති, වචන, කාලය සහ පුරුෂ වැනි රූපවිද්‍යාත්මක ලක්ෂණ විග්‍රහ කරයි.",
     },
   },
@@ -68,7 +68,7 @@ const NLP_SECTIONS = [
     label: { English: "Visual Charts", Tamil: "வரைபடங்கள்", Sinhala: "ප්‍රස්ථාර" },
     desc: {
       English: "Interactive visual distributions for grammatical POS categories.",
-      Tamil: "சொல் வகைகளின் ஊடாடும் வரைபடங்கள்.",
+      Tamil: "வரைபடங்கள் என்பது தரவுப் புள்ளிகள் மற்றும் அவற்றுக்கு இடையேயான தொடர்புகளை காட்டும் ஒரு கட்டமைப்பாகும்.",
       Sinhala: "පද වර්ග පිළිබඳ අන්තර්ක්‍රියාකාරී ප්‍රස්ථාර.",
     },
   },
@@ -141,6 +141,72 @@ const MORPH_LABELS = {
     "Polarity=Neg": "සෘණාත්මක",
   },
 };
+
+const COMMON_MORPH_FEATURES = [
+  {
+    category: "Case",
+    name: { English: "Grammatical Case", Tamil: "வேற்றுமை", Sinhala: "විභක්තිය" },
+    items: [
+      { key: "Case=Nom", label: "Nom (Nominative / எழுவாய்)" },
+      { key: "Case=Acc", label: "Acc (Accusative / 2-ம் வேற்றுமை)" },
+      { key: "Case=Dat", label: "Dat (Dative / 4-ம் வேற்றுமை)" },
+      { key: "Case=Gen", label: "Gen (Genitive / 6-ம் வேற்றுமை)" },
+      { key: "Case=Loc", label: "Loc (Locative / 7-ம் வேற்றுமை)" },
+      { key: "Case=Ins", label: "Ins (Instrumental / 3-ம் வேற்றுமை)" },
+      { key: "Case=Abl", label: "Abl (Ablative / 5-ம் வேற்றுமை)" },
+      { key: "Case=Com", label: "Com (Comitative / உடன்)" },
+      { key: "Case=Ben", label: "Ben (Benefactive / பொருட்டு)" },
+    ],
+  },
+  {
+    category: "Number",
+    name: { English: "Number", Tamil: "எண்", Sinhala: "වචන" },
+    items: [
+      { key: "Number=Sing", label: "Singular (ஒருமை / ඒකවචන)" },
+      { key: "Number=Plur", label: "Plural (பன்மை / බහුවචන)" },
+    ],
+  },
+  {
+    category: "Gender",
+    name: { English: "Gender", Tamil: "பால்", Sinhala: "ලිංගය" },
+    items: [
+      { key: "Gender=Masc", label: "Masculine (ஆண்பால் / පුරුෂ)" },
+      { key: "Gender=Fem", label: "Feminine (பெண்பால் / ස්ත්‍රී)" },
+      { key: "Gender=Neut", label: "Neuter (ஒன்றன்பால் / නපුංසක)" },
+    ],
+  },
+  {
+    category: "Tense",
+    name: { English: "Tense", Tamil: "காலம்", Sinhala: "කාලය" },
+    items: [
+      { key: "Tense=Past", label: "Past (இறந்தகாலம் / අතීත)" },
+      { key: "Tense=Pres", label: "Present (நிகழ்காலம் / වර්තමාන)" },
+      { key: "Tense=Fut", label: "Future (எதிர்காலம் / අනාගත)" },
+    ],
+  },
+  {
+    category: "Person",
+    name: { English: "Person", Tamil: "இடம்", Sinhala: "පුරුෂ" },
+    items: [
+      { key: "Person=1", label: "1st Person (தன்மை / උත්තම)" },
+      { key: "Person=2", label: "2nd Person (முன்னிலை / මධ්‍යම)" },
+      { key: "Person=3", label: "3rd Person (படர்க்கை / ප්‍රථම)" },
+    ],
+  },
+  {
+    category: "Verb Form & Voice",
+    name: { English: "Verb Form & Voice", Tamil: "வினை வடிவம்", Sinhala: "ක්‍රියා ස්වරූපය" },
+    items: [
+      { key: "VerbForm=Fin", label: "Finite (முற்றுவினை)" },
+      { key: "VerbForm=Inf", label: "Infinitive (தொழிற்பெயர்)" },
+      { key: "VerbForm=Part", label: "Participle (வினையெச்சம்)" },
+      { key: "Voice=Act", label: "Active (செய்வினை)" },
+      { key: "Voice=Pass", label: "Passive (செயப்பாட்டுவினை)" },
+      { key: "Polarity=Neg", label: "Negative (எதிர்மறை)" },
+      { key: "Polite=Yes", label: "Polite (மரியாதை)" },
+    ],
+  },
+];
 
 const METADATA_FIELDS = [
   { key: "source", label: ["Source", "மூலம் (Source)", "මූලාශ්‍රය (Source)"], required: true, placeholder: "e.g. Daily News, Wikipedia, Research Paper" },
@@ -232,7 +298,11 @@ function SectionDesc({ desc }) {
       padding: "12px 16px", marginBottom: 20, fontSize: 13, color: "var(--ink-lt)",
       lineHeight: 1.6, display: "flex", alignItems: "flex-start", gap: 10,
     }}>
-      <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>ℹ️</span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 2 }}>
+        <circle cx="12" cy="12" r="10" />
+        <line x1="12" y1="16" x2="12" y2="12" />
+        <line x1="12" y1="8" x2="12.01" y2="8" />
+      </svg>
       {desc}
     </div>
   );
@@ -308,15 +378,457 @@ function ChartCard({ title, children }) {
   );
 }
 
-function TokensSection({ nlp, tr, desc }) {
-  const rows = (nlp.token_details || []).slice(0, 250).map((tk) => [
-    <strong>{tokenText(tk)}</strong>,
-  ]);
+function EditTokenModal({
+  isOpen,
+  token,
+  tokenIndex,
+  initialTab = "pos",
+  lang,
+  tr,
+  totalOccurrences = 1,
+  onSave,
+  onClose,
+}) {
+  if (!isOpen || !token) return null;
+
+  const [activeTab, setActiveTab] = useState(initialTab);
+  const [pos, setPos] = useState(token.pos || "X");
+  const [lemma, setLemma] = useState(token.lemma || tokenText(token));
+  const [morph, setMorph] = useState(token.morph || "");
+  const [applyAll, setApplyAll] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    setActiveTab(initialTab);
+    setPos(token.pos || "X");
+    setLemma(token.lemma || tokenText(token));
+    setMorph(token.morph || "");
+    setApplyAll(true);
+    setError(null);
+  }, [token, initialTab]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      await onSave({
+        token_index: tokenIndex,
+        word: tokenText(token),
+        pos,
+        lemma,
+        morph,
+        apply_all: applyAll,
+      });
+      onClose();
+    } catch (err) {
+      setError(
+        getErrorMessage(
+          err,
+          tr("Failed to update token.", "சொல்லைப் புதுப்பிப்பதில் தோல்வி.", "ටෝකනය යාවත්කාලීන කිරීම අසාර්ථක විය.")
+        )
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleMorphFeature = (feature) => {
+    const existing = morph ? morph.split("|").filter(Boolean) : [];
+    const prefix = feature.split("=")[0] + "=";
+    let updated;
+    if (existing.includes(feature)) {
+      updated = existing.filter((f) => f !== feature);
+    } else {
+      updated = existing.filter((f) => !f.startsWith(prefix));
+      updated.push(feature);
+    }
+    setMorph(updated.join("|"));
+  };
+
+  const word = tokenText(token);
+  const posInfo = getPosInfo(pos);
+  const activeMorphs = new Set(morph ? morph.split("|").filter(Boolean) : []);
+
+  return (
+    <div style={{
+      position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+      background: "rgba(15, 23, 42, 0.65)", backdropFilter: "blur(4px)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      zIndex: 9999, padding: 16,
+    }}>
+      <div style={{
+        background: "var(--paper, #ffffff)", borderRadius: 12,
+        width: "100%", maxWidth: 640, maxHeight: "90vh",
+        display: "flex", flexDirection: "column",
+        boxShadow: "0 20px 25px -5px rgba(0,0,0,0.2), 0 8px 10px -6px rgba(0,0,0,0.1)",
+        border: "1px solid var(--border)", overflow: "hidden",
+      }}>
+        {/* Header */}
+        <div style={{
+          padding: "16px 20px", borderBottom: "1px solid var(--border)",
+          background: "var(--bg-lt)", display: "flex", justifyContent: "space-between", alignItems: "center",
+        }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 17, fontWeight: 700, color: "var(--ink)" }}>
+                {tr("Edit NLP Annotation", "NLP தரவைத் திருத்து", "NLP විවරණය සංස්කරණය")}
+              </span>
+              <span className="badge" style={{ background: "var(--mint)", color: "var(--forest)", fontWeight: 700, fontSize: 13 }}>
+                {word}
+              </span>
+            </div>
+            <div style={{ fontSize: 12, color: "var(--ink-lt)", marginTop: 4 }}>
+              {tr("Index", "குறியீட்டு எண்", "දර්ශකය")}: #{tokenIndex + 1}
+              {token.language && ` • ${tr("Lang", "மொழி", "භාෂාව")}: ${token.language.toUpperCase()}`}
+              {totalOccurrences > 1 && ` • ${totalOccurrences} ${tr("occurrences in document", "முறை ஆவணத்தில் உள்ளது", "වාර ගණනක් ලේඛනයේ ඇත")}`}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              background: "none", border: "none", fontSize: 20,
+              cursor: "pointer", color: "var(--ink-lt)", padding: "4px 8px",
+            }}
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Tab Switcher */}
+        <div style={{
+          display: "flex", borderBottom: "1px solid var(--border)", background: "var(--bg-lt)", padding: "0 16px",
+        }}>
+          {[
+            { key: "pos", label: tr("Part-of-Speech", "சொல் வகை (POS)", "පද වර්ගය (POS)") },
+            { key: "lemma", label: tr("Lemmatization", "வேர்ச்சொல் (Lemma)", "ලේමටීකරණය") },
+            { key: "morph", label: tr("Morphology", "உருபியல் (Morphology)", "රූපවිද්‍යාව") },
+          ].map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setActiveTab(t.key)}
+              style={{
+                padding: "10px 16px", border: "none", background: "none",
+                cursor: "pointer", fontSize: 13,
+                fontWeight: activeTab === t.key ? 700 : 500,
+                color: activeTab === t.key ? "var(--forest)" : "var(--ink-lt)",
+                borderBottom: activeTab === t.key ? "3px solid var(--forest)" : "3px solid transparent",
+              }}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Form Body */}
+        <form onSubmit={handleSubmit} style={{ overflowY: "auto", padding: "20px", flex: 1 }}>
+          {error && (
+            <div className="alert-error" style={{ marginBottom: 16 }}>{error}</div>
+          )}
+
+          {/* POS Tab */}
+          {activeTab === "pos" && (
+            <div>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 700, marginBottom: 8, color: "var(--ink)" }}>
+                {tr("Select Part-of-Speech Tag:", "இலக்கண வகையைத் தேர்ந்தெடுக்கவும்:", "පද වර්ග ටැගය තෝරන්න:")}
+              </label>
+
+              <div style={{
+                display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))",
+                gap: 8, maxHeight: 210, overflowY: "auto", padding: 2, marginBottom: 14,
+              }}>
+                {Object.keys(POS_INFO).map((tag) => {
+                  const info = POS_INFO[tag];
+                  const isSelected = pos === tag;
+                  return (
+                    <button
+                      type="button"
+                      key={tag}
+                      onClick={() => setPos(tag)}
+                      title={getPosDesc(tag, lang)}
+                      style={{
+                        padding: "8px 10px", borderRadius: 8, textAlign: "left", cursor: "pointer",
+                        border: isSelected ? `2px solid ${info.color}` : "1px solid var(--border)",
+                        background: isSelected ? info.bg : "var(--paper)",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: info.color }}>{tag}</span>
+                        {isSelected && <span style={{ color: info.color, fontSize: 12, fontWeight: 700 }}>✓</span>}
+                      </div>
+                      <div style={{ fontSize: 11, color: "var(--ink)", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {getPosLabel(tag, lang)}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* POS Preview Card */}
+              <div style={{
+                background: posInfo.bg, border: `1px solid ${posInfo.border}`,
+                borderRadius: 8, padding: "10px 14px", display: "flex", alignItems: "center", gap: 10,
+              }}>
+                <span style={{
+                  fontSize: 13, fontWeight: 700, color: posInfo.color,
+                  padding: "2px 8px", background: "#fff", borderRadius: 4, border: `1px solid ${posInfo.border}`,
+                }}>
+                  {pos}
+                </span>
+                <div>
+                  <strong style={{ fontSize: 13, color: posInfo.color }}>{getPosLabel(pos, lang)}</strong>
+                  <div style={{ fontSize: 11, color: "var(--ink-lt)", marginTop: 2 }}>{getPosDesc(pos, lang)}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Lemma Tab */}
+          {activeTab === "lemma" && (
+            <div>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 700, marginBottom: 8, color: "var(--ink)" }}>
+                {tr("Base Dictionary Form (Lemma):", "வேர்ச்சொல் வடிவம் (Lemma):", "මූලික ශබ්දකෝෂ ස්වරූපය (Lemma):")}
+              </label>
+              <input
+                type="text"
+                className="form-input"
+                value={lemma}
+                onChange={(e) => setLemma(e.target.value)}
+                placeholder="e.g. root/base word"
+                style={{ ...inputStyle, fontSize: 14, fontWeight: 600, marginBottom: 10 }}
+              />
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+                <button
+                  type="button"
+                  onClick={() => setLemma(word)}
+                  style={{
+                    background: "none", border: "1px solid var(--border)", borderRadius: 6,
+                    padding: "4px 10px", fontSize: 12, cursor: "pointer", color: "var(--ink)",
+                  }}
+                >
+                  {tr("Same as Word", "அசல் சொல்", "මුල් වචනය")} ({word})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLemma(word.toLowerCase())}
+                  style={{
+                    background: "none", border: "1px solid var(--border)", borderRadius: 6,
+                    padding: "4px 10px", fontSize: 12, cursor: "pointer", color: "var(--ink)",
+                  }}
+                >
+                  {tr("Lowercase", "சிறிய எழுத்து", "කුඩා අකුරු")} ({word.toLowerCase()})
+                </button>
+              </div>
+              <div style={{
+                background: "var(--bg-lt)", border: "1px solid var(--border)", borderRadius: 8,
+                padding: "10px 14px", fontSize: 12, color: "var(--ink-lt)", lineHeight: 1.5,
+              }}>
+                {tr(
+                  "Lemmatization normalizes words to their canonical dictionary root (e.g. 'marangal' → 'maram', 'walking' → 'walk').",
+                  "வேர்ச்சொல் என்பது ஒரு சொல்லின் அடிப்படை அகராதி வடிவமாகும் (எ.கா. 'மரங்கள்' → 'மரம்', 'நடந்தான்' → 'நட').",
+                  "ලේමටීකරණය මඟින් වචනයක ප්‍රභේද එහි මූලික ශබ්දකෝෂ ස්වරූපයට අඩු කරයි."
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Morphology Tab */}
+          {activeTab === "morph" && (
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <label style={{ fontSize: 12, fontWeight: 700, color: "var(--ink)" }}>
+                  {tr("Morphological Features:", "உருபியல் கூறுகள்:", "රූපවිද්‍යාත්මක ලක්ෂණ:")}
+                </label>
+                {morph && (
+                  <button
+                    type="button"
+                    onClick={() => setMorph("")}
+                    style={{ background: "none", border: "none", color: "var(--danger)", fontSize: 11, cursor: "pointer" }}
+                  >
+                    {tr("Clear All", "அனைத்தையும் நீக்கு", "සියල්ල ඉවත් කරන්න")}
+                  </button>
+                )}
+              </div>
+
+              <input
+                type="text"
+                className="form-input"
+                value={morph}
+                onChange={(e) => setMorph(e.target.value)}
+                placeholder="e.g. Case=Nom|Number=Sing|Tense=Past"
+                style={{ ...inputStyle, fontSize: 13, marginBottom: 10, fontFamily: "monospace" }}
+              />
+
+              {/* Translation preview */}
+              {morph && (
+                <div style={{
+                  marginBottom: 14, padding: "8px 12px", background: "#f0fdf4",
+                  borderRadius: 6, border: "1px solid #bbf7d0", fontSize: 12, color: "#166534",
+                }}>
+                  <strong>{tr("Interpreted:", "விளக்கம்:", "අර්ථය:")} </strong>
+                  {translateMorph(morph, lang) || morph}
+                </div>
+              )}
+
+              {/* Quick toggle chips */}
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--ink-lt)", marginBottom: 6 }}>
+                {tr("Quick Pick Features:", "விரைவு தேர்வு:", "ඉක්මන් තේරීම්:")}
+              </div>
+              <div style={{ maxHeight: 180, overflowY: "auto", border: "1px solid var(--border)", borderRadius: 8, padding: 8 }}>
+                {COMMON_MORPH_FEATURES.map((grp) => (
+                  <div key={grp.category} style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: "var(--forest)", marginBottom: 4 }}>
+                      {pick(grp.name, lang)}
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                      {grp.items.map((item) => {
+                        const active = activeMorphs.has(item.key);
+                        return (
+                          <button
+                            key={item.key}
+                            type="button"
+                            onClick={() => toggleMorphFeature(item.key)}
+                            style={{
+                              padding: "3px 8px", borderRadius: 4, fontSize: 11, cursor: "pointer",
+                              border: active ? "1px solid var(--forest)" : "1px solid var(--border)",
+                              background: active ? "var(--forest)" : "var(--paper)",
+                              color: active ? "#ffffff" : "var(--ink)",
+                              fontWeight: active ? 600 : 400,
+                              transition: "all 0.15s ease",
+                            }}
+                          >
+                            {active ? "✓ " : "+ "}{item.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Scope selection */}
+          <div style={{
+            marginTop: 18, paddingTop: 14, borderTop: "1px solid var(--border)",
+            background: "var(--bg-lt)", padding: "12px 14px", borderRadius: 8,
+          }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink)", marginBottom: 8 }}>
+              {tr("Update Scope:", "புதுப்பிக்கும் பரப்பு:", "යාවත්කාලීන කිරීමේ විෂය පථය:")}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 13 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                <input
+                  type="radio"
+                  name="scope"
+                  checked={applyAll}
+                  onChange={() => setApplyAll(true)}
+                />
+                <span>
+                  {tr(
+                    `Apply to all occurrences of "${word}" in document (${totalOccurrences || 1} occurrences)`,
+                    `ஆவணத்தில் உள்ள அனைத்து "${word}" சொற்களுக்கும் பொருத்துக (${totalOccurrences || 1} முறை)`,
+                    `ලේඛනයේ ඇති සියලුම "${word}" සඳහා යොදන්න (${totalOccurrences || 1} වාරයක්)`
+                  )}
+                </span>
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                <input
+                  type="radio"
+                  name="scope"
+                  checked={!applyAll}
+                  onChange={() => setApplyAll(false)}
+                />
+                <span>
+                  {tr(
+                    `Apply to this token instance only (Token #${tokenIndex + 1})`,
+                    `இந்த ஒரு சொல்லுக்கு மட்டும் பொருத்துக (சொல் #${tokenIndex + 1})`,
+                    `මෙම ටෝකනයට පමණක් යොදන්න (ටෝකනය #${tokenIndex + 1})`
+                  )}
+                </span>
+              </label>
+            </div>
+          </div>
+
+          {/* Footer Buttons */}
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 20 }}>
+            <button type="button" className="btn btn-ghost" onClick={onClose} disabled={saving}>
+              {tr("Cancel", "ரத்துசெய்", "අවලංගු කරන්න")}
+            </button>
+            <button type="submit" className="btn btn-primary" disabled={saving}>
+              {saving
+                ? tr("Saving...", "சேமிக்கிறது...", "සුරකිමින් පවතී...")
+                : tr("Save NLP Changes", "மாற்றங்களைச் சேமி", "වෙනස්කම් සුරකින්න")}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function TokensSection({ nlp, tr, desc, onEditToken }) {
+  const [query, setQuery] = useState("");
+  const needle = query.trim().toLowerCase();
+
+  const allTokens = (nlp.token_details || []).map((tk, idx) => ({ ...tk, __index: idx }));
+  const filtered = allTokens.filter((tk) => !needle || tokenText(tk).toLowerCase().includes(needle));
+
+  const rows = filtered.slice(0, 200).map((tk) => {
+    const info = getPosInfo(tk.pos);
+    return [
+      <strong>{tokenText(tk)}</strong>,
+      <span style={{
+        display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 6px", borderRadius: 4,
+        background: info.bg, color: info.color, border: `1px solid ${info.border}`, fontSize: 11, fontWeight: 600,
+      }}>
+        {tk.pos || "X"}
+      </span>,
+      <span style={{ color: "var(--forest)", fontWeight: 500, fontSize: 12 }}>{tk.lemma || tokenText(tk)}</span>,
+      <button
+        type="button"
+        onClick={() => onEditToken && onEditToken(tk, tk.__index, "pos")}
+        className="btn btn-ghost btn-sm"
+        style={{
+          padding: "3px 8px", fontSize: 11, display: "inline-flex",
+          alignItems: "center", gap: 4, borderRadius: 6,
+          border: "1px solid var(--border)", color: "var(--forest)", cursor: "pointer",
+        }}
+      >
+        {tr("Edit", "திருத்து", "සංස්කරණය")}
+      </button>,
+    ];
+  });
+
   return (
     <div>
       <SectionDesc desc={desc} />
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 10 }}>
+        <div style={{ fontSize: 13, color: "var(--ink-lt)" }}>
+          {tr("Showing", "காட்டப்படுகிறது", "පෙන්වන්නේ")}: <strong>{Math.min(filtered.length, 200)}</strong> / {allTokens.length}
+        </div>
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={tr("Search token...", "சொல்லைத் தேடுங்கள்...", "ටෝකනය සොයන්න...")}
+          style={{
+            padding: "6px 12px", borderRadius: 6, border: "1px solid var(--border)",
+            fontSize: 12, background: "var(--paper)", color: "var(--ink)", width: 200,
+          }}
+        />
+      </div>
       <ScrollTable
-        headers={[{ label: tr("Token", "சொல்", "ටෝකනය") }]}
+        headers={[
+          { label: tr("Token", "சொல்", "ටෝකනය") },
+          { label: tr("POS", "இலக்கணம் (POS)", "පද වර්ගය"), width: 110 },
+          { label: tr("Base (Lemma)", "வேர்ச்சொல்", "මූල ස්වරූපය"), width: 140 },
+          { label: tr("Action", "செயல்", "ක්‍රියාව"), width: 85 },
+        ]}
         rows={rows}
         emptyText={tr("No tokens found.", "சொற்கள் எதுவும் இல்லை.", "ටෝකන හමු නොවීය.")}
       />
@@ -344,7 +856,7 @@ function SentencesSection({ nlp, desc }) {
   );
 }
 
-function PosSection({ nlp, lang, tr, desc }) {
+function PosSection({ nlp, lang, tr, desc, onEditToken }) {
   const [filter, setFilter] = useState(null);
   const [query, setQuery] = useState("");
 
@@ -352,7 +864,9 @@ function PosSection({ nlp, lang, tr, desc }) {
   const total = distribution.reduce((sum, [, count]) => sum + (typeof count === "number" ? count : 0), 0) || 1;
   const needle = query.trim().toLowerCase();
 
-  const tokens = (nlp.token_details || []).filter((tk) => {
+  const allTokens = (nlp.token_details || []).map((tk, idx) => ({ ...tk, __index: idx }));
+
+  const tokens = allTokens.filter((tk) => {
     const pos = (tk.pos || "").toUpperCase();
     if (filter && pos !== filter.toUpperCase()) return false;
     return !needle || tokenText(tk).toLowerCase().includes(needle) || pos.toLowerCase().includes(needle);
@@ -369,6 +883,18 @@ function PosSection({ nlp, lang, tr, desc }) {
         <span>{getPosLabel(tk.pos, lang)}</span>
         <span style={{ opacity: 0.7, fontSize: 10, fontWeight: 700 }}>({tk.pos})</span>
       </span>,
+      <button
+        type="button"
+        onClick={() => onEditToken && onEditToken(tk, tk.__index, "pos")}
+        className="btn btn-ghost btn-sm"
+        style={{
+          padding: "3px 8px", fontSize: 11, display: "inline-flex",
+          alignItems: "center", gap: 4, borderRadius: 6,
+          border: "1px solid var(--border)", color: "var(--forest)", cursor: "pointer",
+        }}
+      >
+        {tr("Edit POS", "POS திருத்து", "POS සංස්කරණය")}
+      </button>,
     ];
   });
 
@@ -463,22 +989,28 @@ function PosSection({ nlp, lang, tr, desc }) {
               </button>
             )}
           </div>
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={tr("Search word or POS...", "சொல்லைத் தேடுங்கள்...", "වචනයක් සොයන්න...")}
-            style={{
-              padding: "6px 12px", borderRadius: 6, border: "1px solid var(--border)",
-              fontSize: 12, background: "var(--paper)", color: "var(--ink)", width: 220,
-            }}
-          />
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 12, color: "var(--ink-lt)" }}>
+              {tokens.length} {tr("tokens", "சொற்கள்", "ටෝකන")}
+            </span>
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={tr("Search word or POS...", "சொல்லைத் தேடுங்கள்...", "වචනයක් සොයන්න...")}
+              style={{
+                padding: "6px 12px", borderRadius: 6, border: "1px solid var(--border)",
+                fontSize: 12, background: "var(--paper)", color: "var(--ink)", width: 220,
+              }}
+            />
+          </div>
         </div>
 
         <ScrollTable
           headers={[
             { label: tr("Token", "சொல்", "වචනය (ටෝකනය)") },
-            { label: tr("Part-of-Speech", "இலக்கண வகை (POS)", "පද වර්ගය (POS)"), width: 220 },
+            { label: tr("Part-of-Speech", "இலக்கண வகை (POS)", "පද වර්ගය (POS)") },
+            { label: tr("Action", "செயல்", "ක්‍රියාව"), width: 110 },
           ]}
           rows={rows}
           emptyText={tr("No matching tokens found.", "பொருந்தும் சொற்கள் எதுவும் இல்லை.", "ගැලපෙන වචන හමු නොවීය.")}
@@ -488,67 +1020,239 @@ function PosSection({ nlp, lang, tr, desc }) {
   );
 }
 
-function LemmaSection({ nlp, tr, desc }) {
-  const seen = new Set();
-  const pairs = [];
-  for (const tk of nlp.token_details || []) {
+function LemmaSection({ nlp, lang, tr, desc, onEditToken }) {
+  const [query, setQuery] = useState("");
+  const [filterMode, setFilterMode] = useState("modified"); // 'modified' | 'all'
+
+  const allTokens = (nlp.token_details || []).map((tk, idx) => ({ ...tk, __index: idx }));
+  const needle = query.trim().toLowerCase();
+
+  const lemmaChanged = allTokens.filter((tk) => {
     const text = tokenText(tk);
-    if (!tk.lemma || text.toLowerCase() === tk.lemma.toLowerCase()) continue;
-    const key = `${text}→${tk.lemma}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    pairs.push(tk);
-    if (pairs.length >= 100) break;
-  }
+    return tk.lemma && text && tk.lemma.toLowerCase() !== text.toLowerCase();
+  });
+
+  const tokens = allTokens.filter((tk) => {
+    const text = tokenText(tk);
+    const lemma = tk.lemma || text;
+    if (filterMode === "modified" && (!tk.lemma || text.toLowerCase() === tk.lemma.toLowerCase())) {
+      return false;
+    }
+    return !needle || text.toLowerCase().includes(needle) || lemma.toLowerCase().includes(needle);
+  });
+
+  const rows = tokens.slice(0, 200).map((tk) => {
+    const text = tokenText(tk);
+    const isModified = tk.lemma && text.toLowerCase() !== tk.lemma.toLowerCase();
+    return [
+      <strong>{text}</strong>,
+      <span style={{ color: "var(--ink-lt)" }}>→</span>,
+      <span style={{ color: isModified ? "var(--forest)" : "var(--ink)", fontWeight: 600 }}>
+        {tk.lemma || text}
+      </span>,
+      <span className="badge" style={{ fontSize: 11 }}>{tk.language || "en"}</span>,
+      <button
+        type="button"
+        onClick={() => onEditToken && onEditToken(tk, tk.__index, "lemma")}
+        className="btn btn-ghost btn-sm"
+        style={{
+          padding: "3px 8px", fontSize: 11, display: "inline-flex",
+          alignItems: "center", gap: 4, borderRadius: 6,
+          border: "1px solid var(--border)", color: "var(--forest)", cursor: "pointer",
+        }}
+      >
+        {tr("Edit Lemma", "வேர்ச்சொல் திருத்து", "මූල පදය සංස්කරණය")}
+      </button>,
+    ];
+  });
 
   return (
     <div>
       <SectionDesc desc={desc} />
-      {pairs.length > 0 ? (
-        <ScrollTable
-          numbered={false}
-          headers={[
-            { label: tr("Original", "அசல் சொல்", "මුල් වචනය") },
-            { label: "", width: 32 },
-            { label: tr("Base Form (Lemma)", "வேர்ச்சொல்", "මූල ස්වරූපය") },
-            { label: tr("Language", "மொழி", "භාෂාව"), width: 80 },
-          ]}
-          rows={pairs.map((tk) => [
-            <strong>{tokenText(tk)}</strong>,
-            <span style={{ color: "var(--ink-lt)" }}>→</span>,
-            <span style={{ color: "var(--forest)", fontWeight: 600 }}>{tk.lemma}</span>,
-            <span className="badge" style={{ fontSize: 11 }}>{tk.language || "en"}</span>,
-          ])}
+
+      <div style={{
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+        flexWrap: "wrap", gap: 10, marginBottom: 16,
+        background: "var(--bg-lt)", padding: "10px 16px", borderRadius: 8, border: "1px solid var(--border)",
+      }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button
+            type="button"
+            onClick={() => setFilterMode("modified")}
+            style={{
+              padding: "5px 12px", borderRadius: 20, fontSize: 12, cursor: "pointer",
+              border: filterMode === "modified" ? "1px solid var(--forest)" : "1px solid var(--border)",
+              background: filterMode === "modified" ? "var(--forest)" : "var(--paper)",
+              color: filterMode === "modified" ? "#fff" : "var(--ink)",
+              fontWeight: filterMode === "modified" ? 700 : 500,
+            }}
+          >
+            {tr("Reduced to Base Form", "வேர்ச்சொல்லாக மாற்றப்பட்டவை", "මූල ස්වරූපයට අඩු කළ")} ({lemmaChanged.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterMode("all")}
+            style={{
+              padding: "5px 12px", borderRadius: 20, fontSize: 12, cursor: "pointer",
+              border: filterMode === "all" ? "1px solid var(--forest)" : "1px solid var(--border)",
+              background: filterMode === "all" ? "var(--forest)" : "var(--paper)",
+              color: filterMode === "all" ? "#fff" : "var(--ink)",
+              fontWeight: filterMode === "all" ? 700 : 500,
+            }}
+          >
+            {tr("All Tokens", "அனைத்து சொற்களும்", "සියලු ටෝකන")} ({allTokens.length})
+          </button>
+        </div>
+
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={tr("Search word or lemma...", "சொல்லைத் தேடுங்கள்...", "වචනයක් සොයන්න...")}
+          style={{
+            padding: "6px 12px", borderRadius: 6, border: "1px solid var(--border)",
+            fontSize: 12, background: "var(--paper)", color: "var(--ink)", width: 220,
+          }}
         />
-      ) : (
-        <p className="muted" style={{ fontSize: 13 }}>
-          {tr(
-            "All words are already in base form.",
-            "அனைத்து வார்த்தைகளும் ஏற்கனவே அவற்றின் வேர்ச்சொல் வடிவத்தில் உள்ளன.",
-            "සියලු වචන දැනටමත් මූල ස්වරූපයේ ඇත."
-          )}
-        </p>
-      )}
+      </div>
+
+      <ScrollTable
+        numbered={true}
+        headers={[
+          { label: tr("Original", "அசல் சொல்", "මුල් වචනය") },
+          { label: "", width: 32 },
+          { label: tr("Base Form (Lemma)", "வேர்ச்சொல்", "මූල ස්වරූපය") },
+          { label: tr("Language", "மொழி", "භාෂාව"), width: 80 },
+          { label: tr("Action", "செயல்", "ක්‍රියාව"), width: 110 },
+        ]}
+        rows={rows}
+        emptyText={tr("No lemmatized words found.", "பொருந்தும் வேர்ச்சொற்கள் எதுவும் இல்லை.", "ගැලපෙන මූල පද හමු නොවීය.")}
+      />
     </div>
   );
 }
 
-function MorphSection({ nlp, lang, tr, desc }) {
-  const rows = (nlp.token_details || [])
-    .filter((tk) => tk.morph)
-    .slice(0, 50)
-    .map((tk) => [
+function MorphSection({ nlp, lang, tr, desc, onEditToken }) {
+  const [query, setQuery] = useState("");
+  const [filterMode, setFilterMode] = useState("has_morph"); // 'has_morph' | 'all'
+
+  const allTokens = (nlp.token_details || []).map((tk, idx) => ({ ...tk, __index: idx }));
+  const needle = query.trim().toLowerCase();
+
+  const tokensWithMorph = allTokens.filter((tk) => Boolean(tk.morph && tk.morph.trim()));
+
+  const filtered = allTokens.filter((tk) => {
+    if (filterMode === "has_morph" && (!tk.morph || !tk.morph.trim())) return false;
+    if (!needle) return true;
+    const text = tokenText(tk).toLowerCase();
+    const morphStr = (tk.morph || "").toLowerCase();
+    const translated = translateMorph(tk.morph, lang).toLowerCase();
+    return text.includes(needle) || morphStr.includes(needle) || translated.includes(needle);
+  });
+
+  const rows = filtered.slice(0, 200).map((tk) => {
+    const hasMorph = Boolean(tk.morph && tk.morph.trim());
+    return [
       <strong>{tokenText(tk)}</strong>,
-      <span style={{ fontSize: 12 }}>{translateMorph(tk.morph, lang)}</span>,
-    ]);
+      hasMorph ? (
+        <div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 3 }}>
+            {tk.morph.split("|").filter(Boolean).map((feat) => {
+              const translated = (MORPH_LABELS[lang] || MORPH_LABELS.English)[feat] || feat;
+              return (
+                <span
+                  key={feat}
+                  className="badge"
+                  style={{
+                    fontSize: 11, padding: "2px 6px",
+                    background: "#ecfdf5", color: "#065f46", border: "1px solid #a7f3d0",
+                  }}
+                  title={feat}
+                >
+                  {translated}
+                </span>
+              );
+            })}
+          </div>
+          <div style={{ fontSize: 10, color: "var(--ink-lt)", fontFamily: "monospace" }}>
+            {tk.morph}
+          </div>
+        </div>
+      ) : (
+        <span className="muted" style={{ fontSize: 12 }}>
+          {tr("No morphological features assigned", "உருபியல் கூறுகள் இல்லை", "රූපවිද්‍යාත්මක ලක්ෂණ නොමැත")}
+        </span>
+      ),
+      <button
+        type="button"
+        onClick={() => onEditToken && onEditToken(tk, tk.__index, "morph")}
+        className="btn btn-ghost btn-sm"
+        style={{
+          padding: "3px 8px", fontSize: 11, display: "inline-flex",
+          alignItems: "center", gap: 4, borderRadius: 6,
+          border: "1px solid var(--border)", color: "var(--forest)", cursor: "pointer",
+        }}
+      >
+        {tr("Edit Features", "உருபியல் திருத்து", "ලක්ෂණ සංස්කරණය")}
+      </button>,
+    ];
+  });
 
   return (
     <div>
       <SectionDesc desc={desc} />
+
+      <div style={{
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+        flexWrap: "wrap", gap: 10, marginBottom: 16,
+        background: "var(--bg-lt)", padding: "10px 16px", borderRadius: 8, border: "1px solid var(--border)",
+      }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button
+            type="button"
+            onClick={() => setFilterMode("has_morph")}
+            style={{
+              padding: "5px 12px", borderRadius: 20, fontSize: 12, cursor: "pointer",
+              border: filterMode === "has_morph" ? "1px solid var(--forest)" : "1px solid var(--border)",
+              background: filterMode === "has_morph" ? "var(--forest)" : "var(--paper)",
+              color: filterMode === "has_morph" ? "#fff" : "var(--ink)",
+              fontWeight: filterMode === "has_morph" ? 700 : 500,
+            }}
+          >
+            {tr("Tokens with Features", "உருபியல் கூறுகள் உள்ளவை", "ලක්ෂණ සහිත ටෝකන")} ({tokensWithMorph.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterMode("all")}
+            style={{
+              padding: "5px 12px", borderRadius: 20, fontSize: 12, cursor: "pointer",
+              border: filterMode === "all" ? "1px solid var(--forest)" : "1px solid var(--border)",
+              background: filterMode === "all" ? "var(--forest)" : "var(--paper)",
+              color: filterMode === "all" ? "#fff" : "var(--ink)",
+              fontWeight: filterMode === "all" ? 700 : 500,
+            }}
+          >
+            {tr("All Tokens", "அனைத்து சொற்களும்", "සියලු ටෝකන")} ({allTokens.length})
+          </button>
+        </div>
+
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={tr("Search word or feature...", "சொல் அல்லது கூறைத் தேடுங்கள்...", "වචනයක් හෝ ලක්ෂණයක් සොයන්න...")}
+          style={{
+            padding: "6px 12px", borderRadius: 6, border: "1px solid var(--border)",
+            fontSize: 12, background: "var(--paper)", color: "var(--ink)", width: 230,
+          }}
+        />
+      </div>
+
       <ScrollTable
         headers={[
-          { label: tr("Word", "வார்த்தை", "වචනය"), width: 220 },
+          { label: tr("Word", "வார்த்தை", "වචනය"), width: 180 },
           { label: tr("Morphological Features", "இலக்கண உருபியல் கூறுகள்", "රූපවිද්‍යාත්මක ලක්ෂණ") },
+          { label: tr("Action", "செயல்", "ක්‍රියාව"), width: 120 },
         ]}
         rows={rows}
         emptyText={tr("No morphological features found.", "உருபியல் தரவு எதுவும் கிடைக்கவில்லை.", "රූපවිද්‍යාත්මක දත්ත හමු නොවීය.")}
@@ -657,9 +1361,9 @@ function ChartsSection({ nlp, lang, tr, desc }) {
 
   const lexicalVariety = tokens.length
     ? [
-        { name: tr("Unique Tokens", "தனித்துவ சொற்கள்", "අනන්‍ය ටෝකන"), value: nlp.unique_tokens || 0, color: "#1a3a2a" },
-        { name: tr("Repeated Tokens", "மீண்டும் வரும் சொற்கள்", "නැවත යෙදුණු ටෝකන"), value: Math.max((nlp.token_count || tokens.length) - (nlp.unique_tokens || 0), 0), color: "#b0d8b8" },
-      ].filter((d) => d.value > 0)
+      { name: tr("Unique Tokens", "தனித்துவ சொற்கள்", "අනන්‍ය ටෝකන"), value: nlp.unique_tokens || 0, color: "#1a3a2a" },
+      { name: tr("Repeated Tokens", "மீண்டும் வரும் சொற்கள்", "නැවත යෙදුණු ටෝකන"), value: Math.max((nlp.token_count || tokens.length) - (nlp.unique_tokens || 0), 0), color: "#b0d8b8" },
+    ].filter((d) => d.value > 0)
     : [];
 
   const pieLabel = (entry) => `${entry.name} (${entry.value}%)`;
@@ -776,13 +1480,39 @@ const SECTION_COMPONENTS = {
   charts: ChartsSection,
 };
 
-function NlpTab({ nlp, lang, tr }) {
+function NlpTab({ docId, nlp, lang, tr, onNlpUpdated }) {
   const [sectionKey, setSectionKey] = useState("tokens");
+  const [editingToken, setEditingToken] = useState(null);
+  const [feedback, setFeedback] = useState(null);
   const section = NLP_SECTIONS.find((s) => s.key === sectionKey);
   const Section = SECTION_COMPONENTS[sectionKey];
 
+  const handleStartEdit = (token, index, tab = "pos") => {
+    const word = tokenText(token);
+    const count = (nlp.token_details || []).filter(
+      (t) => tokenText(t).toLowerCase() === word.toLowerCase()
+    ).length;
+    setEditingToken({ token, index, tab, occurrences: count });
+  };
+
+  const handleSaveEdit = async (patch) => {
+    const res = await updateDocumentNlp(docId, patch);
+    if (onNlpUpdated && res.nlp) {
+      onNlpUpdated(res.nlp);
+    }
+    setFeedback({
+      type: "success",
+      text: tr(
+        "NLP annotation updated successfully.",
+        "NLP சிறுகுறிப்பு வெற்றிகரமாக புதுப்பிக்கப்பட்டது.",
+        "NLP විවරණය සාර්ථකව යාවත්කාලීන කරන ලදී."
+      ),
+    });
+    setTimeout(() => setFeedback(null), 3500);
+  };
+
   return (
-    <div style={{ display: "flex", minHeight: 520 }}>
+    <div style={{ display: "flex", minHeight: 520, position: "relative" }}>
       <div style={{
         width: 220, flexShrink: 0, borderRight: "1px solid var(--border)",
         background: "var(--bg-lt)", padding: "12px 0",
@@ -817,11 +1547,41 @@ function NlpTab({ nlp, lang, tr }) {
       </div>
 
       <div style={{ flex: 1, padding: "20px 24px", overflowY: "auto", minWidth: 0 }}>
+        {feedback && (
+          <div
+            className="alert-success"
+            style={{
+              marginBottom: 16, padding: "10px 14px", borderRadius: 8, fontSize: 13,
+              background: "#dcfce7", color: "#15803d", border: "1px solid #bbf7d0",
+            }}
+          >
+            {feedback.text}
+          </div>
+        )}
         <h2 style={{ margin: "0 0 16px 0", fontSize: 18, fontWeight: 700, color: "var(--ink)" }}>
           {pick(section?.label, lang)}
         </h2>
-        <Section key={sectionKey} nlp={nlp} lang={lang} tr={tr} desc={pick(section?.desc, lang)} />
+        <Section
+          key={sectionKey}
+          nlp={nlp}
+          lang={lang}
+          tr={tr}
+          desc={pick(section?.desc, lang)}
+          onEditToken={handleStartEdit}
+        />
       </div>
+
+      <EditTokenModal
+        isOpen={Boolean(editingToken)}
+        token={editingToken?.token}
+        tokenIndex={editingToken?.index}
+        initialTab={editingToken?.tab || "pos"}
+        lang={lang}
+        tr={tr}
+        totalOccurrences={editingToken?.occurrences}
+        onSave={handleSaveEdit}
+        onClose={() => setEditingToken(null)}
+      />
     </div>
   );
 }
@@ -1221,7 +1981,15 @@ export default function DocumentView() {
         {tab === "overview" && <OverviewTab doc={doc} nlp={nlp} tr={tr} />}
         {tab === "raw" && <pre className="snippet">{doc.raw_text}</pre>}
         {tab === "cleaned" && <pre className="snippet">{doc.cleaned_text}</pre>}
-        {tab === "nlp" && doc.nlp && <NlpTab nlp={nlp} lang={lang} tr={tr} />}
+        {tab === "nlp" && doc.nlp && (
+          <NlpTab
+            docId={id}
+            nlp={nlp}
+            lang={lang}
+            tr={tr}
+            onNlpUpdated={(newNlp) => setDoc((prev) => ({ ...prev, nlp: newNlp }))}
+          />
+        )}
         {tab === "metadata" && (
           <MetadataTab
             docId={id}
