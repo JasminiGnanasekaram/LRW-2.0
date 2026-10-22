@@ -1,6 +1,8 @@
 """Text extraction from various input formats."""
 import io
+import logging
 import os
+import re
 import tempfile
 from typing import Optional
 
@@ -18,6 +20,8 @@ try:
 except ImportError:  # pragma: no cover - optional dependency
     pytesseract = None
 
+logger = logging.getLogger(__name__)
+
 # Prefer configured tesseract path, falling back to common Windows path if present.
 if pytesseract is not None:
     settings = get_settings()
@@ -27,59 +31,102 @@ if pytesseract is not None:
         pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
 
+def _get_ocr_languages() -> str:
+    """Return the installed Tesseract language packs in preferred order."""
+    preferred = ["eng", "tam", "sin"]
+    if pytesseract is None:
+        logger.warning("pytesseract is not installed; falling back to English OCR only.")
+        return "eng"
+
+    try:
+        languages = pytesseract.get_languages()
+        installed = set()
+        if isinstance(languages, dict):
+            for value in languages.values():
+                if isinstance(value, (list, tuple, set)):
+                    installed.update(str(item).lower() for item in value)
+        elif isinstance(languages, (list, tuple, set)):
+            installed.update(str(item).lower() for item in languages)
+    except Exception as exc:  # pragma: no cover - depends on system Tesseract install
+        logger.warning("Unable to detect installed Tesseract languages, falling back to English OCR: %s", exc)
+        return "eng"
+
+    available = [lang for lang in preferred if lang in installed]
+    if not available:
+        logger.warning(
+            "No preferred OCR languages detected (%s). Falling back to English OCR.",
+            ", ".join(preferred),
+        )
+        return "eng"
+    return "+".join(available)
+
+
+def _has_readable_pdf_text(page_text: str) -> bool:
+    """Return True when the extracted PDF text still looks like real text rather than OCR noise."""
+    if not page_text:
+        return False
+    cleaned = re.sub(r"\s+", " ", page_text).strip()
+    if len(cleaned) < 3:
+        return False
+    letters = sum(
+        1
+        for ch in cleaned
+        if ch.isalpha() or ch.isdigit() or bool(re.search(r"[\u0B80-\u0BFF\u0D80-\u0DFF]", ch))
+    )
+    return letters >= 3 and (letters / len(cleaned)) >= 0.35
+
+
 def extract_from_text(content: bytes, encoding: str = "utf-8") -> str:
     return content.decode(encoding, errors="replace")
 
 
 def extract_from_pdf(content: bytes) -> str:
-    """PDF extraction using PyMuPDF (fitz).
-    Each page is checked for a real text layer; pages with one are
-    extracted directly, pages without one (scans/photos) are rendered
-    to an image and OCR'd. Handles text-only, scanned-only, and mixed PDFs."""
-    import fitz  # PyMuPDF
-    from PIL import Image
+    """Extract text from text, scanned, or mixed PDFs while preferring the original PDF wording."""
+    import pdfplumber
 
     MIN_CHARS_PER_PAGE = 20
-    doc = fitz.open(stream=content, filetype="pdf")
     text_parts = []
 
-    for page in doc:
-        page_text = page.get_text().strip()
-        if len(page_text) >= MIN_CHARS_PER_PAGE:
-            text_parts.append(page_text)
-        else:
-            # 1. Use Matrix Zoom (compatible with all PyMuPDF versions) to scale up page image for high-quality OCR
-            zoom = 2  # 2x zoom factor
-            mat = fitz.Matrix(zoom, zoom)
-            pix = page.get_pixmap(matrix=mat)
-            
-            # 2. Convert to bytes and open with Pillow
-            img = Image.open(io.BytesIO(pix.tobytes("png")))
-            ocr_text = pytesseract.image_to_string(img, lang="eng+tam+sin") if pytesseract else ""
-            text_parts.append(ocr_text.strip())
+    try:
+        with pdfplumber.open(io.BytesIO(content)) as doc:
+            for page in doc.pages:
+                page_text = (page.extract_text(layout=True) or "").strip()
+                if not _has_readable_pdf_text(page_text) and len(page_text) < MIN_CHARS_PER_PAGE and pytesseract is not None:
+                    try:
+                        image = page.to_image(resolution=250).original
+                        ocr_text = pytesseract.image_to_string(
+                            image,
+                            lang=_get_ocr_languages(),
+                            config="--psm 6",
+                        ).strip()
+                        if ocr_text:
+                            page_text = ocr_text
+                    except Exception as exc:
+                        logger.warning("OCR failed on a PDF page: %s", exc)
+                        page_text = page_text or ""
+                text_parts.append(page_text)
+    except Exception as exc:
+        raise ValueError(f"Unable to read PDF content: {exc}") from exc
 
-    doc.close()
     return "\n\n".join(text_parts)
 
 
 def detect_pdf_type(content: bytes) -> str:
     """Analyze PDF to determine its type: text_only, text_image, or image_only."""
-    import fitz  # PyMuPDF
+    import pdfplumber
     
     MIN_CHARS_PER_PAGE = 20  # Threshold for considering a page as having text
     
-    doc = fitz.open(stream=content, filetype="pdf")
     text_page_count = 0
     image_page_count = 0
     
-    for page in doc:
-        page_text = page.get_text().strip()
-        if len(page_text) >= MIN_CHARS_PER_PAGE:
-            text_page_count += 1
-        else:
-            image_page_count += 1
-    
-    doc.close()
+    with pdfplumber.open(io.BytesIO(content)) as doc:
+        for page in doc.pages:
+            page_text = (page.extract_text() or "").strip()
+            if len(page_text) >= MIN_CHARS_PER_PAGE:
+                text_page_count += 1
+            else:
+                image_page_count += 1
     
     total_pages = text_page_count + image_page_count
     if total_pages == 0:
@@ -112,7 +159,7 @@ def extract_from_image(content: bytes) -> str:
 
     img = Image.open(io.BytesIO(content))
     try:
-        return pytesseract.image_to_string(img, lang="eng+tam+sin")
+        return pytesseract.image_to_string(img, lang=_get_ocr_languages())
     except pytesseract.pytesseract.TesseractNotFoundError as exc:
         raise RuntimeError(
             "Tesseract OCR executable not found. Install Tesseract and add it to PATH, "
@@ -165,16 +212,16 @@ def extract_from_audio(content: bytes) -> str:
 
 def _pdf_is_mostly_text(content: bytes, min_chars_per_page: int = 20, text_ratio_threshold: float = 0.5) -> bool:
     """Check whether a PDF has a usable text layer on most pages."""
-    import fitz  # PyMuPDF
+    import pdfplumber
 
-    doc = fitz.open(stream=content, filetype="pdf")
-    total_pages = len(doc)
-    if total_pages == 0:
-        doc.close()
-        return False
-
-    text_pages = sum(1 for page in doc if len(page.get_text().strip()) >= min_chars_per_page)
-    doc.close()
+    with pdfplumber.open(io.BytesIO(content)) as doc:
+        total_pages = len(doc.pages)
+        if total_pages == 0:
+            return False
+        text_pages = sum(
+            1 for page in doc.pages
+            if len((page.extract_text() or "").strip()) >= min_chars_per_page
+        )
     return (text_pages / total_pages) >= text_ratio_threshold
 
 
