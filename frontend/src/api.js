@@ -116,6 +116,11 @@ export async function updateDocumentMetadata(id, metadata) {
   return data;
 }
 
+export async function updateDocumentNlp(id, nlpData) {
+  const { data } = await api.patch(`/documents/${id}/nlp`, nlpData);
+  return data;
+}
+
 function triggerBlobDownload(blobData, filename) {
   const blob = new Blob([blobData]);
   const url = window.URL.createObjectURL(blob);

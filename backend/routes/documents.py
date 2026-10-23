@@ -470,6 +470,63 @@ async def update_document_metadata(
     return {"detail": "Metadata updated successfully", "metadata": metadata_update}
 
 
+@router.patch("/{doc_id}/nlp")
+async def update_document_nlp(
+    doc_id: str,
+    nlp_update: dict = Body(...),
+    user: dict = Depends(get_current_user),
+):
+    """Update editable NLP data for a document (POS, lemmas, and morphology)."""
+    try:
+        raw = await raw_documents_col.find_one({"_id": ObjectId(doc_id)})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid document ID")
+
+    if not raw:
+        raise HTTPException(status_code=404, detail="Not found")
+    if str(raw["user_id"]) != user["id"] and user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    cleaned = await cleaned_documents_col.find_one({"raw_document_id": raw["_id"]})
+    if not cleaned:
+        raise HTTPException(status_code=404, detail="Document content not found")
+
+    analysis = await nlp_analysis_col.find_one({"cleaned_document_id": cleaned["_id"]})
+    data = (analysis or {}).get("data") or {}
+    token_details = nlp_update.get("token_details") or data.get("token_details") or []
+    pos_distribution = nlp_update.get("pos_distribution") or {}
+    if not pos_distribution and token_details:
+        counts = {}
+        for token in token_details:
+            pos = token.get("pos") or "X"
+            counts[pos] = counts.get(pos, 0) + 1
+        pos_distribution = counts
+
+    updated = {
+        **data,
+        "token_details": token_details,
+        "pos_distribution": pos_distribution,
+        "token_count": len(token_details),
+        "unique_tokens": len({(item.get("text") or item.get("token") or "").strip() for item in token_details if (item.get("text") or item.get("token") or "").strip()}),
+    }
+
+    if analysis:
+        await nlp_analysis_col.update_one(
+            {"_id": analysis["_id"]},
+            {"$set": {"data": updated, "updated_at": datetime.utcnow(), "nlp_rules_version": nlp.NLP_RULES_VERSION}},
+        )
+    else:
+        analysis_doc = {
+            "cleaned_document_id": cleaned["_id"],
+            "data": updated,
+            "nlp_rules_version": nlp.NLP_RULES_VERSION,
+            "created_at": datetime.utcnow(),
+        }
+        await nlp_analysis_col.insert_one(analysis_doc)
+
+    return {"detail": "NLP analysis updated successfully", "nlp": updated}
+
+
 # ── Delete document ───────────────────────────────────────────────────
 @router.delete("/{doc_id}")
 async def delete_document(doc_id: str, user: dict = Depends(get_current_user)):

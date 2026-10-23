@@ -3,7 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from "recharts";
-import { getDocument, exportDocument, updateDocumentMetadata } from "../api";
+import { getDocument, exportDocument, updateDocumentMetadata, updateDocumentNlp } from "../api";
 
 function PdfTypeBadge({ pdfType }) {
   if (!pdfType) return null;
@@ -39,7 +39,7 @@ const NLP_SECTIONS = [
     label: { English: "Sentences", Tamil: "வாக்கியங்கள்", Sinhala: "වාක්‍ය" },
     desc: {
       English: "Multilingual sentence segmentation handling punctuation, abbreviations, and decimal numbers.",
-      Tamil: "நிறுத்தற்குறிகள், சுருக்கங்கள் மற்றும் தசம எண்களைப் பாதுகாத்து வாக்கியங்களைப் பிரிக்கிறது.",
+      Tamil: "சொற்கள் ஒரு குறிப்பிட்ட ஒழுங்குமுறைக்கு ஏற்ப இணைந்து, முழுமையான பொருளைத் தருவது வாக்கியம் எனப்படும்.",
       Sinhala: "විරාම ලකුණු, කෙටි යෙදුම් සහ දශම සංඛ්‍යා නිවැරදිව කළමනාකරණය කරමින් වාක්‍ය වෙන් කරයි.",
     },
   },
@@ -84,7 +84,7 @@ const NLP_SECTIONS = [
     label: { English: "Visual Charts", Tamil: "வரைபடங்கள்", Sinhala: "ප්‍රස්ථාර" },
     desc: {
       English: "Visual summaries of token frequency, sentence lengths, POS, lemmas, morphology, vocabulary, and document structure.",
-      Tamil: "சொல் நிகழ்வெண், வாக்கிய நீளம், சொல் வகை, வேர்ச்சொல், உருபியல், சொற்களஞ்சியம் மற்றும் ஆவண அமைப்பின் காட்சிப்படுத்தல்.",
+      Tamil: "சொல் வகைப் பகிர்வு, உருபியல் அம்சங்களின் எண்ணிக்கை, வாக்கியம் வாரியான சொல் எண்ணிக்கை மற்றும் வரைபட அமைப்பில் காட்சிப்படுத்தல்.",
       Sinhala: "ටෝකන සංඛ්‍යාතය, වාක්‍ය දිග, පද වර්ග, මූල පද, රූපවිද්‍යාව, වචන මාලාව සහ ලේඛන ව්‍යුහයේ දෘශ්‍ය සාරාංශ.",
     },
   },
@@ -334,11 +334,7 @@ function SectionDesc({ desc }) {
       fontSize: 13,
       color: "var(--ink-lt)",
       lineHeight: 1.6,
-      display: "flex",
-      alignItems: "flex-start",
-      gap: 10,
     }}>
-      <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>ℹ️</span>
       {desc}
     </div>
   );
@@ -353,6 +349,8 @@ export default function DocumentView() {
   const [posSearchQuery, setPosSearchQuery] = useState("");
   const [error, setError] = useState("");
   const [appLang, setAppLang] = useState(localStorage.getItem("lrw_lang") || "");
+  const [editingNlpSection, setEditingNlpSection] = useState(null);
+  const [nlpDraft, setNlpDraft] = useState({ token_details: [] });
 
   // Metadata editing state
   const [isEditingMeta, setIsEditingMeta] = useState(false);
@@ -386,6 +384,59 @@ export default function DocumentView() {
       setAppLang(doc.nlp.language);
     }
   }, [doc]);
+
+  useEffect(() => {
+    if (doc?.nlp?.token_details) {
+      setNlpDraft({
+        token_details: doc.nlp.token_details.map((token) => ({ ...token }))
+      });
+    }
+  }, [doc?.nlp?.token_details]);
+
+  const updateDraftToken = (index, field, value) => {
+    setNlpDraft((prev) => ({
+      ...prev,
+      token_details: (prev.token_details || []).map((token, i) => i === index ? { ...token, [field]: value } : token),
+    }));
+  };
+
+  const saveEditedNlpSection = async () => {
+    const updatedTokens = (nlpDraft.token_details || []).map((token) => ({ ...token }));
+    const posDistribution = {};
+    updatedTokens.forEach((token) => {
+      const pos = token.pos || "X";
+      posDistribution[pos] = (posDistribution[pos] || 0) + 1;
+    });
+
+    setDoc((prev) => ({
+      ...prev,
+      nlp: {
+        ...(prev?.nlp || {}),
+        token_details: updatedTokens,
+        pos_distribution: posDistribution,
+      },
+    }));
+
+    try {
+      await updateDocumentNlp(id, {
+        token_details: updatedTokens,
+        pos_distribution: posDistribution,
+      });
+    } catch (err) {
+      console.error("Failed to save NLP edits:", err);
+    }
+
+    setEditingNlpSection(null);
+  };
+
+  const cancelEditedNlpSection = () => {
+    setEditingNlpSection(null);
+    if (doc?.nlp?.token_details) {
+      setNlpDraft({
+        token_details: doc.nlp.token_details.map((token) => ({ ...token }))
+      });
+    }
+  };
 
   const handleStartEditMeta = () => {
     const currentMeta = doc?.metadata || {};
@@ -471,7 +522,8 @@ export default function DocumentView() {
   );
   if (!doc) return <div className="page"><p className="muted">Loading…</p></div>;
 
-  const lang = appLang || doc?.nlp?.language || "English";
+  const effectiveLang = ["English", "Tamil", "Sinhala"].includes(appLang) ? appLang : (doc?.nlp?.language || "English");
+  const lang = effectiveLang;
   const isTamil = lang === "Tamil";
   const isSinhala = lang === "Sinhala";
   const t = (obj) => (obj && (obj[lang] || obj["English"])) || "";
@@ -501,38 +553,92 @@ export default function DocumentView() {
 
   const translateMorph = (morphStr) => {
     if (!morphStr) return "";
-    const MORPH_TAMIL = {
-      "Case=Nom": "எழுவாய்", "Case=Acc": "இரண்டாம் வேற்றுமை (ஐ)", "Case=Dat": "நான்காம் வேற்றுமை (கு)",
-      "Case=Gen": "ஆறாம் வேற்றுமை (இன்)", "Case=Abl": "ஐந்தாம் வேற்றுமை (இலிருந்து)", "Case=Loc": "ஏழாம் வேற்றுமை (இல்)",
-      "Case=Ins": "மூன்றாம் வேற்றுமை (ஆல்)", "Case=Com": "உடன் வேற்றுமை",
-      "Case=Ben": "நான்காம் வேற்றுமை (பொருட்டு/க்காக)",
-      "Number=Sing": "ஒருமை", "Number=Plur": "பன்மை", "Gender=Masc": "ஆண்பால்",
-      "Gender=Fem": "பெண்பால்", "Gender=Neut": "ஒன்றன்பால்", "Definiteness=Indef": "பொதுமை",
-      "Definiteness=Def": "குறிப்புமை", "NumType=Card": "எண்ணுப்பெயர்", "PronType=Int": "வினாப்பெயர்",
-      "PronType=Art": "சுட்டிடைச்சொல்", "PronType=Prs": "தனிப்பெயர்", "PronType=Dem": "சுட்டுப்பெயர்",
-      "Reflex=Yes": "தற்சுட்டு", "AdpType=Post": "பின்சேர்க்கை இடைச்சொல்",
-      "Polarity=Pos": "உடன்பாட்டு நிலை", "Gender=Com": "பொதுப்பால்", "Polite=Form": "மரியாதை வடிவம்",
-      "Polite=Yes": "மரியாதை", "Polite=No": "மரியாதையற்ற வடிவம்", "Polarity=Neg": "எதிர்மறை",
-      "Tense=Past": "இறந்தகாலம்", "Tense=Pres": "நிகழ்காலம்", "Tense=Fut": "எதிர்காலம்",
-      "VerbForm=Inf": "தொழிற்பெயர்", "VerbForm=Fin": "முற்று வினை", "VerbForm=Part": "பெயரெச்சம்/வினையெச்சம்",
-      "Voice=Act": "செய்வினை", "Voice=Pass": "செயப்பாட்டுவினை",
-      "Aspect=Perf": "நிறைவடைந்த நிலை", "Aspect=Prog": "தொடர்நிலை",
-      "Mood=Imp": "ஏவல் வினை (முன்னிலை)", "Mood=Pot": "சாத்திய முறைமை", "Mood=Des": "விழைவு முறைமை",
-      "Mood=Proh": "விலக்கல் முறைமை (கூடாது)", "Mood=Opt": "வியங்கோள் வினை", "Mood=Cond": "நிபந்தனை முறைமை",
-      "Person=1": "தன்மை", "Person=2": "முன்னிலை", "Person=3": "படர்க்கை",
+
+    const MORPH_MAP = {
+      English: {
+        "Case=Nom": "Nominative", "Case=Acc": "Accusative", "Case=Dat": "Dative",
+        "Case=Gen": "Genitive", "Case=Abl": "Ablative", "Case=Loc": "Locative",
+        "Case=Ins": "Instrumental", "Case=Com": "Comitative",
+        "Case=Ben": "Benefactive",
+        "Number=Sing": "Singular", "Number=Plur": "Plural", "Gender=Masc": "Masculine",
+        "Gender=Fem": "Feminine", "Gender=Neut": "Neuter", "Definiteness=Indef": "Indefinite",
+        "Definiteness=Def": "Definite", "NumType=Card": "Cardinal number", "PronType=Int": "Interrogative pronoun",
+        "PronType=Art": "Article", "PronType=Prs": "Personal pronoun", "PronType=Dem": "Demonstrative",
+        "Reflex=Yes": "Reflexive", "AdpType=Post": "Postposition",
+        "Polarity=Pos": "Positive", "Gender=Com": "Common gender", "Polite=Form": "Polite form",
+        "Polite=Yes": "Polite", "Polite=No": "Non-polite", "Polarity=Neg": "Negative",
+        "Tense=Past": "Past tense", "Tense=Pres": "Present tense", "Tense=Fut": "Future tense",
+        "VerbForm=Inf": "Infinitive", "VerbForm=Fin": "Finite verb", "VerbForm=Part": "Participle",
+        "Voice=Act": "Active voice", "Voice=Pass": "Passive voice",
+        "Aspect=Perf": "Perfective aspect", "Aspect=Prog": "Progressive aspect",
+        "Mood=Imp": "Imperative", "Mood=Pot": "Potential", "Mood=Des": "Desiderative",
+        "Mood=Proh": "Prohibitive", "Mood=Opt": "Optative", "Mood=Cond": "Conditional",
+        "Person=1": "First person", "Person=2": "Second person", "Person=3": "Third person",
+      },
+      Tamil: {
+        "Case=Nom": "எழுவாய்", "Case=Acc": "இரண்டாம் வேற்றுமை (ஐ)", "Case=Dat": "நான்காம் வேற்றுமை (கு)",
+        "Case=Gen": "ஆறாம் வேற்றுமை (இன்)", "Case=Abl": "ஐந்தாம் வேற்றுமை (இலிருந்து)", "Case=Loc": "ஏழாம் வேற்றுமை (இல்)",
+        "Case=Ins": "மூன்றாம் வேற்றுமை (ஆல்)", "Case=Com": "உடன் வேற்றுமை",
+        "Case=Ben": "நான்காம் வேற்றுமை (பொருட்டு/க்காக)",
+        "Number=Sing": "ஒருமை", "Number=Plur": "பன்மை", "Gender=Masc": "ஆண்பால்",
+        "Gender=Fem": "பெண்பால்", "Gender=Neut": "ஒன்றன்பால்", "Definiteness=Indef": "பொதுமை",
+        "Definiteness=Def": "குறிப்புமை", "NumType=Card": "எண்ணுப்பெயர்", "PronType=Int": "வினாப்பெயர்",
+        "PronType=Art": "சுட்டிடைச்சொல்", "PronType=Prs": "தனிப்பெயர்", "PronType=Dem": "சுட்டுப்பெயர்",
+        "Reflex=Yes": "தற்சுட்டு", "AdpType=Post": "பின்சேர்க்கை இடைச்சொல்",
+        "Polarity=Pos": "உடன்பாட்டு நிலை", "Gender=Com": "பொதுப்பால்", "Polite=Form": "மரியாதை வடிவம்",
+        "Polite=Yes": "மரியாதை", "Polite=No": "மரியாதையற்ற வடிவம்", "Polarity=Neg": "எதிர்மறை",
+        "Tense=Past": "இறந்தகாலம்", "Tense=Pres": "நிகழ்காலம்", "Tense=Fut": "எதிர்காலம்",
+        "VerbForm=Inf": "தொழிற்பெயர்", "VerbForm=Fin": "முற்று வினை", "VerbForm=Part": "பெயரெச்சம்/வினையெச்சம்",
+        "Voice=Act": "செய்வினை", "Voice=Pass": "செயப்பாட்டுவினை",
+        "Aspect=Perf": "நிறைவடைந்த நிலை", "Aspect=Prog": "தொடர்நிலை",
+        "Mood=Imp": "ஏவல் வினை (முன்னிலை)", "Mood=Pot": "சாத்திய முறைமை", "Mood=Des": "விழைவு முறைமை",
+        "Mood=Proh": "விலக்கல் முறைமை (கூடாது)", "Mood=Opt": "வியங்கோள் வினை", "Mood=Cond": "நிபந்தனை முறைமை",
+        "Person=1": "தன்மை", "Person=2": "முன்னிலை", "Person=3": "படர்க்கை",
+      },
+      Sinhala: {
+        "Case=Nom": "නාමිකය", "Case=Acc": "ප්‍රේරණය", "Case=Dat": "ප්‍රයෝජනිකය",
+        "Case=Gen": "ආදානය", "Case=Abl": "පිටත", "Case=Loc": "ස්ථානිකය",
+        "Case=Ins": "උපකරණය", "Case=Com": "සහ සහිතය",
+        "Case=Ben": "ලාභීය",
+        "Number=Sing": "එකවචනය", "Number=Plur": "බහුවචනය", "Gender=Masc": "පුරුෂ ලිංගය",
+        "Gender=Fem": "ස්ත්‍රී ලිංගය", "Gender=Neut": "නිශ්චිත නොවන", "Definiteness=Indef": "අනිශ්චිත",
+        "Definiteness=Def": "නිශ්චිත", "NumType=Card": "ගණිත වචනය", "PronType=Int": "ප්‍රශ්නමය නාමය",
+        "PronType=Art": "ලේඛනකය", "PronType=Prs": "පුද්ගල නාමය", "PronType=Dem": "දර්ශකය",
+        "Reflex=Yes": "අන්‍යමාන", "AdpType=Post": "අතර වචනය",
+        "Polarity=Pos": "ධනාත්මක", "Gender=Com": "සාමාන්‍ය ලිංගය", "Polite=Form": "ආකල්පිත ස්වරූපය",
+        "Polite=Yes": "ආගන්තුක", "Polite=No": "අආගන්තුක", "Polarity=Neg": "සෘණ",
+        "Tense=Past": "අතීත කාලය", "Tense=Pres": "වර්තමාන කාලය", "Tense=Fut": "භවिष्य කාලය",
+        "VerbForm=Inf": "අනුපිළිවෙල", "VerbForm=Fin": "සම්පූර්ණ ක්‍රියා", "VerbForm=Part": "ඡේදය",
+        "Voice=Act": "ක්‍රියාමාර්ගය", "Voice=Pass": "සක්‍රිය ස්වරූපය",
+        "Aspect=Perf": "සම්පූර්ණ ගුණය", "Aspect=Prog": "ප්‍රගතිගත අන්දය",
+        "Mood=Imp": "ආඥාමාර්ගය", "Mood=Pot": "හැකියාව", "Mood=Des": "ඉල්ලා අයැදීම",
+        "Mood=Proh": "විරෝධ කාලය", "Mood=Opt": "විකල්පය", "Mood=Cond": "කලපිළිවෙල",
+        "Person=1": "පළමු පුරුෂය", "Person=2": "දෙවැනි පුරුෂය", "Person=3": "තුන්වන පුරුෂය",
+      },
     };
+
+    const currentMorphMap = MORPH_MAP[lang] || MORPH_MAP.English;
+    const featureNames = {
+      English: { AdpType: "Relation", Polarity: "Polarity", Gender: "Gender", Polite: "Politeness" },
+      Tamil: { AdpType: "இடைச்சொல் வகை", Polarity: "வினைநிலை", Gender: "பால்", Polite: "மரியாதை" },
+      Sinhala: { AdpType: "සම්බන්ධක වර්ගය", Polarity: "ඇතුළත් බව", Gender: "ලිංගය", Polite: "ආගන්තුක බව" },
+    };
+    const featureValues = {
+      English: { Post: "Postposition", Pos: "Positive", Neg: "Negative", Com: "Common gender", Form: "Form", Yes: "Yes", No: "No" },
+      Tamil: { Post: "பின்சேர்க்கை", Pos: "உடன்பாடு", Neg: "எதிர்மறை", Com: "பொதுப்பால்", Form: "வடிவம்", Yes: "ஆம்", No: "இல்லை" },
+      Sinhala: { Post: "අතර වචනය", Pos: "ධනාත්මක", Neg: "සෘණ", Com: "සාමාන්‍ය ලිංගය", Form: "ආකෘතිය", Yes: "ඔව්", No: "නැත" },
+    };
+
     return morphStr.split("|").map((feature) => {
-      if (MORPH_TAMIL[feature]) return MORPH_TAMIL[feature];
-      const [name, value] = feature.split("=");
-      const names = {
-        AdpType: "இடைச்சொல் வகை", Polarity: "வினைநிலை", Gender: "பால்", Polite: "மரியாதை",
-      };
-      const values = {
-        Post: "பின்சேர்க்கை", Pos: "உடன்பாடு", Neg: "எதிர்மறை", Com: "பொதுப்பால்",
-        Form: "வடிவம்", Yes: "ஆம்", No: "இல்லை",
-      };
-      if (name && value && names[name] && values[value]) return `${names[name]}: ${values[value]}`;
-      return "கூடுதல் உருபியல் அம்சம்";
+      const cleanFeature = feature.trim();
+      if (currentMorphMap[cleanFeature]) return currentMorphMap[cleanFeature];
+      const [name, value] = cleanFeature.split("=");
+      if (name && value && featureNames[lang]?.[name] && featureValues[lang]?.[value]) {
+        return `${featureNames[lang][name]}: ${featureValues[lang][value]}`;
+      }
+      if (lang === "Tamil") return "கூடுதல் உருபியல் அம்சம்";
+      if (lang === "Sinhala") return "අතිරේක ව්‍යාකරණ ලක්ෂණය";
+      return "Additional morphological feature";
     }).join(" | ");
   };
 
@@ -631,17 +737,30 @@ export default function DocumentView() {
     switch (nlpSec) {
       case "pos": {
         const totalPosCount = Object.values(nlp.pos_distribution || {}).reduce((acc, v) => acc + (typeof v === "number" ? v : 0), 0) || 1;
-        const allTokens = nlp.token_details || [];
-        const filteredTokens = allTokens.filter(tk => {
+        const allTokens = (editingNlpSection === "pos" ? nlpDraft.token_details : nlp.token_details || []);
+        const filteredTokens = allTokens.reduce((acc, tk, index) => {
           const matchPos = !selectedPosFilter || (tk.pos || "").toUpperCase() === selectedPosFilter.toUpperCase();
           const matchQuery = !posSearchQuery.trim() ||
             (tk.text || tk.token || "").toLowerCase().includes(posSearchQuery.toLowerCase());
-          return matchPos && matchQuery;
-        });
+          if (matchPos && matchQuery) acc.push({ ...tk, __index: index });
+          return acc;
+        }, []);
 
         return (
           <div>
             <SectionDesc desc={t(currentSection?.desc)} />
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12, gap: 8 }}>
+              {editingNlpSection === "pos" ? (
+                <>
+                  <button type="button" className="btn btn-primary btn-sm" onClick={saveEditedNlpSection}>{isTamil ? "சேமி" : isSinhala ? "සුරකින්න" : "Save"}</button>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={cancelEditedNlpSection}>{isTamil ? "ரத்து" : isSinhala ? "අවලංගු කරන්න" : "Cancel"}</button>
+                </>
+              ) : (
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditingNlpSection("pos")}>
+                  {isTamil ? "திருத்து" : isSinhala ? "සංස්කරණය කරන්න" : "Edit"}
+                </button>
+              )}
+            </div>
 
             {/* Document Language Indicator */}
             <div style={{
@@ -768,19 +887,36 @@ export default function DocumentView() {
                       const posInfo = getPosInfo(tk.pos);
                       const localizedPos = getPosLabel(tk.pos, lang);
                       return (
-                        <tr key={i}>
+                        <tr key={`${tk.token || tk.text}-${i}`}>
                           <td style={{ ...tdStyle(i % 2), color: "var(--ink-lt)" }}>{i + 1}</td>
                           <td style={{ ...tdStyle(i % 2), fontWeight: 600 }}>{tk.token || tk.text}</td>
                           <td style={tdStyle(i % 2)}>
-                            <span style={{
-                              display: "inline-flex", alignItems: "center", gap: 6,
-                              padding: "3px 8px", borderRadius: 6,
-                              background: posInfo.bg, color: posInfo.color,
-                              border: `1px solid ${posInfo.border}`, fontSize: 12, fontWeight: 600
-                            }}>
-                              <span>{localizedPos}</span>
-                              <span style={{ opacity: 0.7, fontSize: 10, fontWeight: 700 }}>({tk.pos})</span>
-                            </span>
+                            {editingNlpSection === "pos" ? (
+                              <select
+                                value={tk.pos || ""}
+                                onChange={(e) => updateDraftToken(tk.__index, "pos", e.target.value)}
+                                style={{
+                                  padding: "5px 8px", borderRadius: 6, border: "1px solid var(--border)",
+                                  background: "var(--paper)", color: "var(--ink)", fontSize: 12
+                                }}
+                              >
+                                {Object.keys(POS_INFO).map((key) => (
+                                  <option key={key} value={key}>
+                                    {getPosLabel(key, lang)} ({key})
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <span style={{
+                                display: "inline-flex", alignItems: "center", gap: 6,
+                                padding: "3px 8px", borderRadius: 6,
+                                background: posInfo.bg, color: posInfo.color,
+                                border: `1px solid ${posInfo.border}`, fontSize: 12, fontWeight: 600
+                              }}>
+                                <span>{localizedPos}</span>
+                                <span style={{ opacity: 0.7, fontSize: 10, fontWeight: 700 }}>({tk.pos})</span>
+                              </span>
+                            )}
                           </td>
                         </tr>
                       );
@@ -820,11 +956,28 @@ export default function DocumentView() {
           </div>
         );
 
-      case "lemma":
+      case "lemma": {
+        const editableLemmaPairs = (editingNlpSection === "lemma" ? nlpDraft.token_details : nlp.token_details || [])
+          .map((tk, index) => ({ ...tk, __index: index }))
+          .filter((tk) => tk.lemma && (tk.text || tk.token) !== tk.lemma)
+          .slice(0, 100);
+
         return (
           <div>
             <SectionDesc desc={t(currentSection?.desc)} />
-            {lemmaPairs.length > 0 ? (
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12, gap: 8 }}>
+              {editingNlpSection === "lemma" ? (
+                <>
+                  <button type="button" className="btn btn-primary btn-sm" onClick={saveEditedNlpSection}>{isTamil ? "சேமி" : isSinhala ? "සුරකින්න" : "Save"}</button>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={cancelEditedNlpSection}>{isTamil ? "ரத்து" : isSinhala ? "අවලංගු කරන්න" : "Cancel"}</button>
+                </>
+              ) : (
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditingNlpSection("lemma")}>
+                  {isTamil ? "திருத்து" : isSinhala ? "සංස්කරණය කරන්න" : "Edit"}
+                </button>
+              )}
+            </div>
+            {editableLemmaPairs.length > 0 ? (
               <div style={scrollBox}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                   <thead>
@@ -835,11 +988,21 @@ export default function DocumentView() {
                     </tr>
                   </thead>
                   <tbody>
-                    {lemmaPairs.map((tk, i) => (
-                      <tr key={i}>
+                    {editableLemmaPairs.map((tk, i) => (
+                      <tr key={`${tk.text || tk.token}-${i}`}>
                         <td style={tdStyle(i % 2)}><strong>{tk.text || tk.token}</strong></td>
                         <td style={{ ...tdStyle(i % 2), color: "var(--ink-lt)" }}>→</td>
-                        <td style={{ ...tdStyle(i % 2), color: "var(--forest)", fontWeight: 600 }}>{tk.lemma}</td>
+                        <td style={{ ...tdStyle(i % 2), color: "var(--forest)", fontWeight: 600 }}>
+                          {editingNlpSection === "lemma" ? (
+                            <input
+                              value={tk.lemma || ""}
+                              onChange={(e) => updateDraftToken(tk.__index, "lemma", e.target.value)}
+                              style={{ width: "100%", padding: "5px 8px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--paper)" }}
+                            />
+                          ) : (
+                            tk.lemma
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -854,26 +1017,53 @@ export default function DocumentView() {
             )}
           </div>
         );
+      }
 
-      case "morph":
+      case "morph": {
+        const editableMorphTokens = (editingNlpSection === "morph" ? nlpDraft.token_details : nlp.token_details || [])
+          .filter((tk) => tk.morph && tk.morph !== "")
+          .slice(0, 50)
+          .map((tk, index) => ({ ...tk, __index: (editingNlpSection === "morph" ? nlpDraft.token_details : nlp.token_details || []).findIndex((item) => item === tk) }));
+
         return (
           <div>
             <SectionDesc desc={t(currentSection?.desc)} />
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12, gap: 8 }}>
+              {editingNlpSection === "morph" ? (
+                <>
+                  <button type="button" className="btn btn-primary btn-sm" onClick={saveEditedNlpSection}>{isTamil ? "சேமி" : isSinhala ? "සුරකින්න" : "Save"}</button>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={cancelEditedNlpSection}>{isTamil ? "ரத்து" : isSinhala ? "අවලංගු කරන්න" : "Cancel"}</button>
+                </>
+              ) : (
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditingNlpSection("morph")}>
+                  {isTamil ? "திருத்து" : isSinhala ? "සංස්කරණය කරන්න" : "Edit"}
+                </button>
+              )}
+            </div>
             <div style={scrollBox}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
                   <tr>
                     <th style={th}>{isTamil ? "வார்த்தை" : isSinhala ? "වචනය" : "Word"}</th>
-                    <th style={th}>உருபியல் கூறுகள்</th>
+                    <th style={th}>{isTamil ? "உருபியல் கூறுகள்" : isSinhala ? "ව්‍යාකරණ ලක්ෂණ" : "Morphological features"}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {(morphTokens.length > 0 ? morphTokens : (nlp.token_details || []).slice(0, 50)).map((tk, i) => {
+                  {(editableMorphTokens.length > 0 ? editableMorphTokens : (nlp.token_details || []).slice(0, 50)).map((tk, i) => {
+                    const rowIndex = tk.__index ?? i;
                     return (
-                      <tr key={i}>
+                      <tr key={`${tk.text || tk.token}-${i}`}>
                         <td style={{ ...tdStyle(i % 2), fontWeight: 600 }}>{tk.text || tk.token}</td>
                         <td style={{ ...tdStyle(i % 2), color: "var(--ink)", fontSize: 12 }}>
-                          {tk.morph ? translateMorph(tk.morph) : "—"}
+                          {editingNlpSection === "morph" ? (
+                            <input
+                              value={tk.morph || ""}
+                              onChange={(e) => updateDraftToken(rowIndex, "morph", e.target.value)}
+                              style={{ width: "100%", padding: "5px 8px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--paper)" }}
+                            />
+                          ) : (
+                            tk.morph ? translateMorph(tk.morph) : "—"
+                          )}
                         </td>
                       </tr>
                     );
@@ -883,6 +1073,7 @@ export default function DocumentView() {
             </div>
           </div>
         );
+      }
 
       case "sentences":
         return (
@@ -931,15 +1122,10 @@ export default function DocumentView() {
         return (
           <div>
             <SectionDesc desc={t(currentSection?.desc)} />
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20 }}>
-              {renderAnalysisChart(isTamil ? "அடிக்கடி வரும் சொற்கள்" : isSinhala ? "නිතර භාවිත වන වචන" : "Most Frequent Tokens", wordFrequencyData, "#4a7c59")}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20 }}>
               {renderAnalysisChart(isTamil ? "சொல் வகைப் பகிர்வு (POS)" : isSinhala ? "පද වර්ග බෙදාහැරීම (POS)" : "Part-of-Speech Distribution", posChartData, "#1a3a2a")}
-              {renderAnalysisChart(isTamil ? "வாக்கியம் வாரியான சொல் எண்ணிக்கை" : isSinhala ? "වාක්‍යයකට ටෝකන ගණන" : "Tokens per Sentence", sentenceLengthData, "#386641")}
               {renderAnalysisChart(isTamil ? "உருபியல் அம்சங்களின் எண்ணிக்கை" : isSinhala ? "රූපවිද්‍යාත්මක ලක්ෂණ ගණන" : "Morphological Feature Counts", morphologyData, "#6aaa80")}
-              {renderAnalysisChart(isTamil ? "வேர்ச்சொல் மாற்றங்கள்" : isSinhala ? "මූල පද වෙනස්වීම්" : "Lemmatization", lemmaData, "#2d5a3d")}
-              {renderAnalysisChart(isTamil ? "சொற்களஞ்சிய அளவு" : isSinhala ? "වචන මාලාවේ ප්‍රමාණය" : "Vocabulary Size", vocabularyData, "#4a7c59")}
-              {renderAnalysisChart(isTamil ? "ஆவண அமைப்பு" : isSinhala ? "ලේඛන ව්‍යුහය" : "Document Structure", structureData, "#8fb89a")}
-              {renderAnalysisChart(isTamil ? "எழுத்து எண்ணிக்கை" : isSinhala ? "අක්ෂර ගණන" : "Character Counts", characterData, "#386641")}
+              {renderAnalysisChart(isTamil ? "வாக்கியம் வாரியான சொல் எண்ணிக்கை" : isSinhala ? "වාක්‍යයකට ටෝකන ගණන" : "Tokens per Sentence", sentenceLengthData, "#386641")}
             </div>
           </div>
         );
