@@ -197,4 +197,4 @@ async def summarize_url(url: str = Form(...)):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))

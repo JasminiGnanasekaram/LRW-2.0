@@ -134,6 +134,10 @@ async function downloadExport(path, format, filename) {
 
 const normalizeFormat = (format) => (format === "csv" ? "csv" : "json");
 
+export function exportDocumentURL(id, format = "json") {
+  return `${API_BASE}/documents/${id}/export?format=${format}`;
+}
+
 export const exportDocument = (id, format = "json", filename = "document") =>
   downloadExport(`/documents/${id}/export`, normalizeFormat(format), filename);
 

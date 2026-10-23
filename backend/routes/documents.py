@@ -183,6 +183,7 @@ async def upload(
         "file_type":  file_type,
         "raw_text":   stored_raw_text,
         "gridfs_id":  gridfs_id,
+        "summary":    get_text_summary(raw_text),
         "created_at": datetime.utcnow(),
     }
     if pdf_type:
@@ -503,6 +504,7 @@ async def delete_document(doc_id: str, user: dict = Depends(get_current_user)):
     return {"detail": "Deleted successfully"}
 
 
+
 # ── Export single document ────────────────────────────────────────────
 @router.get("/{doc_id}/export")
 async def export_document(
@@ -547,7 +549,6 @@ async def export_all(format: str = "csv", user: dict = Depends(get_current_user)
             media_type="text/csv; charset=utf-8",
             headers={"Content-Disposition": 'attachment; filename="lrw_documents.csv"'},
         )
-
     return JSONResponse(
         content=safe_docs,
         media_type="application/json; charset=utf-8"

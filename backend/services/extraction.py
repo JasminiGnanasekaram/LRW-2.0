@@ -151,7 +151,6 @@ def extract_from_url(url: str, timeout: int = 20) -> str:
     except requests.exceptions.RequestException as e:
         raise ValueError(f"Could not fetch the page: {e}")
 
-
 _whisper_model = None
 
 def _get_whisper():
@@ -185,7 +184,6 @@ def extract_from_audio(content: bytes) -> str:
 def _pdf_is_mostly_text(content: bytes, min_chars_per_page: int = 20, text_ratio_threshold: float = 0.5) -> bool:
     """Check whether a PDF has a usable text layer on most pages."""
     import fitz  # PyMuPDF
-
     doc = fitz.open(stream=content, filetype="pdf")
     total_pages = len(doc)
     if total_pages == 0:

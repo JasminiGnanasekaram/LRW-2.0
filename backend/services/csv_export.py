@@ -160,5 +160,4 @@ def documents_summary_csv(docs: List[dict]) -> str:
             meta.get("publication_date", ""),
             d.get("created_at", ""),
         ])
-
     return buf.getvalue()

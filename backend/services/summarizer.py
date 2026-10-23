@@ -126,3 +126,4 @@ def get_structured_summary(text: str) -> Dict[str, Any]:
         "key_points": key_points,
         "important_topics": [w for w, _ in word_freq.most_common(MAX_TOPICS)],
     }
+
