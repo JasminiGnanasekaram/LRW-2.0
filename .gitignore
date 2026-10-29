@@ -1,4 +1,4 @@
-﻿# Python
+# Python
 __pycache__/
 *.pyc
 *.pyo
@@ -26,8 +26,10 @@ dist/
 # IDE
 .vscode/
 .idea/
-backend/gmail_credentials.json
-backend/gmail_token.pickle
+backend/gmail*
+backend/gmail/
+*.pickle
+*.json.json
 
 # Environment files
 .env
