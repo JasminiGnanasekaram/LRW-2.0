@@ -131,9 +131,7 @@ def extract_from_url(url: str, timeout: int = 20) -> str:
         url = "https://" + url
 
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9,ta;q=0.8",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
     }
 
     try:
@@ -149,12 +147,9 @@ def extract_from_url(url: str, timeout: int = 20) -> str:
             raise ValueError("No readable text found on that page.")
         return text
     except requests.exceptions.Timeout:
-        raise ValueError(
-            f"Request to {url} timed out. Please check your internet connection (e.g. ensure Mobile Data is active on your phone hotspot) or check if the site is currently reachable."
-        )
+        raise ValueError(f"Request to {url} timed out. The site may be slow or blocking requests.")
     except requests.exceptions.RequestException as e:
         raise ValueError(f"Could not fetch the page: {e}")
-
 
 _whisper_model = None
 
@@ -189,7 +184,6 @@ def extract_from_audio(content: bytes) -> str:
 def _pdf_is_mostly_text(content: bytes, min_chars_per_page: int = 20, text_ratio_threshold: float = 0.5) -> bool:
     """Check whether a PDF has a usable text layer on most pages."""
     import fitz  # PyMuPDF
-
     doc = fitz.open(stream=content, filetype="pdf")
     total_pages = len(doc)
     if total_pages == 0:

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, UploadFile, File, Form, Body, HTTPException
 from fastapi.responses import JSONResponse, PlainTextResponse
 from datetime import datetime
+from collections import Counter
 from bson import ObjectId
 import json
 import re
@@ -70,14 +71,10 @@ async def _doc_out(raw, cleaned=None, meta=None, analysis=None):
         "pdf_type":     raw.get("pdf_type"),
         "raw_text":     raw_text,
         "cleaned_text": cleaned.get("text") if cleaned else None,
-        "metadata":      meta.get("data") if meta else None,
-        "nlp":           analysis.get("data") if analysis else None,
-        "summary":       summary,
-        "crawled_pages": raw.get("crawled_pages") or [],
-        "total_available_pages": raw.get("total_available_pages"),
-        "created_at":    raw.get("created_at"),
-        "is_crawled_subpage": bool(raw.get("is_crawled_subpage")),
-        "parent_document_id": str(raw.get("parent_document_id")) if raw.get("parent_document_id") else None,
+        "metadata":     meta.get("data") if meta else None,
+        "nlp":          analysis.get("data") if analysis else None,
+        "summary":      summary,
+        "created_at":   raw.get("created_at"),
     }
 
 
@@ -88,7 +85,6 @@ async def upload(
     file_type: str = Form(...),   # text | pdf | image | audio | url
     url: Optional[str] = Form(None),
     metadata: Optional[str] = Form(None),  # JSON string
-    summary: Optional[str] = Form(None),
     user: dict = Depends(get_current_user),
 ):
     """Upload a document or URL. Runs extraction + cleaning + NLP synchronously."""
@@ -187,6 +183,7 @@ async def upload(
         "file_type":  file_type,
         "raw_text":   stored_raw_text,
         "gridfs_id":  gridfs_id,
+        "summary":    get_text_summary(raw_text),
         "created_at": datetime.utcnow(),
     }
     if pdf_type:
@@ -236,16 +233,16 @@ async def upload(
     }
     await nlp_analysis_col.insert_one(analysis_doc)
 
-    # 7. Generate Summary if not provided from upload preview
-    if not summary:
-        try:
-            from fastapi.concurrency import run_in_threadpool
-            from .summarize import summarize
-            summary = await run_in_threadpool(summarize, cleaned_text[:5000])
-        except Exception as e:
-            import logging
-            logging.getLogger("uvicorn.error").warning(f"Failed to generate summary during upload: {e}")
-            summary = ""
+    # 7. Generate Summary
+    summary = ""
+    try:
+        from fastapi.concurrency import run_in_threadpool
+        from .summarize import summarize
+        summary = await run_in_threadpool(summarize, cleaned_text[:5000])
+    except Exception as e:
+        import logging
+        logging.getLogger("uvicorn.error").warning(f"Failed to generate summary during upload: {e}")
+        summary = ""
 
     await raw_documents_col.update_one(
         {"_id": raw_res.inserted_id},
@@ -260,10 +257,7 @@ async def upload(
 @router.get("/")
 async def list_documents(user: dict = Depends(get_current_user), limit: int = 50):
     cursor = raw_documents_col.find(
-        {
-            "user_id": ObjectId(user["id"]),
-            "is_crawled_subpage": {"$ne": True},
-        }
+        {"user_id": ObjectId(user["id"])}
     ).sort("created_at", -1).limit(limit)
 
     out = []
@@ -376,6 +370,111 @@ async def update_document_metadata(
     return {"detail": "Metadata updated successfully", "metadata": metadata_update}
 
 
+# ── Update document NLP data ──────────────────────────────────────────
+@router.patch("/{doc_id}/nlp")
+async def update_document_nlp(
+    doc_id: str,
+    nlp_update: dict = Body(...),
+    user: dict = Depends(get_current_user),
+):
+    """Update NLP analysis data for a document, supporting per-token or batch word edits."""
+    try:
+        raw = await raw_documents_col.find_one({"_id": ObjectId(doc_id)})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid document ID")
+
+    if not raw:
+        raise HTTPException(status_code=404, detail="Not found")
+    if str(raw["user_id"]) != user["id"] and user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    cleaned = await cleaned_documents_col.find_one({"raw_document_id": raw["_id"]})
+    if not cleaned:
+        raise HTTPException(status_code=404, detail="Cleaned document not found")
+
+    analysis = await nlp_analysis_col.find_one({"cleaned_document_id": cleaned["_id"]})
+    current_data = analysis.get("data") if analysis else {}
+    if not isinstance(current_data, dict):
+        current_data = {}
+
+    # Targeted token / word update
+    if "token_index" in nlp_update or "word" in nlp_update:
+        token_details = list(current_data.get("token_details") or [])
+        token_index = nlp_update.get("token_index")
+        word = nlp_update.get("word")
+        new_pos = nlp_update.get("pos")
+        new_lemma = nlp_update.get("lemma")
+        new_morph = nlp_update.get("morph")
+        apply_all = bool(nlp_update.get("apply_all", False))
+
+        target_word = word.strip().lower() if word else ""
+        updated_count = 0
+
+        for idx, tk in enumerate(token_details):
+            if not isinstance(tk, dict):
+                continue
+            tk_text = (tk.get("token") or tk.get("text") or "").strip().lower()
+            match = False
+
+            if apply_all and target_word:
+                if tk_text == target_word:
+                    match = True
+            elif token_index is not None and idx == token_index:
+                match = True
+            elif not apply_all and target_word and tk_text == target_word and updated_count == 0:
+                match = True
+
+            if match:
+                if new_pos is not None:
+                    tk["pos"] = new_pos
+                    tk["tag"] = new_pos
+                if new_lemma is not None:
+                    tk["lemma"] = new_lemma
+                if new_morph is not None:
+                    tk["morph"] = new_morph
+                updated_count += 1
+                if not apply_all:
+                    break
+
+        current_data["token_details"] = token_details
+
+        # Recompute pos_distribution
+        pos_counter = Counter()
+        for tk in token_details:
+            if isinstance(tk, dict):
+                p = tk.get("pos")
+                if p:
+                    pos_counter[p] += 1
+        current_data["pos_distribution"] = dict(pos_counter)
+
+        # Recompute lemmas
+        current_data["lemmas"] = [
+            tk.get("lemma") for tk in token_details if isinstance(tk, dict) and tk.get("lemma")
+        ]
+
+    elif "nlp" in nlp_update and isinstance(nlp_update["nlp"], dict):
+        current_data.update(nlp_update["nlp"])
+    else:
+        current_data.update(nlp_update)
+
+    if analysis:
+        await nlp_analysis_col.update_one(
+            {"_id": analysis["_id"]},
+            {"$set": {"data": current_data, "updated_at": datetime.utcnow()}},
+        )
+    else:
+        res = await nlp_analysis_col.insert_one({
+            "cleaned_document_id": cleaned["_id"],
+            "data": current_data,
+            "created_at": datetime.utcnow(),
+        })
+
+    return {
+        "detail": "NLP analysis updated successfully",
+        "nlp": current_data,
+    }
+
+
 # ── Delete document ───────────────────────────────────────────────────
 @router.delete("/{doc_id}")
 async def delete_document(doc_id: str, user: dict = Depends(get_current_user)):
@@ -403,6 +502,7 @@ async def delete_document(doc_id: str, user: dict = Depends(get_current_user)):
     await sources_col.delete_one({"_id": raw.get("source_id")})
 
     return {"detail": "Deleted successfully"}
+
 
 
 # ── Export single document ────────────────────────────────────────────
@@ -449,7 +549,6 @@ async def export_all(format: str = "csv", user: dict = Depends(get_current_user)
             media_type="text/csv; charset=utf-8",
             headers={"Content-Disposition": 'attachment; filename="lrw_documents.csv"'},
         )
-
     return JSONResponse(
         content=safe_docs,
         media_type="application/json; charset=utf-8"

@@ -93,13 +93,12 @@ export async function uploadAvatar(file) {
   return data.user;
 }
 
-export function uploadDocument({ file, fileType, url, metadata, summary }) {
+export function uploadDocument({ file, fileType, url, metadata }) {
   const form = new FormData();
   form.append("file_type", fileType);
   if (file) form.append("file", file);
   if (url) form.append("url", url);
   if (metadata) form.append("metadata", JSON.stringify(metadata));
-  if (summary) form.append("summary", summary);
   return unwrap(api.post("/documents/upload", form));
 }
 
@@ -107,6 +106,7 @@ export const listDocuments = () => unwrap(api.get("/documents/"));
 export const getDocument = (id) => unwrap(api.get(`/documents/${id}`));
 export const deleteDocument = (id) => unwrap(api.delete(`/documents/${id}`));
 export const updateDocumentMetadata = (id, metadata) => unwrap(api.patch(`/documents/${id}/metadata`, metadata));
+export const updateDocumentNlp = (id, nlpUpdate) => unwrap(api.patch(`/documents/${id}/nlp`, nlpUpdate));
 
 function saveBlob(blob, filename) {
   const objectUrl = URL.createObjectURL(blob);
@@ -134,6 +134,10 @@ async function downloadExport(path, format, filename) {
 
 const normalizeFormat = (format) => (format === "csv" ? "csv" : "json");
 
+export function exportDocumentURL(id, format = "json") {
+  return `${API_BASE}/documents/${id}/export?format=${format}`;
+}
+
 export const exportDocument = (id, format = "json", filename = "document") =>
   downloadExport(`/documents/${id}/export`, normalizeFormat(format), filename);
 
@@ -146,9 +150,7 @@ export const adminStats = () => unwrap(api.get("/admin/stats"));
 export const adminListUsers = () => unwrap(api.get("/admin/users"));
 export const adminUpdateUser = (id, patch) => unwrap(api.patch(`/admin/users/${id}`, patch));
 export const adminDeleteUser = (id) => unwrap(api.delete(`/admin/users/${id}`));
+export const adminListDocuments = () => unwrap(api.get("/admin/documents"));
+export const adminDeleteDocument = (id) => unwrap(api.delete(`/admin/documents/${id}`));
 
-export const crawlWebsite = (url, max_pages = 10, document_id = null) =>
-  unwrap(api.post("/crawl", { url, max_pages, document_id }));
-
-export const discoverPages = (url, document_id = null) =>
-  unwrap(api.get("/crawl/discover", { params: { url, document_id } }));
+export const getJob = (id) => unwrap(api.get(`/jobs/${id}`));

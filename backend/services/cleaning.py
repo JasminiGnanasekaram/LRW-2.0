@@ -81,6 +81,11 @@ def remove_unwanted_chars(text: str) -> str:
     return "".join(kept)
 
 
+def remove_urls(text: str) -> str:
+    """Strip web URLs from text."""
+    return re.sub(r"https?://\S+|www\.\S+", "", text)
+
+
 def collapse_whitespace(text: str) -> str:
     """Collapse spaces and limit paragraph breaks to a single blank line."""
     text = text.replace("\r\n", "\n").replace("\r", "\n")
@@ -107,4 +112,4 @@ def clean(text: str) -> str:
         return ""
     for step in PIPELINE:
         text = step(text)
-    return text
+    return text

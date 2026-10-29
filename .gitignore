@@ -35,3 +35,5 @@ backend/gmail_token.pickle
 
 backend/.env
 frontend/.env
+__pycache__/
+*.pyc

@@ -116,13 +116,11 @@ def documents_summary_csv(docs: List[dict]) -> str:
     buf = io.StringIO()
     buf.write("\ufeff")
     writer = csv.writer(buf)
-
     writer.writerow([
         "ID",
         "Filename",
         "File Type",
         "Primary Language",
-        "Language Breakdown",
         "Token Count",
         "Unique Tokens",
         "Sentence Count",
@@ -135,7 +133,6 @@ def documents_summary_csv(docs: List[dict]) -> str:
         "Publication Date",
         "Created At",
     ])
-
     for d in docs:
         meta = d.get("metadata") or {}
         nlp = d.get("nlp") or {}
@@ -147,7 +144,6 @@ def documents_summary_csv(docs: List[dict]) -> str:
             d.get("filename", ""),
             d.get("file_type", ""),
             nlp.get("language", ""),
-            nlp.get("language_display", ""),
             nlp.get("token_count", ""),
             nlp.get("unique_tokens", ""),
             nlp.get("sentence_count", ""),
@@ -160,5 +156,4 @@ def documents_summary_csv(docs: List[dict]) -> str:
             meta.get("publication_date", ""),
             d.get("created_at", ""),
         ])
-
     return buf.getvalue()
