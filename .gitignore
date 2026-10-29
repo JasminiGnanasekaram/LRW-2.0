@@ -1,12 +1,37 @@
-﻿.venv/
-venv/
-node_modules/
+﻿# Python
 __pycache__/
 *.pyc
+*.pyo
 *.pickle
+.venv/
+venv/
+
+# Environment - NEVER push this
+.env
+
+# Uploads
+uploads/
+
+# Node
+node_modules/
+dist/
+
+# Vite cache
+.vite/
+
+# Test & type-check caches
+.pytest_cache/
+.mypy_cache/
+
+# IDE
+.vscode/
+.idea/
+backend/gmail_credentials.json
+backend/gmail_token.pickle
+
+# Environment files
 .env
 *.env
-gmail_credentials.json
-gmail_token.pickle
-uploads/
-*.zip
+
+backend/.env
+frontend/.env

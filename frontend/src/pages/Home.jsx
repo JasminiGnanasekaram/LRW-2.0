@@ -30,6 +30,33 @@ const ROLES = [
   { name: "Guest", color: "#5F5E5A", desc: "Read-only browsing of open-licensed documents without an account." },
 ];
 
+const FOOTER_COLUMNS = [
+  {
+    heading: "Product",
+    links: [
+      { label: "Upload", to: "/upload" },
+      { label: "Search", to: "/search" },
+      { label: "Sign in", to: "/login" },
+      { label: "Get started", to: "/register" },
+    ],
+  },
+  {
+    heading: "Company",
+    links: [
+      { label: "About", to: "/about" },
+      { label: "Contact", to: "/contact" },
+    ],
+  },
+  {
+    heading: "Legal",
+    links: [
+      { label: "Terms of Service", to: "/terms" },
+      { label: "Privacy Policy", to: "/privacy" },
+      { label: "Licenses", to: "/licenses" },
+    ],
+  },
+];
+
 const FEATURE_ICONS = {
   "Multi-format upload": (
     <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round">
@@ -102,11 +129,7 @@ function tagWord(word) {
     return POS_DICT[cleanWord];
   }
 
-  if (
-    cleanWord.endsWith("ing") ||
-    cleanWord.endsWith("ed") ||
-    (cleanWord.endsWith("es") && cleanWord.length > 3)
-  ) {
+  if (cleanWord.endsWith("ing") || cleanWord.endsWith("ed") || cleanWord.endsWith("es") || cleanWord.endsWith("s") && cleanWord.length > 3) {
     return "VERB";
   }
   if (cleanWord.endsWith("ly")) {
@@ -161,11 +184,11 @@ export default function Home() {
             <polyline points="2 17 12 22 22 17" />
             <polyline points="2 12 12 17 22 12" />
           </svg>
-          Language Resource Workspace
+          Language Resource Workbench
         </div>
 
         <h1 className="hero-title">
-          Build, analyze and explore your <span style={{ color: "var(--sage)", textDecoration: "underline", textDecorationColor: "rgba(143,184,154,0.4)" }}>language corpus</span>
+          Build, analyze and explore your <span style={{ color: "var(--sage)", textDecoration: "underline", decorationColor: "rgba(143,184,154,0.4)" }}>language corpus</span>
         </h1>
 
         <p className="hero-subtitle">
@@ -422,20 +445,53 @@ export default function Home() {
       </section>
 
       {/* ── Footer ────────────────────────────────────────── */}
-      <footer style={{
-        background: "#0c1510", padding: "32px 24px",
-        display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 20,
-        borderTop: "1px solid rgba(255,255,255,0.05)"
-      }}>
-        <span style={{ fontFamily: "var(--font-head)", fontSize: 18, fontWeight: 700, color: "rgba(255,255,255,0.5)", letterSpacing: "-0.01em" }}>LRW</span>
-        <div style={{ display: "flex", gap: 24 }}>
-          {["Privacy Policy", "Terms of Service", "Contact Support"].map(label => (
-            <span key={label} style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", cursor: "default" }}>
-              {label}
+      <footer style={{ background: "#111d16", padding: "56px 32px 0" }}>
+        <div style={{
+          maxWidth: 960, margin: "0 auto", display: "grid",
+          gridTemplateColumns: "1.4fr repeat(3, 1fr)", gap: 32,
+          paddingBottom: 40, borderBottom: "1px solid rgba(255,255,255,0.08)",
+        }}>
+          <div>
+            <span style={{ fontFamily: "var(--font-head)", fontSize: 20, fontWeight: 700, color: "#fff" }}>
+              LR<span style={{ color: "var(--sage)" }}>W</span>
             </span>
+            <p style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", marginTop: 12, lineHeight: 1.6, maxWidth: 240 }}>
+              A corpus management platform for uploading, processing, and analyzing language data.
+            </p>
+          </div>
+
+          {FOOTER_COLUMNS.map(({ heading, links }) => (
+            <div key={heading}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.55)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 16 }}>
+                {heading}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {links.map(({ label, to }) => (
+                  <Link
+                    key={label}
+                    to={to}
+                    style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}
+                  >
+                    {label}
+                  </Link>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
-        <span style={{ fontSize: 13, color: "rgba(255,255,255,0.3)" }}>&copy; {new Date().getFullYear()} Language Resource Workspace</span>
+
+        <div style={{
+          maxWidth: 960, margin: "0 auto", padding: "20px 0",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          flexWrap: "wrap", gap: 10,
+        }}>
+          <span style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>
+            © 2026 Language Resource Workbench. All rights reserved.
+          </span>
+          <span style={{ fontSize: 12, color: "rgba(255,255,255,0.25)" }}>
+            Built with FastAPI, React &amp; MongoDB
+          </span>
+        </div>
       </footer>
     </div>
   );

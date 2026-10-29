@@ -15,7 +15,7 @@ router = APIRouter(prefix="/search", tags=["search"])
 
 @router.get("/")
 async def search(
-    q: str = Query(..., min_length=1),
+    q: Optional[str] = Query(None),
     pos: Optional[str] = Query(None),
     domain: Optional[str] = Query(None),
     license: Optional[str] = Query(None),
@@ -25,22 +25,26 @@ async def search(
     limit: int = 20,
     user: dict = Depends(get_current_user),
 ):
-    base_filter: dict = {"$text": {"$search": q}}
+    base_filter = {}
     if user["role"] != "admin":
         base_filter["user_id"] = ObjectId(user["id"])
 
-    try:
-        cursor = (
-            cleaned_documents_col.find(base_filter, {"score": {"$meta": "textScore"}})
-            .sort([("score", {"$meta": "textScore"})])
-            .limit(limit * 4)
-        )
+    candidates = []
+    if q:
+        try:
+            text_filter = {**base_filter, "$text": {"$search": q}}
+            cursor = (
+                cleaned_documents_col.find(text_filter, {"score": {"$meta": "textScore"}})
+                .sort([("score", {"$meta": "textScore"})])
+                .limit(limit * 4)
+            )
+            candidates = [doc async for doc in cursor]
+        except Exception:
+            regex_filter = {**base_filter, "text": {"$regex": q, "$options": "i"}}
+            candidates = [doc async for doc in cleaned_documents_col.find(regex_filter).limit(limit * 4)]
+    else:
+        cursor = cleaned_documents_col.find(base_filter).sort([("_id", -1)]).limit(limit * 4)
         candidates = [doc async for doc in cursor]
-    except Exception:
-        regex_filter = {"text": {"$regex": q, "$options": "i"}}
-        if user["role"] != "admin":
-            regex_filter["user_id"] = ObjectId(user["id"])
-        candidates = [doc async for doc in cleaned_documents_col.find(regex_filter).limit(limit * 4)]
 
     results = []
     for cleaned in candidates:
@@ -66,7 +70,7 @@ async def search(
             analysis = await nlp_analysis_col.find_one({"cleaned_document_id": cleaned["_id"]})
             nlp_data = ((analysis or {}).get("data") or {})
             tokens = nlp_data.get("token_details") or nlp_data.get("tokens") or []
-            ql = q.lower()
+            ql = q.lower() if q else None
             match = False
             for t in tokens:
                 if isinstance(t, dict):
@@ -77,9 +81,11 @@ async def search(
                     token_pos = ""
                     token_text = str(t).lower()
                     token_lemma = token_text
-                if token_pos == pos.upper() and (ql in token_text or ql in token_lemma):
-                    match = True
-                    break
+                
+                if token_pos == pos.upper():
+                    if ql is None or (ql in token_text or ql in token_lemma):
+                        match = True
+                        break
             if not match:
                 continue
 

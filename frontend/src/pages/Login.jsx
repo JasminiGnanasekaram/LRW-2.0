@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { login } from "../api";
 
 export default function Login() {
@@ -9,10 +9,6 @@ export default function Login() {
   const [unverified, setUnverified] = useState(false);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-
-  // Show success banner when redirected after email verification
-  const justVerified = searchParams.get("verified") === "1";
 
   const submit = async (e) => {
     e.preventDefault();
@@ -37,17 +33,6 @@ export default function Login() {
       <div className="auth-card fade-up">
         <div className="auth-logo">LR<span>W</span></div>
         <p className="auth-tagline">Language Resource Workspace</p>
-
-        {/* Success message after email verification */}
-        {justVerified && (
-          <div style={{
-            background: "#e8f5e9", border: "1px solid #2d6a4f",
-            borderRadius: 8, padding: "12px 16px", marginBottom: 16,
-            color: "#2d6a4f", fontSize: 14, textAlign: "center", fontWeight: 500,
-          }}>
-            ✅ Email verified successfully! You can now sign in.
-          </div>
-        )}
 
         <form onSubmit={submit}>
           <div className="auth-field">
