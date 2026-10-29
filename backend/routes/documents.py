@@ -124,6 +124,7 @@ async def get_document(document_id: str, user: dict = Depends(get_current_user))
     ) if cleaned else None
     if cleaned and (
         not analysis
+        or "sentences" not in (analysis.get("data") or {})
         or analysis.get("nlp_rules_version") != nlp.NLP_RULES_VERSION
     ):
         try:
@@ -148,6 +149,23 @@ async def get_document(document_id: str, user: dict = Depends(get_current_user))
         except Exception as exc:
             import logging
             logging.getLogger("uvicorn.error").warning(f"Failed to refresh NLP analysis: {exc}")
+
+    if not raw.get("summary") and cleaned and cleaned.get("text"):
+        try:
+            from fastapi.concurrency import run_in_threadpool
+            from .summarize import summarize
+            summary = await run_in_threadpool(summarize, cleaned["text"][:5000])
+        except Exception as exc:
+            import logging
+            logging.getLogger("uvicorn.error").warning(f"Failed to auto-generate missing summary: {exc}")
+        else:
+            if summary:
+                await raw_documents_col.update_one(
+                    {"_id": raw["_id"]},
+                    {"$set": {"summary": summary}},
+                )
+                raw["summary"] = summary
+
     return await _doc_out(raw, cleaned, meta, analysis)
 
 
@@ -192,9 +210,28 @@ async def export_document(
 @router.delete("/{document_id}")
 async def delete_document(document_id: str, user: dict = Depends(get_current_user)):
     raw = await _owned_raw_document(document_id, user)
+    if raw.get("gridfs_id"):
+        import logging
+        try:
+            await get_gridfs_bucket().delete(raw["gridfs_id"])
+        except Exception as exc:
+            logging.getLogger("uvicorn.error").warning(
+                f"Failed to delete GridFS data for document {document_id}: {exc}"
+            )
+
+    cleaned_docs = await cleaned_documents_col.find(
+        {"raw_document_id": raw["_id"]}
+    ).to_list(None)
+    for cleaned in cleaned_docs:
+        await nlp_analysis_col.delete_many(
+            {"cleaned_document_id": cleaned["_id"]}
+        )
+
     await cleaned_documents_col.delete_many({"raw_document_id": raw["_id"]})
     await document_metadata_col.delete_many({"raw_document_id": raw["_id"]})
     await raw_documents_col.delete_one({"_id": raw["_id"]})
+    if raw.get("source_id"):
+        await sources_col.delete_one({"_id": raw["source_id"]})
     return {"message": "Document deleted"}
 
 
@@ -350,91 +387,6 @@ async def upload(
     return await _doc_out(raw_doc, cleaned_doc, meta_doc, analysis_doc)
 
 
-# ── List documents ────────────────────────────────────────────────────
-@router.get("/")
-async def list_documents(user: dict = Depends(get_current_user), limit: int = 50):
-    cursor = raw_documents_col.find(
-        {"user_id": ObjectId(user["id"])}
-    ).sort("created_at", -1).limit(limit)
-
-    out = []
-    async for raw in cursor:
-        cleaned  = await cleaned_documents_col.find_one({"raw_document_id": raw["_id"]})
-        meta     = await document_metadata_col.find_one({"raw_document_id": raw["_id"]})
-        analysis = None
-        if cleaned:
-            analysis = await nlp_analysis_col.find_one({"cleaned_document_id": cleaned["_id"]})
-        out.append(await _doc_out(raw, cleaned, meta, analysis))
-    return out
-
-
-# ── Get single document ───────────────────────────────────────────────
-@router.get("/{doc_id}")
-async def get_document(doc_id: str, user: dict = Depends(get_current_user)):
-    raw = await raw_documents_col.find_one({"_id": ObjectId(doc_id)})
-    if not raw:
-        raise HTTPException(status_code=404, detail="Not found")
-    if str(raw["user_id"]) != user["id"] and user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Forbidden")
-
-    cleaned  = await cleaned_documents_col.find_one({"raw_document_id": raw["_id"]})
-    meta     = await document_metadata_col.find_one({"raw_document_id": raw["_id"]})
-    analysis = None
-    if cleaned:
-        analysis = await nlp_analysis_col.find_one({"cleaned_document_id": cleaned["_id"]})
-        if (
-            not analysis
-            or "sentences" not in analysis.get("data", {})
-            or analysis.get("nlp_rules_version") != nlp.NLP_RULES_VERSION
-        ):
-            try:
-                from fastapi.concurrency import run_in_threadpool
-                analysis_data = await run_in_threadpool(nlp.analyze, cleaned.get("text") or "")
-                if analysis:
-                    await nlp_analysis_col.update_one(
-                        {"_id": analysis["_id"]},
-                        {"$set": {
-                            "data": analysis_data,
-                            "nlp_rules_version": nlp.NLP_RULES_VERSION,
-                        }}
-                    )
-                    analysis["data"] = analysis_data
-                else:
-                    analysis_doc = {
-                        "cleaned_document_id": cleaned["_id"],
-                        "data": analysis_data,
-                        "nlp_rules_version": nlp.NLP_RULES_VERSION,
-                        "created_at": datetime.utcnow(),
-                    }
-                    res = await nlp_analysis_col.insert_one(analysis_doc)
-                    analysis_doc["_id"] = res.inserted_id
-                    analysis = analysis_doc
-            except Exception as e:
-                import logging
-                logging.getLogger("uvicorn.error").warning(f"Failed to lazily compute NLP data: {e}")
-
-    # Auto-generate summary if missing and cleaned text is available
-    if not raw.get("summary") and cleaned and cleaned.get("text"):
-        summary = ""
-        try:
-            from fastapi.concurrency import run_in_threadpool
-            from .summarize import summarize
-            summary = await run_in_threadpool(summarize, cleaned.get("text")[:5000])
-        except Exception as e:
-            import logging
-            logging.getLogger("uvicorn.error").warning(f"Failed to auto-generate missing summary: {e}")
-            summary = ""
-        
-        if summary:
-            await raw_documents_col.update_one(
-                {"_id": raw["_id"]},
-                {"$set": {"summary": summary}}
-            )
-            raw["summary"] = summary
-
-    return await _doc_out(raw, cleaned, meta, analysis)
-
-
 # ── Update document metadata ──────────────────────────────────────────
 @router.patch("/{doc_id}/metadata")
 async def update_document_metadata(
@@ -525,35 +477,6 @@ async def update_document_nlp(
         await nlp_analysis_col.insert_one(analysis_doc)
 
     return {"detail": "NLP analysis updated successfully", "nlp": updated}
-
-
-# ── Delete document ───────────────────────────────────────────────────
-@router.delete("/{doc_id}")
-async def delete_document(doc_id: str, user: dict = Depends(get_current_user)):
-    """Delete a document and all associated data."""
-    raw = await raw_documents_col.find_one({"_id": ObjectId(doc_id)})
-    if not raw:
-        raise HTTPException(status_code=404, detail="Not found")
-    if str(raw["user_id"]) != user["id"] and user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Forbidden")
-
-    if raw.get("gridfs_id"):
-        bucket = get_gridfs_bucket()
-        try:
-            await bucket.delete(raw["gridfs_id"])
-        except Exception:
-            pass
-
-    cleaned_docs = await cleaned_documents_col.find({"raw_document_id": raw["_id"]}).to_list(None)
-    for cleaned in cleaned_docs:
-        await nlp_analysis_col.delete_many({"cleaned_document_id": cleaned["_id"]})
-
-    await raw_documents_col.delete_one({"_id": raw["_id"]})
-    await cleaned_documents_col.delete_many({"raw_document_id": raw["_id"]})
-    await document_metadata_col.delete_one({"raw_document_id": raw["_id"]})
-    await sources_col.delete_one({"_id": raw.get("source_id")})
-
-    return {"detail": "Deleted successfully"}
 
 
 # ── Bulk export ───────────────────────────────────────────────────────
