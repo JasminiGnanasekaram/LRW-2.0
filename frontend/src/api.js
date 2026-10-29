@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_BASE = "/api";
+const API_BASE = import.meta.env.VITE_API_URL || "/api";
 const TOKEN_KEY = "lrw_token";
 const USER_KEY = "lrw_user";
 const USER_EVENT = "lrw_user_updated";
