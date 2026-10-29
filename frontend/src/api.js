@@ -188,3 +188,15 @@ export async function getJob(id) {
   const { data } = await api.get(`/jobs/${id}`);
   return data;
 }
+
+
+// ---- Web Crawler ----
+export async function crawlWebsite(url, max_pages = 10, document_id = null) {
+  const { data } = await api.post("/crawl", { url, max_pages, document_id });
+  return data;
+}
+
+export async function discoverPages(url, document_id = null) {
+  const { data } = await api.get("/crawl/discover", { params: { url, document_id } });
+  return data;
+}

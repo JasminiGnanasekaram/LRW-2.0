@@ -1,93 +1,128 @@
-"""Multilingual document summarizer supporting English, Tamil, and Sinhala."""
+"""Multilingual extractive summarizer for English, Tamil and Sinhala."""
+
+import math
 import re
 from collections import Counter
-from typing import Dict, List, Any
+from typing import Any, Dict, List, Tuple
+
+INDIC_CLASS = "\u0B80-\u0BFF\u0D80-\u0DFF\u200C\u200D"
+
+_WORD_RE = re.compile(rf"[{INDIC_CLASS}]+|[A-Za-z0-9]+")
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?।॥])\s+|(?<=[.!?।॥][\"'”’)])\s+|\n+")
+_DECIMAL_RE = re.compile(r"(?<=\d)\.(?=\d)")
+_TITLE_RE = re.compile(r"\b(?:Dr|Mr|Mrs|Ms|Prof|Rev|Hon|Jr|Sr|Ltd|Co|Inc|vs|Rs)\.(?=\s)")
+_DOT = "\uE000"
+
+MIN_SENTENCE_CHARS = 10
+MIN_WORD_CHARS = 3
+MAX_SUMMARY_SENTENCES = 3
+MAX_KEY_POINTS = 4
+MAX_TOPICS = 5
+MAX_FALLBACK_CHARS = 200
+REDUNDANCY_THRESHOLD = 0.6
+
+STOP_WORDS = {
+    "the", "and", "but", "are", "was", "were", "for", "with", "this", "that", "its", "has", "have", "had",
+    "மற்றும்", "ஒரு", "இந்த", "அது", "என்று", "ஆகிய", "உள்ள", "என", "ஆன", "உடன்", "இன்",
+    "සහ", "එය", "මම", "එක්", "මෙම", "ඇති", "කරන", "හා", "වන", "නමුත්", "සඳහා",
+}
+
+
+def _words(text: str) -> List[str]:
+    return _WORD_RE.findall(text.lower())
+
+
+def _content_words(text: str) -> List[str]:
+    return [w for w in _words(text) if len(w) >= MIN_WORD_CHARS and w not in STOP_WORDS]
+
+
+def _split_sentences(text: str) -> List[str]:
+    protected = _DECIMAL_RE.sub(_DOT, text.replace("\r\n", "\n").replace("\r", "\n"))
+    protected = _TITLE_RE.sub(lambda m: m.group(0).replace(".", _DOT), protected)
+    sentences = (part.replace(_DOT, ".").strip() for part in _SENTENCE_SPLIT_RE.split(protected))
+    return [s for s in sentences if len(s) > MIN_SENTENCE_CHARS]
+
+
+def _truncate(text: str, limit: int = MAX_FALLBACK_CHARS) -> str:
+    text = text.strip()
+    if len(text) <= limit:
+        return text
+    cut = text[:limit]
+    if not text[limit].isspace() and " " in cut:
+        cut = cut.rsplit(" ", 1)[0]
+    return cut.rstrip(" ,;:") + "…"
+
+
+def _score_sentences(sentences: List[str], word_freq: Counter) -> List[float]:
+    peak = max(word_freq.values())
+    scores = []
+    for idx, sentence in enumerate(sentences):
+        words = _content_words(sentence)
+        if not words:
+            scores.append(0.0)
+            continue
+        score = sum(word_freq[w] / peak for w in words) / math.sqrt(len(words))
+        if idx == 0:
+            score *= 1.5
+        scores.append(score)
+    return scores
+
+
+def _overlap(a: str, b: str) -> float:
+    set_a, set_b = set(_content_words(a)), set(_content_words(b))
+    if not set_a or not set_b:
+        return 0.0
+    return len(set_a & set_b) / len(set_a | set_b)
+
+
+def _select(sentences: List[str], scores: List[float], limit: int) -> List[str]:
+    chosen: List[int] = []
+    for idx in sorted(range(len(sentences)), key=lambda i: scores[i], reverse=True):
+        if len(chosen) >= limit:
+            break
+        if any(_overlap(sentences[idx], sentences[j]) > REDUNDANCY_THRESHOLD for j in chosen):
+            continue
+        chosen.append(idx)
+    return [sentences[i] for i in sorted(chosen)]
+
+
+def _analyze(text: str) -> Tuple[List[str], Counter, List[float]]:
+    sentences = _split_sentences(text)
+    word_freq = Counter(_content_words(text))
+    scores = _score_sentences(sentences, word_freq) if sentences and word_freq else []
+    return sentences, word_freq, scores
+
+
+def _summarize(text: str, sentences: List[str], scores: List[float]) -> str:
+    if not sentences:
+        return _truncate(text)
+    if len(sentences) <= 2:
+        return " ".join(sentences)
+    if not scores:
+        return " ".join(sentences[:2])
+    return " ".join(_select(sentences, scores, MAX_SUMMARY_SENTENCES))
 
 
 def get_text_summary(text: str) -> str:
-    """
-    Generates a concise, informative 2-3 sentence extractive summary
-    preserving the original language without truncation mid-word.
-    """
     if not text or not text.strip():
         return "No text available to summarize."
-
-    # 1. Split text into sentences
-    # Split on period, exclamation, question mark, Tamil/Sinhala sentence terminators
-    sentences = re.split(r'(?<=[.!?|।॥\n])\s+', text.strip())
-    sentences = [s.strip() for s in sentences if len(s.strip()) > 10]
-    
-    total_sentences = len(sentences)
-    if total_sentences == 0:
-        return text[:200]
-    if total_sentences <= 2:
-        return " ".join(sentences)
-
-    # 2. Tokenize words and count frequencies across scripts
-    words = re.findall(r'[\u0B80-\u0BFF\u0D80-\u0DFFa-zA-Z0-9]+', text.lower())
-    stop_words = {
-        # English
-        "the", "a", "an", "and", "or", "but", "is", "are", "was", "were", "to", "of", "in", "on", "for", "with", "this", "that", "it",
-        # Tamil
-        "மற்றும்", "ஒரு", "இந்த", "அது", "என்று", "ஆகிய", "உள்ள", "என", "ஆன", "உடன்", "இன்",
-        # Sinhala
-        "සහ", "එය", "මම", "එක්", "මෙම", "ඇති", "කරන", "හා", "වන", "නමුත්", "සඳහා"
-    }
-    filtered_words = [w for w in words if w not in stop_words and len(w) > 2]
-    
-    if not filtered_words:
-        return " ".join(sentences[:2])
-        
-    word_freq = Counter(filtered_words)
-    max_freq = max(word_freq.values())
-    scored_freq = {w: count / max_freq for w, count in word_freq.items()}
-    
-    # 3. Score sentences based on word salience + position weight (first sentence is weighted higher)
-    sentence_scores = []
-    for idx, sentence in enumerate(sentences):
-        sent_words = re.findall(r'[\u0B80-\u0BFF\u0D80-\u0DFFa-zA-Z0-9]+', sentence.lower())
-        score = sum(scored_freq.get(w, 0) for w in sent_words)
-        # Position weight: first 20% of document is more informative
-        if idx == 0:
-            score *= 1.5
-        sentence_scores.append((idx, score))
-        
-    # Select top 2-3 highest scoring sentences maintaining chronological order
-    num_sentences = min(3, total_sentences)
-    top_indices = sorted([idx for idx, _ in sorted(sentence_scores, key=lambda x: x[1], reverse=True)[:num_sentences]])
-    
-    selected_sentences = [sentences[i] for i in top_indices]
-    return " ".join(selected_sentences)
+    sentences, _, scores = _analyze(text)
+    return _summarize(text, sentences, scores)
 
 
 def get_structured_summary(text: str) -> Dict[str, Any]:
-    """
-    Returns short summary, key points, and important topics.
-    """
     if not text or not text.strip():
-        return {
-            "short_summary": "No text available.",
-            "key_points": [],
-            "important_topics": []
-        }
+        return {"short_summary": "No text available.", "key_points": [], "important_topics": []}
 
-    sentences = re.split(r'(?<=[.!?|।॥\n])\s+', text.strip())
-    sentences = [s.strip() for s in sentences if len(s.strip()) > 10]
+    sentences, word_freq, scores = _analyze(text)
 
-    words = re.findall(r'[\u0B80-\u0BFF\u0D80-\u0DFFa-zA-Z0-9]+', text.lower())
-    stop_words = {
-        "the", "a", "an", "and", "or", "but", "is", "are", "was", "were", "to", "of", "in", "on", "for", "with", "this", "that", "it",
-        "மற்றும்", "ஒரு", "இந்த", "அது", "என்று", "ஆகிய", "உள்ள", "என",
-        "සහ", "එය", "මම", "එක්", "මෙම", "ඇති", "කරන", "හා", "වන"
-    }
-    filtered_words = [w for w in words if w not in stop_words and len(w) > 2]
-    top_topics = [w for w, _ in Counter(filtered_words).most_common(5)]
-
-    key_points = sentences[:min(4, len(sentences))]
-    short_summary = get_text_summary(text)
+    if scores:
+        key_points = _select(sentences, scores, MAX_KEY_POINTS)
+    else:
+        key_points = sentences[:MAX_KEY_POINTS]
 
     return {
-        "short_summary": short_summary,
+        "short_summary": _summarize(text, sentences, scores),
         "key_points": key_points,
-        "important_topics": top_topics,
+        "important_topics": [w for w, _ in word_freq.most_common(MAX_TOPICS)],
     }

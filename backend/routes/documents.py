@@ -71,17 +71,19 @@ async def _doc_out(raw, cleaned=None, meta=None, analysis=None):
     summary = raw.get("summary") or (get_text_summary(raw_text) if raw_text else None)
 
     return {
-        "id":           str(raw["_id"]),
-        "user_id":      str(raw["user_id"]),
-        "filename":     raw.get("filename"),
-        "file_type":    raw.get("file_type"),
-        "pdf_type":     raw.get("pdf_type"),
-        "raw_text":     raw_text,
-        "summary":      summary,
-        "cleaned_text": cleaned.get("text") if cleaned else None,
-        "metadata": meta.get("data") if meta else None,
-        "nlp": nlp_data,
-        "created_at": raw.get("created_at"),
+        "id":                 str(raw["_id"]),
+        "user_id":            str(raw["user_id"]),
+        "filename":           raw.get("filename"),
+        "file_type":          raw.get("file_type"),
+        "pdf_type":           raw.get("pdf_type"),
+        "raw_text":           raw_text,
+        "summary":            summary,
+        "cleaned_text":       cleaned.get("text") if cleaned else None,
+        "metadata":           meta.get("data") if meta else None,
+        "nlp":                nlp_data,
+        "is_crawled_subpage": bool(raw.get("is_crawled_subpage", False)),
+        "parent_document_id": str(raw.get("parent_document_id")) if raw.get("parent_document_id") else None,
+        "created_at":         raw.get("created_at"),
     }
 
 
@@ -100,9 +102,16 @@ async def _owned_raw_document(document_id: str, user: dict) -> dict:
 
 
 @router.get("/")
-async def list_documents(user: dict = Depends(get_current_user), limit: int = 10_000):
-    """List the current user's documents for the dashboard."""
+async def list_documents(
+    include_subpages: bool = False,
+    user: dict = Depends(get_current_user),
+    limit: int = 10_000,
+):
+    """List the current user's documents for the dashboard (excluding crawled subpages by default)."""
     query = {} if user["role"] == "admin" else {"user_id": ObjectId(user["id"])}
+    if not include_subpages:
+        query["is_crawled_subpage"] = {"$ne": True}
+
     result = []
     async for raw in raw_documents_col.find(query).sort("created_at", -1).limit(limit):
         cleaned = await cleaned_documents_col.find_one({"raw_document_id": raw["_id"]})
@@ -241,6 +250,7 @@ async def upload(
     file_type: str = Form(...),   # text | pdf | image | audio | url
     url: Optional[str] = Form(None),
     metadata: Optional[str] = Form(None),  # JSON string
+    summary: Optional[str] = Form(None),
     user: dict = Depends(get_current_user),
 ):
     """Upload a document or URL. Runs extraction + cleaning + NLP synchronously (MVP)."""
@@ -367,22 +377,24 @@ async def upload(
     }
     await nlp_analysis_col.insert_one(analysis_doc)
 
-    # 7. Generate Summary
-    summary = ""
-    try:
-        from fastapi.concurrency import run_in_threadpool
-        from .summarize import summarize
-        summary = await run_in_threadpool(summarize, cleaned_text[:5000])
-    except Exception as e:
-        import logging
-        logging.getLogger("uvicorn.error").warning(f"Failed to generate summary during upload: {e}")
-        summary = ""
+    # 6. Summary — use preview summary if provided, otherwise generate
+    final_summary = (summary or "").strip()
+    if not final_summary:
+        try:
+            from fastapi.concurrency import run_in_threadpool
+            from .summarize import summarize as generate_summary
+            final_summary = await run_in_threadpool(generate_summary, cleaned_text[:4000])
+        except Exception as e:
+            import logging
+            logging.getLogger("uvicorn.error").warning(f"Failed to generate summary during upload: {e}")
+            final_summary = ""
 
-    await raw_documents_col.update_one(
-        {"_id": raw_res.inserted_id},
-        {"$set": {"summary": summary}}
-    )
-    raw_doc["summary"] = summary
+    if final_summary:
+        await raw_documents_col.update_one(
+            {"_id": raw_res.inserted_id},
+            {"$set": {"summary": final_summary}}
+        )
+    raw_doc["summary"] = final_summary
 
     return await _doc_out(raw_doc, cleaned_doc, meta_doc, analysis_doc)
 

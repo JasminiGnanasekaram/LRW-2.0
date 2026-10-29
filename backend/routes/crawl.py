@@ -255,4 +255,4 @@ async def start_crawl(
                 f"[Crawl] Failed to update crawled_pages on document {target_parent_id}: {exc}"
             )
 
-    return CrawlResponse(total=len(results), pages=results)
+    return CrawlResponse(total=len(results), pages=results)
