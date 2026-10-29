@@ -23,6 +23,7 @@ def document_to_csv(doc: dict) -> str:
     writer.writerow(["Filename", doc.get("filename", "")])
     writer.writerow(["File Type", doc.get("file_type", "")])
     writer.writerow(["Primary Language", nlp.get("language", "")])
+    writer.writerow(["Language Breakdown", nlp.get("language_display", "")])
     writer.writerow(["Token Count", nlp.get("token_count", "")])
     writer.writerow(["Unique Tokens", nlp.get("unique_tokens", "")])
     writer.writerow(["Sentence Count", nlp.get("sentence_count", "")])

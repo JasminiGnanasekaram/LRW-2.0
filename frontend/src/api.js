@@ -1,190 +1,156 @@
 import axios from "axios";
 
 const API_BASE = "/api";
+const TOKEN_KEY = "lrw_token";
+const USER_KEY = "lrw_user";
+const USER_EVENT = "lrw_user_updated";
 
 export const api = axios.create({ baseURL: API_BASE });
 
+const unwrap = (request) => request.then((response) => response.data);
+
+const notifyUserUpdated = (user) => window.dispatchEvent(new CustomEvent(USER_EVENT, { detail: user }));
+
+function saveUser(user) {
+  localStorage.setItem(USER_KEY, JSON.stringify(user));
+}
+
+function clearSession() {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
+  notifyUserUpdated(null);
+}
+
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("lrw_token");
+  const token = localStorage.getItem(TOKEN_KEY);
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
 api.interceptors.response.use(
-  (resp) => resp,
-  (err) => {
-    if (err.response?.status === 401) {
-      localStorage.removeItem("lrw_token");
-      localStorage.removeItem("lrw_user");
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      clearSession();
       if (!window.location.pathname.includes("/login")) {
         window.location.href = "/login";
-        
       }
     }
-    return Promise.reject(err);
+    return Promise.reject(error);
   }
 );
 
-// ---- Auth ----
+export const register = (name, email, password, role = "guest") =>
+  unwrap(api.post("/auth/register", { name, email, password, role }));
 
-// FIX: default was "student" which backend rejects → changed to "guest"
-export async function register(name, email, password, role = "guest") {
-  const { data } = await api.post("/auth/register", { name, email, password, role });
-  return data;
-}
+export const verifyEmail = (token) => unwrap(api.post("/auth/verify-email", null, { params: { token } }));
 
-export async function verifyEmail(token) {
-  const { data } = await api.post("/auth/verify-email", null, { params: { token } });
-  return data;
-}
+export const resendVerification = (email) =>
+  unwrap(api.post("/auth/resend-verification", null, { params: { email } }));
 
-// FIX: use params object instead of string (handles + and special chars in email safely)
-export async function resendVerification(email) {
-  const { data } = await api.post("/auth/resend-verification", null, { params: { email } });
-  return data;
-}
+export const forgotPassword = (email) => unwrap(api.post("/auth/forgot-password", { email }));
 
-export async function forgotPassword(email) {
-  const { data } = await api.post("/auth/forgot-password", { email });
-  return data;
-}
-
-export async function resetPassword(token, new_password) {
-  const { data } = await api.post("/auth/reset-password", { token, new_password });
-  return data;
-}
+export const resetPassword = (token, new_password) =>
+  unwrap(api.post("/auth/reset-password", { token, new_password }));
 
 export async function login(email, password) {
-  const form = new URLSearchParams();
-  form.append("username", email);
-  form.append("password", password);
-  const { data } = await api.post("/auth/login", form, {
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-  });
-  localStorage.setItem("lrw_token", data.access_token);
-  localStorage.setItem("lrw_user", JSON.stringify(data.user));
+  const form = new URLSearchParams({ username: email, password });
+  const data = await unwrap(api.post("/auth/login", form));
+  localStorage.setItem(TOKEN_KEY, data.access_token);
+  saveUser(data.user);
+  notifyUserUpdated(data.user);
   return data;
 }
 
 export async function logout() {
-  try { await api.post("/auth/logout"); } catch {}
-  localStorage.removeItem("lrw_token");
-  localStorage.removeItem("lrw_user");
+  try {
+    await api.post("/auth/logout");
+  } catch {
+
+  }
+  clearSession();
 }
 
 export function currentUser() {
-  const u = localStorage.getItem("lrw_user");
-  return u ? JSON.parse(u) : null;
+  try {
+    return JSON.parse(localStorage.getItem(USER_KEY));
+  } catch {
+    return null;
+  }
 }
 
-export async function updateProfile() {
-  throw new Error("Profile updates are not available from the current API.");
+export async function updateProfile(patch) {
+  const data = await unwrap(api.patch("/auth/me", patch));
+  saveUser(data);
+  return data;
 }
 
-export async function uploadAvatar() {
-  throw new Error("Avatar uploads are not available from the current API.");
+export async function uploadAvatar(file) {
+  const form = new FormData();
+  form.append("avatar", file);
+  const data = await unwrap(api.post("/auth/me/avatar", form));
+  saveUser(data.user);
+  return data.user;
 }
 
-// ---- Documents ----
-export async function uploadDocument({ file, fileType, url, metadata }) {
+export function uploadDocument({ file, fileType, url, metadata }) {
   const form = new FormData();
   form.append("file_type", fileType);
   if (file) form.append("file", file);
   if (url) form.append("url", url);
   if (metadata) form.append("metadata", JSON.stringify(metadata));
-  const { data } = await api.post("/documents/upload", form);
-  return data;
+  return unwrap(api.post("/documents/upload", form));
 }
 
-export async function listDocuments() {
-  const { data } = await api.get("/documents/");
-  return data;
-}
+export const listDocuments = () => unwrap(api.get("/documents/"));
+export const getDocument = (id) => unwrap(api.get(`/documents/${id}`));
+export const deleteDocument = (id) => unwrap(api.delete(`/documents/${id}`));
+export const updateDocumentMetadata = (id, metadata) => unwrap(api.patch(`/documents/${id}/metadata`, metadata));
+export const updateDocumentNlp = (id, nlpUpdate) => unwrap(api.patch(`/documents/${id}/nlp`, nlpUpdate));
 
-export async function getDocument(id) {
-  const { data } = await api.get(`/documents/${id}`);
-  return data;
-}
-
-export async function deleteDocument(id) {
-  const { data } = await api.delete(`/documents/${id}`);
-  return data;
-}
-
-export async function updateDocumentMetadata(id, metadata) {
-  const { data } = await api.patch(`/documents/${id}/metadata`, metadata);
-  return data;
-}
-
-export async function updateDocumentNlp(id, nlpData) {
-  const { data } = await api.patch(`/documents/${id}/nlp`, nlpData);
-  return data;
-}
-
-function triggerBlobDownload(blobData, filename) {
-  const blob = new Blob([blobData]);
-  const url = window.URL.createObjectURL(blob);
+function saveBlob(blob, filename) {
+  const objectUrl = URL.createObjectURL(blob);
   const link = document.createElement("a");
-  link.href = url;
+  link.href = objectUrl;
   link.download = filename;
   document.body.appendChild(link);
   link.click();
-  document.body.removeChild(link);
-  window.URL.revokeObjectURL(url);
+  link.remove();
+  URL.revokeObjectURL(objectUrl);
 }
 
-export async function exportDocument(id, format = "json", filename = "document") {
-  const response = await api.get(`/documents/${id}/export`, {
-    params: { format },
-    responseType: "blob",
-  });
-  const ext = format === "csv" ? "csv" : "json";
-  triggerBlobDownload(response.data, `${filename}.${ext}`);
+async function downloadExport(path, format, filename) {
+  try {
+    const { data } = await api.get(path, {
+      params: { format, t: Date.now() },
+      responseType: "blob",
+    });
+    saveBlob(data, `${filename}.${format}`);
+  } catch (error) {
+    const message = await error.response?.data?.text?.();
+    throw new Error(message || error.message || "Download failed");
+  }
 }
 
-export async function exportAll(format = "csv") {
-  const response = await api.get("/documents/export/all", {
-    params: { format },
-    responseType: "blob",
-  });
-  const ext = format === "csv" ? "csv" : "json";
-  triggerBlobDownload(response.data, `lrw_documents.${ext}`);
+const normalizeFormat = (format) => (format === "csv" ? "csv" : "json");
+
+export function exportDocumentURL(id, format = "json") {
+  return `${API_BASE}/documents/${id}/export?format=${format}`;
 }
 
-// ---- Search ----
-export async function searchDocuments(params) {
-  const { data } = await api.get("/search/", { params });
-  return data;
-}
+export const exportDocument = (id, format = "json", filename = "document") =>
+  downloadExport(`/documents/${id}/export`, normalizeFormat(format), filename);
 
-// ---- Admin ----
-export async function adminStats() {
-  const { data } = await api.get("/admin/stats");
-  return data;
-}
-export async function adminListUsers() {
-  const { data } = await api.get("/admin/users");
-  return data;
-}
-export async function adminUpdateUser(id, patch) {
-  const { data } = await api.patch(`/admin/users/${id}`, patch);
-  return data;
-}
-export async function adminDeleteUser(id) {
-  const { data } = await api.delete(`/admin/users/${id}`);
-  return data;
-}
-export async function adminListDocuments() {
-  const { data } = await api.get("/admin/documents");
-  return data;
-}
-export async function adminDeleteDocument(id) {
-  const { data } = await api.delete(`/admin/documents/${id}`);
-  return data;
-}
+export const exportAll = (format = "csv") =>
+  downloadExport("/documents/export/all", normalizeFormat(format), "lrw_documents");
 
-// ---- Jobs ----
-export async function getJob(id) {
-  const { data } = await api.get(`/jobs/${id}`);
-  return data;
-}
+export const searchDocuments = (params) => unwrap(api.get("/search/", { params }));
+
+export const adminStats = () => unwrap(api.get("/admin/stats"));
+export const adminListUsers = () => unwrap(api.get("/admin/users"));
+export const adminUpdateUser = (id, patch) => unwrap(api.patch(`/admin/users/${id}`, patch));
+export const adminDeleteUser = (id) => unwrap(api.delete(`/admin/users/${id}`));
+export const adminListDocuments = () => unwrap(api.get("/admin/documents"));
+export const adminDeleteDocument = (id) => unwrap(api.delete(`/admin/documents/${id}`));
+
+export const getJob = (id) => unwrap(api.get(`/jobs/${id}`));
