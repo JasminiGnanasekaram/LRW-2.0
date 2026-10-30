@@ -152,3 +152,9 @@ export const adminUpdateUser = (id, patch) => unwrap(api.patch(`/admin/users/${i
 export const adminDeleteUser = (id) => unwrap(api.delete(`/admin/users/${id}`));
 
 export const getJob = (id) => unwrap(api.get(`/jobs/${id}`));
+
+export const crawlWebsite = (url, max_pages = 10, document_id = null) =>
+  unwrap(api.post("/crawl", { url, max_pages, document_id }));
+
+export const discoverPages = (url, document_id = null) =>
+  unwrap(api.get("/crawl/discover", { params: { url, document_id } }));
