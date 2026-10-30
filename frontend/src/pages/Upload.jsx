@@ -146,6 +146,7 @@ export default function Upload() {
   const [dragging, setDragging] = useState(false);
   const [summary, setSummary] = useState("");
   const [summaryLoading, setSummaryLoading] = useState(false);
+  const audioLanguage = "ta";
 
   const accept = FILE_TYPES.find((type) => type.value === fileType)?.accept;
   const updateMeta = (key) => (e) => setMeta((prev) => ({ ...prev, [key]: e.target.value }));
@@ -164,6 +165,10 @@ export default function Upload() {
     const formData = new FormData();
     if (type === "url") formData.append("url", selectedUrl);
     else formData.append("file", selectedFile);
+
+    if (type === "audio") {
+      formData.append("language", audioLanguage);
+    }
 
     try {
       const { data } = await api.post(`/summarize/${type}`, formData);
@@ -219,6 +224,8 @@ export default function Upload() {
         fileType,
         url: fileType === "url" ? url.trim() : undefined,
         metadata: meta,
+        summary,
+        language: fileType === "audio" && audioLanguage !== "auto" ? audioLanguage : undefined,
       });
       navigate(`/documents/${result.id}`);
     } catch (err) {
