@@ -146,7 +146,7 @@ export default function Upload() {
   const [dragging, setDragging] = useState(false);
   const [summary, setSummary] = useState("");
   const [summaryLoading, setSummaryLoading] = useState(false);
-  const [audioLanguage, setAudioLanguage] = useState("ta");
+  const audioLanguage = "ta";
 
   const accept = FILE_TYPES.find((type) => type.value === fileType)?.accept;
   const updateMeta = (key) => (e) => setMeta((prev) => ({ ...prev, [key]: e.target.value }));
@@ -157,7 +157,7 @@ export default function Upload() {
     setSummaryLoading(false);
   };
 
-  const fetchSummary = async (type, { file: selectedFile, url: selectedUrl, langOverride }) => {
+  const fetchSummary = async (type, { file: selectedFile, url: selectedUrl }) => {
     const requestId = ++summaryRequestRef.current;
     setSummaryLoading(true);
     setSummary("");
@@ -166,9 +166,8 @@ export default function Upload() {
     if (type === "url") formData.append("url", selectedUrl);
     else formData.append("file", selectedFile);
 
-    const effectiveLang = langOverride !== undefined ? langOverride : audioLanguage;
-    if (type === "audio" && effectiveLang && effectiveLang !== "auto") {
-      formData.append("language", effectiveLang);
+    if (type === "audio") {
+      formData.append("language", audioLanguage);
     }
 
     try {
@@ -314,38 +313,6 @@ export default function Upload() {
                   )}
                 </div>
               </Field>
-            )}
-
-            {fileType === "audio" && (
-              <div style={{ marginTop: 14, padding: "12px 16px", background: "var(--paper)", border: "1px solid var(--border)", borderRadius: "var(--radius)" }}>
-                <label style={{ fontSize: 13, fontWeight: 600, color: "var(--forest)", display: "block", marginBottom: 8 }}>
-                  🎙️ Audio Spoken Language (ஒலி மொழி)
-                </label>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  {[
-                    { value: "ta", label: "Tamil (தமிழ்)" },
-                    { value: "si", label: "Sinhala (සිංහල)" },
-                    { value: "en", label: "English" },
-                    { value: "auto", label: "Auto Detect" },
-                  ].map((langOpt) => (
-                    <button
-                      key={langOpt.value}
-                      type="button"
-                      onClick={() => {
-                        setAudioLanguage(langOpt.value);
-                        if (file) fetchSummary("audio", { file, langOverride: langOpt.value });
-                      }}
-                      className={`btn btn-sm ${audioLanguage === langOpt.value ? "btn-primary" : "btn-ghost"}`}
-                      style={{ padding: "6px 14px", borderRadius: 8, fontSize: 13 }}
-                    >
-                      {langOpt.label}
-                    </button>
-                  ))}
-                </div>
-                <p className="muted" style={{ fontSize: 12, marginTop: 8, margin: 0 }}>
-                  💡 Selecting <strong>Tamil (தமிழ்)</strong> forces high-precision Tamil acoustic decoding with full Unicode script.
-                </p>
-              </div>
             )}
           </div>
 
