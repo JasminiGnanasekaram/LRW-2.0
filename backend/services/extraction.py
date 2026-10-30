@@ -165,15 +165,70 @@ def _get_whisper():
     return _whisper_model
 
 
-def extract_from_audio(content: bytes) -> str:
-    """Speech-to-Text via faster-whisper. Requires ffmpeg on PATH."""
+def extract_from_audio(content: bytes, filename: Optional[str] = None, language: Optional[str] = None) -> str:
+    """Speech-to-Text via faster-whisper with tuned settings for Tamil and multilingual audio."""
     model = _get_whisper()
-    with tempfile.NamedTemporaryFile(suffix=".audio", delete=False) as tmp:
+    
+    # 1. Preserve original extension so ffmpeg accurately decodes the container
+    ext = ".wav"
+    if filename and "." in filename:
+        candidate_ext = os.path.splitext(filename)[1].lower()
+        if candidate_ext in {".mp3", ".wav", ".m4a", ".ogg", ".flac", ".aac", ".wma", ".webm"}:
+            ext = candidate_ext
+
+    with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
         tmp.write(content)
         tmp_path = tmp.name
+
     try:
-        segments, _info = model.transcribe(tmp_path, beam_size=1)
-        return "\n".join(seg.text.strip() for seg in segments).strip()
+        # Detect if Tamil is requested or hinted in filename
+        lang_lower = (language or "").strip().lower()
+        fn_lower = (filename or "").lower()
+        is_tamil = lang_lower in {"ta", "tamil", "தமிழ்"} or any(k in fn_lower for k in ["tamil", "tam", "_ta", "தமிழ்"])
+        is_sinhala = lang_lower in {"si", "sinhala", "සිංහල"} or any(k in fn_lower for k in ["sinhala", "sin", "_si", "සිංහල"])
+
+        # High-accuracy parameters for faster-whisper:
+        # - beam_size=5: avoids greedy decoding errors on agglutinative Tamil words
+        # - vad_filter=True: silences background noise and stops hallucinations
+        # - condition_on_previous_text=False: stops infinite phrase repeating loops
+        # - initial_prompt: gives vocabulary and Unicode orthography context
+        transcribe_kwargs = {
+            "beam_size": 5,
+            "best_of": 5,
+            "vad_filter": True,
+            "vad_parameters": dict(min_silence_duration_ms=400),
+            "condition_on_previous_text": False,
+            "temperature": [0.0, 0.2, 0.4],
+        }
+
+        if is_tamil:
+            transcribe_kwargs["language"] = "ta"
+            transcribe_kwargs["initial_prompt"] = "வணக்கம், இது தெளிவான தமிழ் பேச்சு மற்றும் உரை ஒலிப்பதிவு."
+        elif is_sinhala:
+            transcribe_kwargs["language"] = "si"
+            transcribe_kwargs["initial_prompt"] = "ආයුබෝවන්, මෙය සිංහල භාෂාවෙන් කරන ලද හඬ පටිගත කිරීමකි."
+        elif lang_lower in {"en", "english"}:
+            transcribe_kwargs["language"] = "en"
+        else:
+            # Multilingual prompt guiding the model to support Tamil & Sinhala Unicode
+            transcribe_kwargs["initial_prompt"] = "வணக்கம், இது தமிழ் மற்றும் பலமொழி உரை. Hello. ආයුබෝවන්."
+
+        segments, info = model.transcribe(tmp_path, **transcribe_kwargs)
+        text_segments = [seg.text.strip() for seg in segments if seg.text and seg.text.strip()]
+        result_text = "\n".join(text_segments).strip()
+
+        # Fallback: if auto-detect missed Tamil or produced empty output, re-run with explicit Tamil
+        if not result_text or (not is_tamil and not is_sinhala and any(ord(c) >= 0x0B80 and ord(c) <= 0x0BFF for c in result_text)):
+            segments, _ = model.transcribe(
+                tmp_path,
+                beam_size=5,
+                language="ta",
+                initial_prompt="வணக்கம், இது தமிழ் உரை ஒலிப்பதிவு.",
+                vad_filter=True,
+            )
+            result_text = "\n".join(seg.text.strip() for seg in segments if seg.text and seg.text.strip()).strip()
+
+        return result_text
     finally:
         try:
             os.unlink(tmp_path)
@@ -198,7 +253,13 @@ def _pdf_is_mostly_text(content: bytes, min_chars_per_page: int = 20, text_ratio
     return (text_pages / total_pages) >= text_ratio_threshold
 
 
-def extract(file_type: str, content: Optional[bytes] = None, url: Optional[str] = None, filename: Optional[str] = None) -> str:
+def extract(
+    file_type: str,
+    content: Optional[bytes] = None,
+    url: Optional[str] = None,
+    filename: Optional[str] = None,
+    language: Optional[str] = None,
+) -> str:
     file_type = file_type.lower()
 
     # Image tab + actual .pdf file → only allow scanned/image PDFs here.
@@ -218,7 +279,7 @@ def extract(file_type: str, content: Optional[bytes] = None, url: Optional[str] 
     if file_type == "image":
         return extract_from_image(content)
     if file_type == "audio":
-        return extract_from_audio(content)
+        return extract_from_audio(content, filename=filename, language=language)
     if file_type == "url":
         return extract_from_url(url)
     raise ValueError(f"Unsupported file_type: {file_type}")

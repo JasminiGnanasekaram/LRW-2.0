@@ -85,6 +85,7 @@ async def upload(
     file_type: str = Form(...),   # text | pdf | image | audio | url
     url: Optional[str] = Form(None),
     metadata: Optional[str] = Form(None),  # JSON string
+    language: Optional[str] = Form(None),  # language hint for audio (e.g. 'ta', 'si', 'en')
     user: dict = Depends(get_current_user),
 ):
     """Upload a document or URL. Runs extraction + cleaning + NLP synchronously."""
@@ -144,7 +145,7 @@ async def upload(
             raise HTTPException(status_code=400, detail="file required")
         content = await file.read()
         try:
-            raw_text = extraction.extract(file_type, content=content, filename=file.filename)
+            raw_text = extraction.extract(file_type, content=content, filename=file.filename, language=language)
         except NotImplementedError as e:
             raise HTTPException(status_code=501, detail=str(e))
         except Exception as e:

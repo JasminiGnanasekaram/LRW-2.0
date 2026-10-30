@@ -178,10 +178,10 @@ async def summarize_image(file: UploadFile = File(...)):
 
 
 @router.post("/audio")
-async def summarize_audio(file: UploadFile = File(...)):
+async def summarize_audio(file: UploadFile = File(...), language: Optional[str] = Form(None)):
     try:
         content = await file.read()
-        raw_text = extraction.extract("audio", content=content)
+        raw_text = extraction.extract("audio", content=content, filename=file.filename, language=language)
         return {"summary": summarize(raw_text)}
     except HTTPException:
         raise

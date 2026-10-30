@@ -93,12 +93,14 @@ export async function uploadAvatar(file) {
   return data.user;
 }
 
-export function uploadDocument({ file, fileType, url, metadata }) {
+export function uploadDocument({ file, fileType, url, metadata, summary, language }) {
   const form = new FormData();
   form.append("file_type", fileType);
   if (file) form.append("file", file);
   if (url) form.append("url", url);
   if (metadata) form.append("metadata", JSON.stringify(metadata));
+  if (summary) form.append("summary", summary);
+  if (language) form.append("language", language);
   return unwrap(api.post("/documents/upload", form));
 }
 
