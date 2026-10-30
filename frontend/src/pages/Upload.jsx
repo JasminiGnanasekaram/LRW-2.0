@@ -45,7 +45,7 @@ const EMPTY_META = {
   source: "",
   author: "",
   publication_date: "",
-  domain: "",
+  domain: "general",
   category: "",
   license: "",
 };
@@ -203,7 +203,6 @@ export default function Upload() {
 
   const validate = () => {
     if (!meta.source.trim()) return "Source is required.";
-    if (!meta.domain) return "Domain is required.";
     if (!meta.license) return "License is required.";
     if (fileType === "url" && !url.trim()) return "URL is required for URL uploads.";
     if (fileType !== "url" && !file) return "Please choose a file to upload.";
@@ -223,7 +222,10 @@ export default function Upload() {
         file,
         fileType,
         url: fileType === "url" ? url.trim() : undefined,
-        metadata: meta,
+        metadata: {
+          ...meta,
+          domain: meta.domain || "general",
+        },
         summary,
         language: fileType === "audio" && audioLanguage !== "auto" ? audioLanguage : undefined,
       });

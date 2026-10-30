@@ -27,7 +27,7 @@ class MetadataIn(BaseModel):
     # Required
     source: str
     license: str
-    domain: str
+    domain: Optional[str] = "general"
 
     # Optional
     publication_date: str | None = None
