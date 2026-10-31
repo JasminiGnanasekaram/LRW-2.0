@@ -33,6 +33,7 @@ class MetadataIn(BaseModel):
     publication_date: str | None = None
     author: str | None = None
     category: str | None = None # open | research | restricted
+    title: str | None = None
 
 
 class DocumentOut(BaseModel):

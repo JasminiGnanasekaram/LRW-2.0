@@ -48,6 +48,7 @@ const EMPTY_META = {
   domain: "general",
   category: "",
   license: "",
+  title: "",
 };
 
 const styles = {
@@ -360,6 +361,26 @@ export default function Upload() {
               value={meta.license}
               onChange={updateMeta("license")}
               required
+            />
+
+            <Field id="meta-title" label="Title">
+              <input id="meta-title" type="text" value={meta.title} onChange={updateMeta("title")} placeholder="Document title" />
+            </Field>
+
+            <Field id="meta-author" label="Author">
+              <input id="meta-author" type="text" value={meta.author} onChange={updateMeta("author")} placeholder="Author or organization" />
+            </Field>
+            <Field id="meta-date" label="Publication date">
+              <input id="meta-date" type="date" value={meta.publication_date} onChange={updateMeta("publication_date")} />
+            </Field>
+
+            <SelectField
+              id="meta-domain"
+              label="Domain"
+              placeholder="General"
+              options={DOMAINS}
+              value={meta.domain === "general" ? "" : meta.domain}
+              onChange={updateMeta("domain")}
             />
           </div>
         </div>

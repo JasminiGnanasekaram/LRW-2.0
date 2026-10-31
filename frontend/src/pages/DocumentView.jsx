@@ -222,6 +222,7 @@ const METADATA_FIELDS = [
   { key: "category", label: ["Category", "அணுகல் வகை (Category)", "ප්‍රවේශ කාණ්ඩය (Category)"], options: ["open", "research", "restricted"] },
   { key: "author", label: ["Author", "ஆசிரியர் (Author)", "කර්තෘ (Author)"], placeholder: "e.g. Author or Organization name" },
   { key: "publication_date", label: ["Publication Date", "வெளியீட்டு தேதி (Publication Date)", "ප්‍රකාශන දිනය (Publication Date)"], placeholder: "YYYY-MM-DD or text" },
+  { key: "title", label: ["Title", "தலைப்பு (Title)", "මාතෘකාව (Title)"], placeholder: "Document title" },
 ];
 const STANDARD_METADATA_KEYS = METADATA_FIELDS.map((f) => f.key);
 
