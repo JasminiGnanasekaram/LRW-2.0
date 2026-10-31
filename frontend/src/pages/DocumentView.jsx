@@ -370,11 +370,11 @@ function ScrollTable({ headers, rows, emptyText, numbered = true }) {
   );
 }
 
-function ChartCard({ title, children }) {
+function ChartCard({ title, children, height = 280 }) {
   return (
     <div style={panelStyle}>
       <h4 style={{ color: "var(--forest)", margin: "0 0 14px 0", fontSize: 14 }}>{title}</h4>
-      <div style={{ width: "100%", height: 240 }}>
+      <div style={{ width: "100%", height }}>
         <ResponsiveContainer>{children}</ResponsiveContainer>
       </div>
     </div>
@@ -785,18 +785,6 @@ function TokensSection({ nlp, tr, desc, onEditToken }) {
   const rows = filtered.slice(0, 200).map((tk) => {
     return [
       <strong>{tokenText(tk)}</strong>,
-      <button
-        type="button"
-        onClick={() => onEditToken && onEditToken(tk, tk.__index, "pos")}
-        className="btn btn-ghost btn-sm"
-        style={{
-          padding: "3px 8px", fontSize: 11, display: "inline-flex",
-          alignItems: "center", gap: 4, borderRadius: 6,
-          border: "1px solid var(--border)", color: "var(--forest)", cursor: "pointer",
-        }}
-      >
-        {tr("Edit", "திருத்து", "සංස්කරණය")}
-      </button>,
     ];
   });
 
@@ -821,7 +809,6 @@ function TokensSection({ nlp, tr, desc, onEditToken }) {
       <ScrollTable
         headers={[
           { label: tr("Token", "சொல்", "ටෝකනය") },
-          { label: tr("Action", "செயல்", "ක්‍රියාව"), width: 85 },
         ]}
         rows={rows}
         emptyText={tr("No tokens found.", "சொற்கள் எதுவும் இல்லை.", "ටෝකන හමු නොවීය.")}
@@ -1290,67 +1277,186 @@ const countBy = (items, keyFn) => {
   return out;
 };
 
+const MORPH_EXPANDED_LABELS = {
+  English: {
+    "Number=Sing": "Singular",
+    "Number=Plur": "Plural",
+    "Tense=Pres": "Present tense",
+    "Tense=Past": "Past tense",
+    "Tense=Fut": "Future tense",
+    "VerbForm=Fin": "Finite verb",
+    "VerbForm=Part": "Participle",
+    "VerbForm=Inf": "Infinitive",
+    "Person=1": "First person",
+    "Person=2": "Second person",
+    "Person=3": "Third person",
+    "Aspect=Perf": "Perfective aspect",
+    "Aspect=Prog": "Progressive aspect",
+    "PronType=Prs": "Personal pronoun",
+    "PronType=Art": "Article",
+    "PronType=Dem": "Demonstrative",
+    "PronType=Int": "Interrogative",
+    "Definite=Def": "Article",
+    "Definite=Ind": "Indefinite article",
+    "Voice=Act": "Active voice",
+    "Voice=Pass": "Passive voice",
+    "Mood=Imp": "Imperative mood",
+    "Mood=Ind": "Indicative mood",
+    "Foreign=Yes": "Additional morphological feature",
+    "Typo=Yes": "Additional morphological feature",
+  },
+  Tamil: {
+    "Number=Sing": "ஒருமை",
+    "Number=Plur": "பன்மை",
+    "Tense=Pres": "நிகழ்காலம்",
+    "Tense=Past": "இறந்தகாலம்",
+    "Tense=Fut": "எதிர்காலம்",
+    "VerbForm=Fin": "முற்று வினை",
+    "VerbForm=Part": "பெயரெச்சம்/வினையெச்சம்",
+    "VerbForm=Inf": "தொழிற்பெயர்",
+    "Person=1": "தன்மை",
+    "Person=2": "முன்னிலை",
+    "Person=3": "படர்க்கை",
+    "Aspect=Perf": "முடிந்த நிலை",
+    "Aspect=Prog": "தொடர் நிலை",
+    "PronType=Prs": "தன்மை/முன்னிலை/படர்க்கைப் பெயர்",
+    "PronType=Art": "சுட்டுச்சொல்",
+    "Foreign=Yes": "கூடுதல் உருபனியல் அம்சம்",
+  },
+  Sinhala: {
+    "Number=Sing": "ඒකවචන",
+    "Number=Plur": "බහුවචන",
+    "Tense=Pres": "වර්තමාන කාලය",
+    "Tense=Past": "අතීත කාලය",
+    "Tense=Fut": "අනාගත කාලය",
+    "VerbForm=Fin": "සීමිත ක්‍රියාව",
+    "VerbForm=Part": "කෘදන්තය",
+    "VerbForm=Inf": "අනියම් ක්‍රියාව",
+    "Person=1": "උත්තම පුරුෂ",
+    "Person=2": "මධ්‍යම පුරුෂ",
+    "Person=3": "ප්‍රථම පුරුෂ",
+    "Aspect=Perf": "සම්පූර්ණ ආකාරය",
+    "PronType=Prs": "පුද්ගලික සර්වනාමය",
+    "PronType=Art": "නිපාතය / උපපදය",
+    "Foreign=Yes": "අමතර රූපවිද්‍යාත්මක ලක්ෂණය",
+  },
+};
+
+const getMorphDisplayLabel = (feat, lang) => {
+  if (!feat) return "";
+  if (MORPH_EXPANDED_LABELS[lang]?.[feat]) return MORPH_EXPANDED_LABELS[lang][feat];
+  if (MORPH_LABELS[lang]?.[feat]) return MORPH_LABELS[lang][feat];
+  if (MORPH_EXPANDED_LABELS.English?.[feat]) return MORPH_EXPANDED_LABELS.English[feat];
+  if (MORPH_LABELS.English?.[feat]) return MORPH_LABELS.English[feat];
+  if (feat.startsWith("Foreign=") || feat.startsWith("Typo=") || feat.startsWith("ExtPos=")) {
+    return lang === "Tamil"
+      ? "கூடுதல் உருபனியல் அம்சம்"
+      : lang === "Sinhala"
+      ? "අමතර රූපවිද්‍යාත්මක ලක්ෂණය"
+      : "Additional morphological feature";
+  }
+  if (feat.includes("=")) {
+    const [, val] = feat.split("=");
+    return val;
+  }
+  return feat;
+};
+
 function ChartsSection({ nlp, lang, tr, desc }) {
   const tokens = nlp.token_details || [];
 
-  const posAll = Object.entries(nlp.pos_distribution || {})
-    .map(([pos, count]) => ({
-      name: getPosLabel(pos, lang),
-      label: `${getPosLabel(pos, lang)} (${pos})`,
-      count,
-      color: getPosInfo(pos).color,
-    }))
-    .sort((a, b) => b.count - a.count);
-  const posChartData = posAll.slice(0, 8);
-
-  const topWordsData = (nlp.top_words || []).slice(0, 10).map((item) => {
-    if (Array.isArray(item)) return { word: String(item[0]), count: item[1] };
-    return { word: String(item.word ?? item.text ?? ""), count: item.count ?? item.frequency ?? 0 };
+  // 1. Tokens per Sentence
+  const sentenceTokenCounts = {};
+  tokens.forEach((tk) => {
+    if (tk.sentence_id != null) {
+      sentenceTokenCounts[tk.sentence_id] = (sentenceTokenCounts[tk.sentence_id] || 0) + 1;
+    }
   });
 
-  const langDist = nlp.statistics?.language_distribution;
-  const langPieData = langDist && Object.keys(langDist).length
-    ? Object.entries(langDist).map(([name, value]) => ({ name, value }))
-    : Object.entries(countBy(tokens, (tk) => LANG_NAMES[tk.language] || tk.language)).map(([name, value]) => ({ name, value }));
+  const rawSentences = nlp.sentences || [];
+  let sentenceChartData = rawSentences.slice(0, 25).map((s, idx) => {
+    const sId = idx + 1;
+    const count = sentenceTokenCounts[sId] != null
+      ? sentenceTokenCounts[sId]
+      : (typeof s === "string" ? s.trim().split(/\s+/).filter(Boolean).length : 0);
+    return { name: `#${sId}`, count };
+  });
 
-  const countPieLabel = (entry) => `${entry.name}`;
-  const palette = (entry, i) => entry.color || LANG_COLORS[entry.name] || PIE_COLORS[i % PIE_COLORS.length];
+  if (sentenceChartData.length === 0 && Object.keys(sentenceTokenCounts).length > 0) {
+    sentenceChartData = Object.entries(sentenceTokenCounts)
+      .map(([sId, count]) => ({ name: `#${sId}`, count }))
+      .slice(0, 25);
+  }
 
-  const renderPie = (data, label, inner = 0) => (
-    <PieChart>
-      <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={inner} outerRadius={80} label={label}>
-        {data.map((entry, i) => <Cell key={entry.name} fill={palette(entry, i)} />)}
-      </Pie>
-      <Tooltip /><Legend />
-    </PieChart>
-  );
+  // 2. Part-of-Speech Distribution
+  const posChartData = Object.entries(nlp.pos_distribution || {})
+    .map(([pos, count]) => ({
+      name: `${getPosLabel(pos, lang)} (${pos})`,
+      count,
+    }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 12);
+
+  // 3. Morphological Feature Counts
+  const morphCounts = {};
+  tokens.forEach((tk) => {
+    if (!tk.morph) return;
+    String(tk.morph)
+      .split("|")
+      .map((p) => p.trim())
+      .filter(Boolean)
+      .forEach((p) => {
+        const label = getMorphDisplayLabel(p, lang);
+        if (label) morphCounts[label] = (morphCounts[label] || 0) + 1;
+      });
+  });
+
+  const morphChartData = Object.entries(morphCounts)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 15);
 
   const cards = [
-    posChartData.length > 0 && (
-      <ChartCard key="pos" title={tr("Part-of-Speech Distribution", "சொல் வகைப் பகிர்வு (POS)", "පද වර්ග බෙදාහැරීම (POS)")}>
-        <BarChart data={posChartData}>
-          <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={0} angle={-15} textAnchor="end" height={45} />
-          <YAxis tick={{ fontSize: 11 }} />
-          <Tooltip formatter={(value, name, item) => [value, item?.payload?.label || name]} />
-          <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-            {posChartData.map((entry) => <Cell key={entry.label} fill={entry.color} />)}
-          </Bar>
-        </BarChart>
-      </ChartCard>
-    ),
-    topWordsData.length > 0 && (
-      <ChartCard key="topwords" title={tr("Top 10 Most Frequent Words", "அதிகம் பயன்படுத்தப்பட்ட 10 சொற்கள்", "වඩාත්ම භාවිත වචන 10")}>
-        <BarChart data={topWordsData} layout="vertical" margin={{ left: 20 }}>
+    sentenceChartData.length > 0 && (
+      <ChartCard
+        key="sent"
+        title={tr("Tokens per Sentence", "வாக்கியத்திற்கான சொற்கள்", "වාක්‍යයකට ටෝකන")}
+        height={Math.max(260, sentenceChartData.length * 28 + 40)}
+      >
+        <BarChart data={sentenceChartData} layout="vertical" margin={{ left: 10, right: 30, top: 10, bottom: 10 }}>
           <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
-          <YAxis type="category" dataKey="word" tick={{ fontSize: 11 }} width={90} />
+          <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={50} interval={0} />
           <Tooltip />
           <Bar dataKey="count" fill="#2d5a3d" radius={[0, 4, 4, 0]} />
         </BarChart>
       </ChartCard>
     ),
-    langPieData.length > 0 && (
-      <ChartCard key="lang" title={tr("Language Distribution", "மொழிப் பகிர்வு", "භාෂා බෙදාහැරීම")}>
-        {renderPie(langPieData, countPieLabel)}
+    posChartData.length > 0 && (
+      <ChartCard
+        key="pos"
+        title={tr("Part-of-Speech Distribution", "சொல் வகைப் பகிர்வு (POS)", "පද වර්ග බෙදාහැරීම (POS)")}
+        height={Math.max(260, posChartData.length * 28 + 40)}
+      >
+        <BarChart data={posChartData} layout="vertical" margin={{ left: 10, right: 30, top: 10, bottom: 10 }}>
+          <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
+          <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={180} interval={0} />
+          <Tooltip />
+          <Bar dataKey="count" fill="#1f3d2b" radius={[0, 4, 4, 0]} />
+        </BarChart>
+      </ChartCard>
+    ),
+    morphChartData.length > 0 && (
+      <ChartCard
+        key="morph"
+        title={tr("Morphological Feature Counts", "உருபனியல் அம்ச எண்ணிக்கை", "රූපවිද්‍යාත්මක ලක්ෂණ ගණන")}
+        height={Math.max(260, morphChartData.length * 28 + 40)}
+      >
+        <BarChart data={morphChartData} layout="vertical" margin={{ left: 10, right: 30, top: 10, bottom: 10 }}>
+          <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
+          <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={180} interval={0} />
+          <Tooltip />
+          <Bar dataKey="count" fill="#5b9374" radius={[0, 4, 4, 0]} />
+        </BarChart>
       </ChartCard>
     ),
   ].filter(Boolean);
@@ -1358,9 +1464,15 @@ function ChartsSection({ nlp, lang, tr, desc }) {
   return (
     <div>
       <SectionDesc desc={desc} />
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20 }}>
-        {cards}
-      </div>
+      {cards.length > 0 ? (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 24 }}>
+          {cards}
+        </div>
+      ) : (
+        <div style={{ padding: 32, textAlign: "center", color: "var(--ink-lt)" }}>
+          {tr("No visual chart data available.", "வரைபடத் தகவல்கள் எதுவும் இல்லை.", "ප්‍රස්ථාර දත්ත නොමැත.")}
+        </div>
+      )}
     </div>
   );
 }
@@ -1530,7 +1642,7 @@ function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDo
       try {
         const byId = localStorage.getItem(`lrw_crawler_${doc.id}`);
         if (byId) return JSON.parse(byId);
-      } catch {}
+      } catch { }
     }
     return [];
   });
@@ -1540,7 +1652,7 @@ function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDo
       try {
         const byId = localStorage.getItem(`lrw_crawler_status_${doc.id}`);
         if (byId) return byId;
-      } catch {}
+      } catch { }
     }
     return "";
   });
@@ -1583,7 +1695,7 @@ function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDo
     if (doc?.id && crawlResults && crawlResults.length > 0) {
       try {
         localStorage.setItem(`lrw_crawler_${doc.id}`, JSON.stringify(crawlResults));
-      } catch {}
+      } catch { }
     }
   }, [crawlResults, doc?.id]);
 
@@ -1591,7 +1703,7 @@ function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDo
     if (doc?.id && crawlStatus) {
       try {
         localStorage.setItem(`lrw_crawler_status_${doc.id}`, crawlStatus);
-      } catch {}
+      } catch { }
     }
   }, [crawlStatus, doc?.id]);
 
@@ -1655,7 +1767,7 @@ function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDo
           localStorage.removeItem(`lrw_crawler_${doc.id}`);
           localStorage.removeItem(`lrw_crawler_status_${doc.id}`);
         }
-      } catch {}
+      } catch { }
     }
   };
 
@@ -2218,7 +2330,7 @@ export default function DocumentView() {
     try {
       const data = await getDocument(docId);
       setDoc(data);
-    } catch {}
+    } catch { }
   }, [id]);
 
   const handleSelectPage = useCallback(async (page) => {
