@@ -45,9 +45,10 @@ const EMPTY_META = {
   source: "",
   author: "",
   publication_date: "",
-  domain: "",
+  domain: "general",
   category: "",
   license: "",
+  title: "",
 };
 
 const styles = {
@@ -146,6 +147,7 @@ export default function Upload() {
   const [dragging, setDragging] = useState(false);
   const [summary, setSummary] = useState("");
   const [summaryLoading, setSummaryLoading] = useState(false);
+  const audioLanguage = "ta";
 
   const accept = FILE_TYPES.find((type) => type.value === fileType)?.accept;
   const updateMeta = (key) => (e) => setMeta((prev) => ({ ...prev, [key]: e.target.value }));
@@ -164,6 +166,10 @@ export default function Upload() {
     const formData = new FormData();
     if (type === "url") formData.append("url", selectedUrl);
     else formData.append("file", selectedFile);
+
+    if (type === "audio") {
+      formData.append("language", audioLanguage);
+    }
 
     try {
       const { data } = await api.post(`/summarize/${type}`, formData);
@@ -198,7 +204,6 @@ export default function Upload() {
 
   const validate = () => {
     if (!meta.source.trim()) return "Source is required.";
-    if (!meta.domain) return "Domain is required.";
     if (!meta.license) return "License is required.";
     if (fileType === "url" && !url.trim()) return "URL is required for URL uploads.";
     if (fileType !== "url" && !file) return "Please choose a file to upload.";
@@ -218,7 +223,12 @@ export default function Upload() {
         file,
         fileType,
         url: fileType === "url" ? url.trim() : undefined,
-        metadata: meta,
+        metadata: {
+          ...meta,
+          domain: meta.domain || "general",
+        },
+        summary,
+        language: fileType === "audio" && audioLanguage !== "auto" ? audioLanguage : undefined,
       });
       navigate(`/documents/${result.id}`);
     } catch (err) {
@@ -361,6 +371,26 @@ export default function Upload() {
               value={meta.license}
               onChange={updateMeta("license")}
               required
+            />
+
+            <Field id="meta-title" label="Title">
+              <input id="meta-title" type="text" value={meta.title} onChange={updateMeta("title")} placeholder="Document title" />
+            </Field>
+
+            <Field id="meta-author" label="Author">
+              <input id="meta-author" type="text" value={meta.author} onChange={updateMeta("author")} placeholder="Author or organization" />
+            </Field>
+            <Field id="meta-date" label="Publication date">
+              <input id="meta-date" type="date" value={meta.publication_date} onChange={updateMeta("publication_date")} />
+            </Field>
+
+            <SelectField
+              id="meta-domain"
+              label="Domain"
+              placeholder="General"
+              options={DOMAINS}
+              value={meta.domain === "general" ? "" : meta.domain}
+              onChange={updateMeta("domain")}
             />
           </div>
         </div>

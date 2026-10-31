@@ -1,10 +1,17 @@
-import { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useEffect, useState, useCallback } from "react";
+import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
 } from "recharts";
-import { getDocument, exportDocument, updateDocumentMetadata, updateDocumentNlp } from "../api";
+import {
+  getDocument,
+  exportDocument,
+  updateDocumentMetadata,
+  updateDocumentNlp,
+  crawlWebsite,
+  discoverPages,
+} from "../api";
 
 const PIE_COLORS = ["#1a3a2a", "#4a7c59", "#8fb89a", "#d4e8d0", "#2d5a3d", "#6aaa80", "#b0d8b8", "#386641"];
 
@@ -215,6 +222,7 @@ const METADATA_FIELDS = [
   { key: "category", label: ["Category", "அணுகல் வகை (Category)", "ප්‍රවේශ කාණ්ඩය (Category)"], options: ["open", "research", "restricted"] },
   { key: "author", label: ["Author", "ஆசிரியர் (Author)", "කර්තෘ (Author)"], placeholder: "e.g. Author or Organization name" },
   { key: "publication_date", label: ["Publication Date", "வெளியீட்டு தேதி (Publication Date)", "ප්‍රකාශන දිනය (Publication Date)"], placeholder: "YYYY-MM-DD or text" },
+  { key: "title", label: ["Title", "தலைப்பு (Title)", "මාතෘකාව (Title)"], placeholder: "Document title" },
 ];
 const STANDARD_METADATA_KEYS = METADATA_FIELDS.map((f) => f.key);
 
@@ -298,11 +306,6 @@ function SectionDesc({ desc }) {
       padding: "12px 16px", marginBottom: 20, fontSize: 13, color: "var(--ink-lt)",
       lineHeight: 1.6, display: "flex", alignItems: "flex-start", gap: 10,
     }}>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 2 }}>
-        <circle cx="12" cy="12" r="10" />
-        <line x1="12" y1="16" x2="12" y2="12" />
-        <line x1="12" y1="8" x2="12.01" y2="8" />
-      </svg>
       {desc}
     </div>
   );
@@ -389,17 +392,16 @@ function EditTokenModal({
   onSave,
   onClose,
 }) {
-  if (!isOpen || !token) return null;
-
   const [activeTab, setActiveTab] = useState(initialTab);
-  const [pos, setPos] = useState(token.pos || "X");
-  const [lemma, setLemma] = useState(token.lemma || tokenText(token));
-  const [morph, setMorph] = useState(token.morph || "");
+  const [pos, setPos] = useState(token?.pos || "X");
+  const [lemma, setLemma] = useState(token ? token.lemma || tokenText(token) : "");
+  const [morph, setMorph] = useState(token?.morph || "");
   const [applyAll, setApplyAll] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    if (!token) return;
     setActiveTab(initialTab);
     setPos(token.pos || "X");
     setLemma(token.lemma || tokenText(token));
@@ -407,6 +409,8 @@ function EditTokenModal({
     setApplyAll(true);
     setError(null);
   }, [token, initialTab]);
+
+  if (!isOpen || !token) return null;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -779,16 +783,8 @@ function TokensSection({ nlp, tr, desc, onEditToken }) {
   const filtered = allTokens.filter((tk) => !needle || tokenText(tk).toLowerCase().includes(needle));
 
   const rows = filtered.slice(0, 200).map((tk) => {
-    const info = getPosInfo(tk.pos);
     return [
       <strong>{tokenText(tk)}</strong>,
-      <span style={{
-        display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 6px", borderRadius: 4,
-        background: info.bg, color: info.color, border: `1px solid ${info.border}`, fontSize: 11, fontWeight: 600,
-      }}>
-        {tk.pos || "X"}
-      </span>,
-      <span style={{ color: "var(--forest)", fontWeight: 500, fontSize: 12 }}>{tk.lemma || tokenText(tk)}</span>,
       <button
         type="button"
         onClick={() => onEditToken && onEditToken(tk, tk.__index, "pos")}
@@ -825,8 +821,6 @@ function TokensSection({ nlp, tr, desc, onEditToken }) {
       <ScrollTable
         headers={[
           { label: tr("Token", "சொல்", "ටෝකනය") },
-          { label: tr("POS", "இலக்கணம் (POS)", "පද වර්ගය"), width: 110 },
-          { label: tr("Base (Lemma)", "வேர்ச்சொல்", "මූල ස්වරූපය"), width: 140 },
           { label: tr("Action", "செயல்", "ක්‍රියාව"), width: 85 },
         ]}
         rows={rows}
@@ -1298,7 +1292,6 @@ const countBy = (items, keyFn) => {
 
 function ChartsSection({ nlp, lang, tr, desc }) {
   const tokens = nlp.token_details || [];
-  const sentences = (nlp.sentences || []).map((s) => (typeof s === "string" ? s : s?.text || s?.sentence || ""));
 
   const posAll = Object.entries(nlp.pos_distribution || {})
     .map(([pos, count]) => ({
@@ -1309,8 +1302,6 @@ function ChartsSection({ nlp, lang, tr, desc }) {
     }))
     .sort((a, b) => b.count - a.count);
   const posChartData = posAll.slice(0, 8);
-  const posTotal = posAll.reduce((sum, p) => sum + p.count, 0) || 1;
-  const posPieData = posAll.slice(0, 6).map((p) => ({ name: p.name, value: Math.round((p.count / posTotal) * 1000) / 10, color: p.color }));
 
   const topWordsData = (nlp.top_words || []).slice(0, 10).map((item) => {
     if (Array.isArray(item)) return { word: String(item[0]), count: item[1] };
@@ -1322,51 +1313,6 @@ function ChartsSection({ nlp, lang, tr, desc }) {
     ? Object.entries(langDist).map(([name, value]) => ({ name, value }))
     : Object.entries(countBy(tokens, (tk) => LANG_NAMES[tk.language] || tk.language)).map(([name, value]) => ({ name, value }));
 
-  const buckets = [["1-5", 1, 5], ["6-10", 6, 10], ["11-15", 11, 15], ["16-20", 16, 20], ["21-30", 21, 30], ["31+", 31, Infinity]];
-  const sentenceLenData = buckets.map(([range, lo, hi]) => ({
-    range,
-    count: sentences.filter((s) => {
-      const n = s.trim().split(/\s+/).filter(Boolean).length;
-      return n >= lo && n <= hi;
-    }).length,
-  }));
-
-  const tokenLenData = Array.from({ length: 10 }, (_, i) => ({ length: i === 9 ? "10+" : String(i + 1), count: 0 }));
-  tokens.forEach((tk) => {
-    const len = Array.from(tokenText(tk)).length;
-    if (len > 0) tokenLenData[Math.min(len, 10) - 1].count += 1;
-  });
-
-  const stopCount = tokens.filter((tk) => tk.is_stop).length;
-  const stopData = [
-    { name: tr("Content Words", "உள்ளடக்க சொற்கள்", "අන්තර්ගත වචන"), value: tokens.length - stopCount, color: "#4a7c59" },
-    { name: tr("Stop Words", "நிறுத்தச் சொற்கள்", "නවත්වන වචන"), value: stopCount, color: "#cbd5e1" },
-  ].filter((d) => d.value > 0);
-
-  const lemmaChanged = tokens.filter((tk) => tk.lemma && tokenText(tk) && tk.lemma.toLowerCase() !== tokenText(tk).toLowerCase()).length;
-  const lemmaData = [
-    { name: tr("Reduced to Root", "வேர்ச்சொல்லாக மாற்றப்பட்டவை", "මූලයට අඩු කළ"), value: lemmaChanged, color: "#f97316" },
-    { name: tr("Already Base Form", "ஏற்கனவே வேர்ச்சொல்", "දැනටමත් මූල ස්වරූපය"), value: tokens.length - lemmaChanged, color: "#8fb89a" },
-  ].filter((d) => d.value > 0);
-
-  const morphCounts = {};
-  tokens.forEach((tk) => {
-    if (!tk.morph) return;
-    String(tk.morph).split("|").forEach((f) => { if (f) morphCounts[f] = (morphCounts[f] || 0) + 1; });
-  });
-  const morphData = Object.entries(morphCounts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 8)
-    .map(([feature, count]) => ({ feature: translateMorph(feature, lang), count }));
-
-  const lexicalVariety = tokens.length
-    ? [
-      { name: tr("Unique Tokens", "தனித்துவ சொற்கள்", "අනන්‍ය ටෝකන"), value: nlp.unique_tokens || 0, color: "#1a3a2a" },
-      { name: tr("Repeated Tokens", "மீண்டும் வரும் சொற்கள்", "නැවත යෙදුණු ටෝකන"), value: Math.max((nlp.token_count || tokens.length) - (nlp.unique_tokens || 0), 0), color: "#b0d8b8" },
-    ].filter((d) => d.value > 0)
-    : [];
-
-  const pieLabel = (entry) => `${entry.name} (${entry.value}%)`;
   const countPieLabel = (entry) => `${entry.name}`;
   const palette = (entry, i) => entry.color || LANG_COLORS[entry.name] || PIE_COLORS[i % PIE_COLORS.length];
 
@@ -1392,11 +1338,6 @@ function ChartsSection({ nlp, lang, tr, desc }) {
         </BarChart>
       </ChartCard>
     ),
-    posPieData.length > 0 && (
-      <ChartCard key="pospie" title={tr("POS Share (%)", "சொல் வகை விகிதம் (%)", "පද වර්ග අනුපාතය (%)")}>
-        {renderPie(posPieData, pieLabel, 45)}
-      </ChartCard>
-    ),
     topWordsData.length > 0 && (
       <ChartCard key="topwords" title={tr("Top 10 Most Frequent Words", "அதிகம் பயன்படுத்தப்பட்ட 10 சொற்கள்", "වඩාත්ම භාවිත වචන 10")}>
         <BarChart data={topWordsData} layout="vertical" margin={{ left: 20 }}>
@@ -1410,51 +1351,6 @@ function ChartsSection({ nlp, lang, tr, desc }) {
     langPieData.length > 0 && (
       <ChartCard key="lang" title={tr("Language Distribution", "மொழிப் பகிர்வு", "භාෂා බෙදාහැරීම")}>
         {renderPie(langPieData, countPieLabel)}
-      </ChartCard>
-    ),
-    sentences.length > 0 && (
-      <ChartCard key="sentlen" title={tr("Sentence Length (words)", "வாக்கிய நீளம் (சொற்கள்)", "වාක්‍ය දිග (වචන)")}>
-        <BarChart data={sentenceLenData}>
-          <XAxis dataKey="range" tick={{ fontSize: 11 }} />
-          <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-          <Tooltip />
-          <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-        </BarChart>
-      </ChartCard>
-    ),
-    tokens.length > 0 && (
-      <ChartCard key="toklen" title={tr("Token Length (characters)", "சொல் நீளம் (எழுத்துக்கள்)", "ටෝකන දිග (අක්ෂර)")}>
-        <BarChart data={tokenLenData}>
-          <XAxis dataKey="length" tick={{ fontSize: 11 }} />
-          <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-          <Tooltip />
-          <Bar dataKey="count" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-        </BarChart>
-      </ChartCard>
-    ),
-    stopData.length > 1 && (
-      <ChartCard key="stop" title={tr("Stop Words vs Content Words", "நிறுத்தச் சொற்கள் vs உள்ளடக்க சொற்கள்", "නවත්වන වචන vs අන්තර්ගත වචන")}>
-        {renderPie(stopData, countPieLabel, 45)}
-      </ChartCard>
-    ),
-    lemmaData.length > 1 && (
-      <ChartCard key="lemma" title={tr("Lemmatization Impact", "வேர்ச்சொல் தாக்கம்", "ලේමටීකරණ බලපෑම")}>
-        {renderPie(lemmaData, countPieLabel, 45)}
-      </ChartCard>
-    ),
-    lexicalVariety.length > 1 && (
-      <ChartCard key="variety" title={tr("Lexical Variety", "சொல் வளம்", "වචන විවිධත්වය")}>
-        {renderPie(lexicalVariety, countPieLabel, 45)}
-      </ChartCard>
-    ),
-    morphData.length > 0 && (
-      <ChartCard key="morph" title={tr("Top Morphological Features", "முக்கிய உருபியல் கூறுகள்", "ප්‍රධාන රූපවිද්‍යාත්මක ලක්ෂණ")}>
-        <BarChart data={morphData} layout="vertical" margin={{ left: 20 }}>
-          <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
-          <YAxis type="category" dataKey="feature" tick={{ fontSize: 10 }} width={110} />
-          <Tooltip />
-          <Bar dataKey="count" fill="#f97316" radius={[0, 4, 4, 0]} />
-        </BarChart>
       </ChartCard>
     ),
   ].filter(Boolean);
@@ -1582,6 +1478,435 @@ function NlpTab({ docId, nlp, lang, tr, onNlpUpdated }) {
         onSave={handleSaveEdit}
         onClose={() => setEditingToken(null)}
       />
+    </div>
+  );
+}
+
+function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDocumentUpdated }) {
+  const navigate = useNavigate();
+  const targetUrl = doc.filename || doc.metadata?.crawled_url || "";
+  const [currentUrl, setCurrentUrl] = useState(targetUrl);
+  const [crawlMaxPages, setCrawlMaxPages] = useState(10);
+  const [crawling, setCrawling] = useState(false);
+  const [totalAvailablePages, setTotalAvailablePages] = useState(doc?.total_available_pages || null);
+  const [discovering, setDiscovering] = useState(false);
+
+  // ── Auto-discover total available pages under the website ──
+  useEffect(() => {
+    const url = (currentUrl || targetUrl).trim();
+    if (!url) return;
+
+    if (doc?.total_available_pages && url === targetUrl) {
+      setTotalAvailablePages(doc.total_available_pages);
+      return;
+    }
+
+    let active = true;
+    setDiscovering(true);
+    discoverPages(url, doc?.id)
+      .then((data) => {
+        if (active && data?.total_available) {
+          setTotalAvailablePages(data.total_available);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setTotalAvailablePages((prev) => prev || Math.max(1, crawlResults.length));
+        }
+      })
+      .finally(() => {
+        if (active) setDiscovering(false);
+      });
+
+    return () => { active = false; };
+  }, [currentUrl, targetUrl, doc?.id]);
+
+  // ── Scoped results: strictly load for THIS document ID / URL ──
+  const [crawlResults, setCrawlResults] = useState(() => {
+    if (doc?.crawled_pages && Array.isArray(doc.crawled_pages) && doc.crawled_pages.length > 0) {
+      return doc.crawled_pages;
+    }
+    if (doc?.id) {
+      try {
+        const byId = localStorage.getItem(`lrw_crawler_${doc.id}`);
+        if (byId) return JSON.parse(byId);
+      } catch {}
+    }
+    return [];
+  });
+
+  const [crawlStatus, setCrawlStatus] = useState(() => {
+    if (doc?.id) {
+      try {
+        const byId = localStorage.getItem(`lrw_crawler_status_${doc.id}`);
+        if (byId) return byId;
+      } catch {}
+    }
+    return "";
+  });
+
+  const [crawlError, setCrawlError] = useState("");
+
+  // ── When doc changes, reset state to strictly match THIS document ──
+  useEffect(() => {
+    const url = doc.filename || doc.metadata?.crawled_url || "";
+    setCurrentUrl(url);
+    setCrawlError("");
+
+    if (doc?.crawled_pages && Array.isArray(doc.crawled_pages) && doc.crawled_pages.length > 0) {
+      setCrawlResults(doc.crawled_pages);
+      setCrawlStatus(tr(
+        `Loaded ${doc.crawled_pages.length} saved page(s).`,
+        `${doc.crawled_pages.length} பக்கங்கள் ஏற்றப்பட்டன.`,
+        `සුරකින ලද පිටු ${doc.crawled_pages.length} ක් පූරණය විය.`
+      ));
+    } else if (doc?.id) {
+      const cached = localStorage.getItem(`lrw_crawler_${doc.id}`);
+      if (cached) {
+        try {
+          setCrawlResults(JSON.parse(cached));
+        } catch {
+          setCrawlResults([]);
+        }
+      } else {
+        setCrawlResults([]);
+        setCrawlStatus("");
+      }
+    } else {
+      setCrawlResults([]);
+      setCrawlStatus("");
+    }
+  }, [doc?.id, doc?.filename]);
+
+  // ── Sync to localStorage strictly keyed by document ID ──
+  useEffect(() => {
+    if (doc?.id && crawlResults && crawlResults.length > 0) {
+      try {
+        localStorage.setItem(`lrw_crawler_${doc.id}`, JSON.stringify(crawlResults));
+      } catch {}
+    }
+  }, [crawlResults, doc?.id]);
+
+  useEffect(() => {
+    if (doc?.id && crawlStatus) {
+      try {
+        localStorage.setItem(`lrw_crawler_status_${doc.id}`, crawlStatus);
+      } catch {}
+    }
+  }, [crawlStatus, doc?.id]);
+
+  // ── Execute crawl and update pages ──
+  const executeCrawl = async () => {
+    const urlToCrawl = (currentUrl || targetUrl).trim();
+    if (!urlToCrawl) {
+      setCrawlError(tr(
+        "No valid URL found for this document.",
+        "இந்த ஆவணத்திற்கான சரியான URL இல்லை.",
+        "මෙම ලේඛනය සඳහා වලංගු URL එකක් හමු නොවීය."
+      ));
+      return;
+    }
+    setCrawlError("");
+    setCrawling(true);
+
+    setCrawlStatus(tr(
+      `Crawling website starting from ${urlToCrawl} (up to ${crawlMaxPages} pages)...`,
+      `வலைத்தளத்தை ${urlToCrawl} இலிருந்து ஊர்ந்து செல்கிறது (${crawlMaxPages} பக்கங்கள் வரை)...`,
+      `${urlToCrawl} වෙතින් ආරම්භ කර වෙබ් අඩවිය ක්‍රෝල් කරයි (පිටු ${crawlMaxPages} දක්වා)...`
+    ));
+
+    try {
+      const data = await crawlWebsite(urlToCrawl, Number(crawlMaxPages), doc?.id);
+      const freshPages = data.pages || [];
+      setCrawlResults(freshPages);
+
+      setCrawlStatus(tr(
+        `Successfully crawled ${freshPages.length} page(s).`,
+        `வெற்றிகரமாக ${freshPages.length} பக்கங்கள் ஊரப்பட்டன.`,
+        `පිටු ${freshPages.length} සාර්ථකව ක්‍රෝල් කරන ලදී.`
+      ));
+
+      if (typeof onDocumentUpdated === "function" && doc?.id) {
+        onDocumentUpdated(doc.id);
+      }
+    } catch (err) {
+      setCrawlError(err.response?.data?.detail || err.message || "Crawling failed.");
+    } finally {
+      setCrawling(false);
+    }
+  };
+
+  const handleStartCrawlClick = (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    executeCrawl();
+  };
+
+  const handleClearResults = () => {
+    if (window.confirm(tr(
+      "Clear saved crawl results for this website?",
+      "இந்த வலைத்தளத்திற்கான சேமிக்கப்பட்ட ஊர்தி முடிவுகளை அழிக்கவா?",
+      "මෙම වෙබ් අඩවිය සඳහා සුරකින ලද ප්‍රතිඵල මකා දැමිය යුතුද?"
+    ))) {
+      setCrawlResults([]);
+      setCrawlStatus("");
+      setCrawlError("");
+      try {
+        if (doc?.id) {
+          localStorage.removeItem(`lrw_crawler_${doc.id}`);
+          localStorage.removeItem(`lrw_crawler_status_${doc.id}`);
+        }
+      } catch {}
+    }
+  };
+
+  const handleViewDocument = (page) => {
+    if (typeof onSelectPage === "function") {
+      onSelectPage(page);
+    } else if (page?.doc_id && page.doc_id !== doc?.id) {
+      navigate(`/documents/${page.doc_id}?tab=overview`, { state: { tab: "overview" } });
+    } else {
+      if (typeof onOpenOverview === "function") {
+        onOpenOverview();
+      }
+    }
+  };
+
+  return (
+    <div style={{ padding: "8px 0" }}>
+      {/* Overview Metric Tiles */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 20 }}>
+        <div style={{
+          background: "var(--paper)", border: "1px solid var(--border)",
+          borderRadius: 10, padding: "16px 20px", display: "flex", flexDirection: "column", gap: 4,
+          boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+        }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-lt)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+            {tr("Total Pages Available", "வலைத்தளத்தின் மொத்த பக்கங்கள்", "වෙබ් අඩවියේ මුළු පිටු")}
+          </span>
+          <span style={{ fontSize: 30, fontWeight: 800, color: "var(--forest)", lineHeight: 1.1 }}>
+            {discovering
+              ? tr("Scanning…", "கணக்கிடுகிறது…", "ස්කෑන් වෙමින්…")
+              : (totalAvailablePages !== null ? `${totalAvailablePages}` : "—")}
+          </span>
+          <span style={{ fontSize: 12, color: "var(--ink-mid)" }}>
+            {tr("Pages found under this website", "வலைத்தளத்தின் கீழ் உள்ள பக்கங்கள்", "මෙම වෙබ් අඩවිය යටතේ හමු වූ පිටු")}
+          </span>
+        </div>
+
+        <div style={{
+          background: "var(--paper)", border: "1px solid var(--border)",
+          borderRadius: 10, padding: "16px 20px", display: "flex", flexDirection: "column", gap: 4,
+          boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+        }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-lt)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+            {tr("Pages Crawled", "ஊரப்பட்ட பக்கங்கள்", "ක්‍රෝල් කළ පිටු")}
+          </span>
+          <span style={{ fontSize: 30, fontWeight: 800, color: "var(--ink)", lineHeight: 1.1 }}>
+            {crawlResults.length}
+          </span>
+          <span style={{ fontSize: 12, color: "var(--ink-mid)" }}>
+            {crawlResults.length === 1
+              ? tr("1 page saved in corpus", "1 பக்கம் தரவில் உள்ளது", "පිටු 1ක් සුරකින ලදි")
+              : tr(`${crawlResults.length} pages saved in corpus`, `${crawlResults.length} பக்கங்கள் தரவில் உள்ளன`, `පිටු ${crawlResults.length}ක් සුරකින ලදි`)}
+          </span>
+        </div>
+
+        <div style={{
+          background: "var(--paper)", border: "1px solid var(--border)",
+          borderRadius: 10, padding: "16px 20px", display: "flex", flexDirection: "column", gap: 4,
+          boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+        }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-lt)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+            {tr("Crawler Status", "ஊர்தி நிலை", "ක්‍රෝලර් තත්ත්වය")}
+          </span>
+          <span style={{ fontSize: 16, fontWeight: 700, color: crawling ? "#d97706" : (crawlResults.length > 0 ? "var(--forest)" : "var(--ink-mid)") }}>
+            {crawling ? tr("Crawling…", "ஊர்கிறது…", "ක්‍රෝල් වෙමින්…") : (crawlResults.length > 0 ? tr("Crawled", "ஊரப்பட்டது", "ක්‍රෝල් කරන ලදි") : tr("Ready", "தயார்", "සූදානම්"))}
+          </span>
+          <span style={{ fontSize: 12, color: "var(--ink-mid)" }}>
+            {crawlResults.length > 0
+              ? tr(`${crawlResults.length} pages ready to view`, `${crawlResults.length} பக்கங்கள் தயார்`, `පිටු ${crawlResults.length}ක් සූදානම්`)
+              : tr("Ready to crawl", "ஊரத் தயார்", "ක්‍රෝල් කිරීමට සූදානම්")}
+          </span>
+        </div>
+      </div>
+
+      {/* Control Card */}
+      <div style={{
+        background: "var(--paper)", border: "1px solid var(--border)",
+        borderRadius: 10, padding: "20px 24px", marginBottom: 20,
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 8 }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
+              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--forest)" }}>
+                {tr("Web Crawler", "வலை ஊர்தி", "වෙබ් ක්‍රෝලර්")}
+              </h2>
+            </div>
+            <p style={{ margin: 0, fontSize: 13, color: "var(--ink-mid)" }}>
+              {tr(
+                "Discover links, crawl permitted pages within this domain, and extract readable text with summaries.",
+                "இணையதளத்தின் இணைப்புகளைக் கண்டறிந்து, அனுமதிக்கப்பட்ட பக்கங்களை ஊர்ந்து உரை மற்றும் சுருக்கத்தைப் பெறவும்.",
+                "මෙම ඩොමේනය තුළ සබැඳි සොයාගෙන, අවසර ලත් පිටු ක්‍රෝල් කර සාරාංශ සහිත පෙළ ලබා ගන්න."
+              )}
+            </p>
+          </div>
+
+          {crawlResults.length > 0 && !crawling && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={handleClearResults}
+              style={{ color: "var(--danger)", fontSize: 12, padding: "4px 10px" }}
+              title={tr("Clear saved results", "முடிவுகளை அழி", "ප්‍රතිඵල මකන්න")}
+            >
+              {tr("Clear History", "வரலாற்றை அழி", "ඉතිහාසය මකන්න")}
+            </button>
+          )}
+        </div>
+
+        <div style={{ marginTop: 16, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ flex: 1, minWidth: 260 }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-lt)", display: "block", marginBottom: 4 }}>
+              {tr("Target URL", "இலக்கு முகவரி", "ඉලක්කගත URL")}
+            </span>
+            <input
+              type="url"
+              value={currentUrl}
+              onChange={(e) => setCurrentUrl(e.target.value)}
+              placeholder="https://example.com"
+              disabled={crawling}
+              style={{
+                width: "100%", padding: "7px 12px", fontSize: 13,
+                borderRadius: 6, border: "1px solid var(--border)",
+                background: "var(--paper)", color: "var(--ink)",
+              }}
+            />
+          </div>
+
+          <div style={{ minWidth: 200 }}>
+            <div style={{ marginBottom: 4 }}>
+              <label htmlFor="crawler-pages-input" style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-lt)", margin: 0 }}>
+                {tr("Pages to crawl", "பக்கங்களின் எண்ணிக்கை", "ක්‍රෝල් කිරීමට පිටු")}
+              </label>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input
+                id="crawler-pages-input"
+                type="number"
+                min={1}
+                max={totalAvailablePages ? Math.min(totalAvailablePages, 500) : 100}
+                value={crawlMaxPages}
+                onChange={(e) => setCrawlMaxPages(Math.max(1, Number(e.target.value)))}
+                disabled={crawling}
+                style={{ width: 100, padding: "7px 10px", fontSize: 14, textAlign: "center", borderRadius: 6, border: "1px solid var(--border)" }}
+              />
+            </div>
+          </div>
+
+          <div style={{ alignSelf: "flex-end", display: "flex", gap: 8 }}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={handleStartCrawlClick}
+              disabled={crawling}
+              style={{ padding: "9px 20px", fontSize: 14, minWidth: 140 }}
+            >
+              {crawling
+                ? tr("Crawling…", "ஊர்கிறது…", "ක්‍රෝල් වෙමින්…")
+                : tr("Start Crawling", "ஊரத் தொடங்கு", "ක්‍රෝල් කිරීම අරඹන්න")}
+            </button>
+          </div>
+        </div>
+
+        {crawlStatus && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 8,
+            marginTop: 16, padding: "10px 14px", borderRadius: 8,
+            background: "var(--mint)", fontSize: 13, color: "var(--forest)", fontWeight: 600,
+          }}>
+            {crawlStatus}
+          </div>
+        )}
+
+        {crawlError && (
+          <div className="alert-error" style={{ marginTop: 16 }}>
+            {crawlError}
+          </div>
+        )}
+      </div>
+
+      {/* Crawled Results */}
+      {crawlResults.length > 0 && (
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "var(--ink)", display: "flex", alignItems: "center", gap: 10 }}>
+              <span>{tr("Discovered Pages & Summaries", "கண்டறியப்பட்ட பக்கங்கள் மற்றும் சுருக்கம்", "සොයාගත් පිටු සහ සාරාංශ")}</span>
+              <span className="badge" style={{ background: "var(--forest)", color: "#fff", fontSize: 12, fontWeight: 700, padding: "3px 10px", borderRadius: 12 }}>
+                {tr(`Total Pages: ${crawlResults.length}`, `மொத்த பக்கங்கள்: ${crawlResults.length}`, `මුළු පිටු: ${crawlResults.length}`)}
+              </span>
+            </div>
+            <span style={{ fontSize: 12, color: "var(--ink-lt)" }}>
+              {tr("Saved automatically", "தானாக சேமிக்கப்பட்டது", "ස්වයංක්‍රීයව සුරකින ලදි")}
+            </span>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {crawlResults.map((page, idx) => {
+              const isCurrentDoc = page.doc_id === doc.id || page.url === doc.filename;
+
+              return (
+                <div
+                  key={idx}
+                  style={{
+                    background: "var(--paper)", border: "1px solid var(--border)",
+                    borderRadius: 10, padding: "14px 18px",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
+                    <a
+                      href={page.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ fontSize: 14, fontWeight: 600, color: "var(--forest)", wordBreak: "break-all" }}
+                    >
+                      {page.url}
+                    </a>
+                    {isCurrentDoc && (
+                      <span className="badge" style={{ background: "var(--mint)", color: "var(--forest)", fontSize: 11 }}>
+                        {tr("Current Document", "தற்போதைய ஆவணம்", "වත්මන් ලේඛනය")}
+                      </span>
+                    )}
+                  </div>
+
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, marginTop: 6 }}>
+                    <div style={{
+                      flex: 1, minWidth: 0,
+                      background: "var(--mint)", padding: "10px 14px",
+                      borderRadius: 8, border: "1px solid var(--border)",
+                    }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--forest)", marginBottom: 4, textTransform: "uppercase" }}>
+                        {tr("Summary", "சுருக்கம்", "සාරාංශය")}
+                      </div>
+                      <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6, color: "var(--ink)", wordBreak: "break-word" }}>
+                        {page.summary || (page.text ? page.text.slice(0, 220) + "…" : tr("No summary available.", "சுருக்கம் இல்லை.", "සාරාංශයක් නොමැත."))}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      style={{ flexShrink: 0, whiteSpace: "nowrap", padding: "8px 16px" }}
+                      onClick={() => handleViewDocument(page)}
+                    >
+                      {tr("View Document", "ஆவணத்தைப் பார்", "ලේඛනය බලන්න")}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1880,23 +2205,87 @@ function MetadataTab({ docId, metadata, tr, onSaved }) {
 
 export default function DocumentView() {
   const { id } = useParams();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [doc, setDoc] = useState(null);
+  const [selectedSubpageDoc, setSelectedSubpageDoc] = useState(null);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("overview");
   const [appLang, setAppLang] = useState(() => localStorage.getItem("lrw_lang") || "");
+
+  const refreshDocument = useCallback(async (docId = id) => {
+    try {
+      const data = await getDocument(docId);
+      setDoc(data);
+    } catch {}
+  }, [id]);
+
+  const handleSelectPage = useCallback(async (page) => {
+    if (!page) return;
+    if (page.doc_id === doc?.id || page.url === doc?.filename) {
+      setSelectedSubpageDoc(null);
+      setTab("overview");
+      return;
+    }
+
+    const previewDoc = {
+      id: page.doc_id,
+      filename: page.url,
+      file_type: "url",
+      raw_text: page.text,
+      cleaned_text: page.text,
+      summary: page.summary,
+      created_at: doc?.created_at,
+      is_crawled_subpage: true,
+      parent_document_id: doc?.id,
+      metadata: { source: "crawler", crawled_url: page.url },
+      nlp: null,
+    };
+    setSelectedSubpageDoc(previewDoc);
+    setTab("overview");
+
+    if (page.doc_id) {
+      try {
+        const fullDoc = await getDocument(page.doc_id);
+        if (fullDoc) {
+          setSelectedSubpageDoc(fullDoc);
+        }
+      } catch (err) {
+        console.warn("Could not load full subpage document, using preview:", err);
+      }
+    }
+  }, [doc]);
 
   useEffect(() => {
     let cancelled = false;
     setDoc(null);
+    setSelectedSubpageDoc(null);
     setError("");
-    setTab("overview");
+    setLoading(true);
 
     getDocument(id)
-      .then((data) => { if (!cancelled) setDoc(data); })
-      .catch((e) => { if (!cancelled) setError(getErrorMessage(e, "Failed to load document.")); });
+      .then((data) => {
+        if (!cancelled) {
+          setDoc(data);
+          setLoading(false);
+          const requestedTab = location.state?.tab || new URLSearchParams(window.location.search).get("tab");
+          if (requestedTab) {
+            setTab(requestedTab);
+          } else {
+            setTab(data.file_type === "url" ? "crawler" : "overview");
+          }
+        }
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setLoading(false);
+          setError(getErrorMessage(e, "Failed to load document."));
+        }
+      });
 
     return () => { cancelled = true; };
-  }, [id]);
+  }, [id, location.state]);
 
   useEffect(() => {
     const handleLang = (e) => setAppLang(e.detail);
@@ -1906,56 +2295,69 @@ export default function DocumentView() {
 
   if (error) {
     return (
-      <div className="page" style={{ maxWidth: 720 }}>
+      <div className="page" style={{ maxWidth: 720, paddingTop: 32 }}>
         <div className="alert-error">{error}</div>
         <Link to="/" className="btn btn-ghost btn-sm">← Back to dashboard</Link>
       </div>
     );
   }
-  if (!doc) return <div className="page"><p className="muted">Loading…</p></div>;
+  if (!doc) return <div className="page" style={{ paddingTop: 32 }}><p className="muted">Loading…</p></div>;
 
-  const nlp = doc.nlp || {};
+  const displayDoc = selectedSubpageDoc || doc;
+  const nlp = displayDoc.nlp || {};
   const lang = appLang || nlp.language || "English";
   const tr = makeTr(lang);
-  const baseName = doc.filename?.replace(/\.[^.]+$/, "") || "document";
+  const baseName = displayDoc.filename?.replace(/\.[^.]+$/, "") || "document";
+  const isUrlDoc = doc.file_type === "url" || displayDoc.file_type === "url";
 
   const tabs = [
+    ...(isUrlDoc ? [{ key: "crawler", label: tr("Web Crawler", "வலை ஊர்தி", "වෙබ් ක්‍රෝලර්") }] : []),
     { key: "overview", label: tr("Overview", "கண்ணோட்டம்", "දළ විශ්ලේෂණය") },
     { key: "raw", label: tr("Raw Text", "அசல் உரை", "මුල් පෙළ") },
     { key: "cleaned", label: tr("Cleaned Text", "சுத்திகரிக்கப்பட்ட உரை", "පිරිසිදු කළ පෙළ") },
-    ...(doc.nlp ? [{ key: "nlp", label: tr("NLP Data", "NLP தரவு", "NLP දත්ත") }] : []),
+    ...(displayDoc.nlp ? [{ key: "nlp", label: tr("NLP Data", "NLP தரவு", "NLP දත්ත") }] : []),
     { key: "metadata", label: tr("Meta Data", "மெட்டாடேட்டா", "පාරදත්ත") },
   ];
 
   return (
-    <div className="page">
-      <div className="page-header fade-up">
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <Link to="/" className="muted" style={{ fontSize: 13, marginBottom: 6, display: "inline-block" }}>
-              ← {tr("Dashboard", "முகப்பு", "පුවරුව")}
-            </Link>
-            <h1 className="page-title" style={{ wordBreak: "break-word" }}>{doc.filename}</h1>
+    <div className="page" style={{ paddingTop: 28 }}>
+      <div className="page-header fade-up" style={{ marginBottom: 24 }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+          <div style={{ flex: 1, minWidth: 260 }}>
+            <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 8, flexWrap: "wrap" }}>
+              <Link to="/" className="muted" style={{ fontSize: 13, display: "inline-block" }}>
+                ← {tr("Dashboard", "முகப்பு", "පුවරුව")}
+              </Link>
+              {doc.parent_document_id && (
+                <Link
+                  to={`/documents/${doc.parent_document_id}?tab=crawler`}
+                  style={{ fontSize: 13, display: "inline-block", color: "var(--forest)", fontWeight: 600, textDecoration: "none" }}
+                >
+                  ← {tr("Back to Web Crawler", "வலை ஊர்திக்குத் திரும்பு", "වෙබ් ක්‍රෝලර් වෙත ආපසු")}
+                </Link>
+              )}
+            </div>
+            <h1 className="page-title" style={{ wordBreak: "break-word", fontSize: 28, margin: "4px 0 10px" }}>{displayDoc.filename}</h1>
             <div style={{ display: "flex", gap: 10, marginTop: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <span className="badge">{doc.file_type}</span>
-              {doc.file_type === "pdf" && <PdfTypeBadge pdfType={doc.pdf_type} />}
+              <span className="badge">{displayDoc.file_type}</span>
+              {displayDoc.file_type === "pdf" && <PdfTypeBadge pdfType={displayDoc.pdf_type} />}
               {nlp.language && (
                 <span className="badge" style={{ background: "var(--mint)", color: "var(--forest)", fontWeight: 600 }}>
                   {nlp.language_display || nlp.language}
                 </span>
               )}
-              <span className="muted">{formatDate(doc.created_at)}</span>
+              <span className="muted">{formatDate(displayDoc.created_at)}</span>
               {nlp.token_count != null && <span className="muted">{nlp.token_count.toLocaleString()} tokens</span>}
             </div>
           </div>
-          <div style={{ display: "flex", gap: 8, flexShrink: 0, marginLeft: "auto", alignSelf: "flex-start" }}>
+          <div style={{ display: "flex", gap: 8, flexShrink: 0, marginTop: 4 }}>
             {["json", "csv"].map((format) => (
               <button
                 key={format}
                 className="btn btn-ghost btn-sm"
                 type="button"
                 title={`Download ${format.toUpperCase()} format`}
-                onClick={() => exportDocument(id, format, baseName)}
+                onClick={() => exportDocument(displayDoc.id || id, format, baseName)}
               >
                 📥 {format.toUpperCase()}
               </button>
@@ -1965,6 +2367,48 @@ export default function DocumentView() {
       </div>
 
       <div className="card fade-up fade-up-1">
+        {selectedSubpageDoc && (
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            flexWrap: "wrap",
+            background: "var(--mint)",
+            border: "1px solid var(--border)",
+            borderRadius: 8,
+            padding: "10px 16px",
+            marginBottom: 16,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--forest)", fontWeight: 600, flex: 1, minWidth: 200 }}>
+              <span>📄</span>
+              <span>{tr("Viewing crawled subpage:", "பார்வையிடும் ஊரப்பட்ட பக்கம்:", "නරඹන උප පිටුව:")}</span>
+              <span style={{ color: "var(--ink)", fontWeight: 500, wordBreak: "break-all" }}>{selectedSubpageDoc.filename}</span>
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => {
+                  setSelectedSubpageDoc(null);
+                  setTab("overview");
+                }}
+                style={{ fontSize: 12, padding: "4px 10px" }}
+              >
+                {tr("View Main Document", "முக்கிய ஆவணத்தைப் பார்", "ප්‍රධාන ලේඛනය බලන්න")}
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => setTab("crawler")}
+                style={{ fontSize: 12, padding: "4px 12px" }}
+              >
+                {tr("Back to Crawler", "ஊர்திக்குத் திரும்பு", "ක්‍රෝලර් වෙත ආපසු")}
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="tabs">
           {tabs.map(({ key, label }) => (
             <button
@@ -1978,24 +2422,52 @@ export default function DocumentView() {
           ))}
         </div>
 
-        {tab === "overview" && <OverviewTab doc={doc} nlp={nlp} tr={tr} />}
-        {tab === "raw" && <pre className="snippet">{doc.raw_text}</pre>}
-        {tab === "cleaned" && <pre className="snippet">{doc.cleaned_text}</pre>}
-        {tab === "nlp" && doc.nlp && (
+        <div style={{ display: tab === "crawler" && isUrlDoc ? "block" : "none" }}>
+          {isUrlDoc && (
+            <WebCrawlerTab
+              key={doc.id}
+              doc={doc}
+              tr={tr}
+              currentTab={tab}
+              onOpenOverview={() => {
+                setSelectedSubpageDoc(null);
+                setTab("overview");
+              }}
+              onSelectPage={handleSelectPage}
+              onDocumentUpdated={refreshDocument}
+            />
+          )}
+        </div>
+        {tab === "overview" && <OverviewTab doc={displayDoc} nlp={nlp} tr={tr} />}
+        {tab === "raw" && <pre className="snippet">{displayDoc.raw_text || "No raw text available."}</pre>}
+        {tab === "cleaned" && <pre className="snippet">{displayDoc.cleaned_text || "No cleaned text available."}</pre>}
+        {tab === "nlp" && displayDoc.nlp && (
           <NlpTab
-            docId={id}
+            docId={displayDoc.id || id}
             nlp={nlp}
             lang={lang}
             tr={tr}
-            onNlpUpdated={(newNlp) => setDoc((prev) => ({ ...prev, nlp: newNlp }))}
+            onNlpUpdated={(newNlp) => {
+              if (selectedSubpageDoc) {
+                setSelectedSubpageDoc((prev) => ({ ...prev, nlp: newNlp }));
+              } else {
+                setDoc((prev) => ({ ...prev, nlp: newNlp }));
+              }
+            }}
           />
         )}
         {tab === "metadata" && (
           <MetadataTab
-            docId={id}
-            metadata={doc.metadata}
+            docId={displayDoc.id || id}
+            metadata={displayDoc.metadata}
             tr={tr}
-            onSaved={(metadata) => setDoc((prev) => ({ ...prev, metadata }))}
+            onSaved={(metadata) => {
+              if (selectedSubpageDoc) {
+                setSelectedSubpageDoc((prev) => ({ ...prev, metadata }));
+              } else {
+                setDoc((prev) => ({ ...prev, metadata }));
+              }
+            }}
           />
         )}
       </div>

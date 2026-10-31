@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_BASE = "/api";
+const API_BASE = import.meta.env.VITE_API_URL || "/api";
 const TOKEN_KEY = "lrw_token";
 const USER_KEY = "lrw_user";
 const USER_EVENT = "lrw_user_updated";
@@ -93,12 +93,14 @@ export async function uploadAvatar(file) {
   return data.user;
 }
 
-export function uploadDocument({ file, fileType, url, metadata }) {
+export function uploadDocument({ file, fileType, url, metadata, summary, language }) {
   const form = new FormData();
   form.append("file_type", fileType);
   if (file) form.append("file", file);
   if (url) form.append("url", url);
   if (metadata) form.append("metadata", JSON.stringify(metadata));
+  if (summary) form.append("summary", summary);
+  if (language) form.append("language", language);
   return unwrap(api.post("/documents/upload", form));
 }
 

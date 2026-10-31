@@ -239,7 +239,7 @@ async def summarize_image(file: UploadFile = File(...)):
 
 
 @router.post("/audio")
-async def summarize_audio(file: UploadFile = File(...)):
+async def summarize_audio(file: UploadFile = File(...), language: Optional[str] = Form(None)):
     try:
         content = await file.read()
         raw_text = await run_in_threadpool(extraction.extract, "audio", content=content)
