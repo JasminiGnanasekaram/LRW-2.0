@@ -174,7 +174,7 @@ async def start_crawl(
     - Returns extracted text + summary + doc_id for every page.
     """
 
-    if not 1 <= req.max_pages <= 50:
+    if not 1 <= req.max_pages <= 1000:
         raise HTTPException(
             status_code=400, detail="max_pages must be between 1 and 50."
         )
