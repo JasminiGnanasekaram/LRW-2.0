@@ -344,6 +344,16 @@ export default function Upload() {
             </Field>
 
             <SelectField
+              id="meta-domain"
+              label="Domain"
+              placeholder="Select domain..."
+              options={DOMAINS}
+              value={meta.domain}
+              onChange={updateMeta("domain")}
+              required
+            />
+
+            <SelectField
               id="meta-license"
               label="License"
               placeholder="Select license..."

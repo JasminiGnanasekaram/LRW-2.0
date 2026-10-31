@@ -1,7 +1,11 @@
 """Routes for document summarization using Groq AI and extraction services."""
 import base64
 import io
+import re
+import time
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from groq import Groq
 from PIL import Image
 
@@ -13,7 +17,11 @@ from services.summarizer import get_text_summary
 router = APIRouter(prefix="/summarize", tags=["summarize"])
 settings = get_settings()
 
-MODEL = "llama-3.3-70b-versatile"
+MODEL = "openai/gpt-oss-120b"
+
+# Long documents are summarized piece by piece (each piece up to this many characters),
+# then the piece summaries are summarized again. The input length is NOT limited.
+CHUNK_CHARS = 6000
 
 
 def get_groq_client():
@@ -51,6 +59,52 @@ def compress_image(image_bytes: bytes, mime_type: Optional[str] = None) -> str:
         return base64.b64encode(image_bytes).decode("utf-8")
 
 
+def _ask_groq(system: str, user: str, max_tokens: int = 1000) -> str:
+    """One Groq chat call with a couple of retries (rate limits, short network errors)."""
+    client = get_groq_client()
+    last_error = None
+    for attempt in range(3):
+        try:
+            response = client.chat.completions.create(
+                model=MODEL,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+                max_tokens=max_tokens,
+                temperature=0.3,
+                extra_body={"reasoning_effort": "low"},  # faster answers from gpt-oss
+            )
+            return (response.choices[0].message.content or "").strip()
+        except Exception as e:  # noqa: BLE001
+            last_error = e
+            time.sleep(2 * (attempt + 1))
+    raise last_error
+
+
+def _split_chunks(text: str, size: int = CHUNK_CHARS) -> list:
+    """Split text into pieces of at most `size` characters, preferring sentence boundaries."""
+    chunks, current, length = [], [], 0
+    for piece in re.split(r"(?<=[.!?।॥])\s+|\n+", text):
+        piece = piece.strip()
+        if not piece:
+            continue
+        while len(piece) > size:  # a long run with no punctuation (common in OCR text)
+            if current:
+                chunks.append(" ".join(current))
+                current, length = [], 0
+            chunks.append(piece[:size])
+            piece = piece[size:]
+        if current and length + len(piece) + 1 > size:
+            chunks.append(" ".join(current))
+            current, length = [], 0
+        current.append(piece)
+        length += len(piece) + 1
+    if current:
+        chunks.append(" ".join(current))
+    return chunks
+
+
 def summarize(text: str) -> str:
     if not text or not text.strip():
         return "No text content found to summarize."
@@ -78,23 +132,30 @@ def summarize(text: str) -> str:
         except Exception:
             pass
 
+    # Only the summary itself is short: 2 sentences. The document length is not limited.
     system_content = f"You are a summarizer. Respond in {lang}. Respond with exactly 2 informative sentences. Each sentence must be under 20 words. Never exceed 2 sentences."
     prompt_prefix = f"Summarize the following content in {lang} in 2 informative sentences. Each sentence must be under 20 words. Stop after 2 sentences:\n\n"
+    part_system = f"You are a summarizer. Respond in {lang}. Summarize the passage in 3 to 5 factual sentences that keep its main points."
+    part_prefix = f"Summarize this part of a longer document in {lang}:\n\n"
 
     try:
-        client = get_groq_client()
-        response = client.chat.completions.create(
-            model=MODEL,
-            messages=[
-                {"role": "system", "content": system_content},
-                {"role": "user", "content": prompt_prefix + text[:5000]}
-            ],
-            max_tokens=250 if lang != "English" else 80,
-            temperature=0.3,
-        )
-        return response.choices[0].message.content
+        working = text.strip()
+        # Long document: summarize every piece, then summarize those summaries (repeat if needed)
+        while len(working) > CHUNK_CHARS:
+            chunks = _split_chunks(working)
+            with ThreadPoolExecutor(max_workers=3) as pool:
+                partials = list(pool.map(lambda c: _ask_groq(part_system, part_prefix + c, 600), chunks))
+            condensed = "\n".join(p for p in partials if p)
+            if not condensed or len(condensed) >= len(working):
+                break
+            working = condensed
+
+        summary = _ask_groq(system_content, prompt_prefix + working)
+        if summary:
+            return summary
+        raise ValueError("Groq returned an empty summary")
     except Exception as e:
-        # Fallback to local extractive summary if Groq fails or API key is not configured
+        # Fallback to local extractive summary (reads the whole text) if Groq fails
         print(f"[Summarize] Groq AI failed ({e}), using extractive summarizer fallback.", flush=True)
         return get_text_summary(text)
 
@@ -145,8 +206,8 @@ def summarize_image_b64(b64: str) -> str:
 async def summarize_text(file: UploadFile = File(...)):
     try:
         content = await file.read()
-        raw_text = extraction.extract("text", content=content)
-        return {"summary": summarize(raw_text)}
+        raw_text = await run_in_threadpool(extraction.extract, "text", content=content)
+        return {"summary": await run_in_threadpool(summarize, raw_text)}
     except HTTPException:
         raise
     except Exception as e:
@@ -157,8 +218,8 @@ async def summarize_text(file: UploadFile = File(...)):
 async def summarize_pdf(file: UploadFile = File(...)):
     try:
         content = await file.read()
-        raw_text = extraction.extract("pdf", content=content, filename=file.filename)
-        return {"summary": summarize(raw_text)}
+        raw_text = await run_in_threadpool(extraction.extract, "pdf", content=content, filename=file.filename)
+        return {"summary": await run_in_threadpool(summarize, raw_text)}
     except HTTPException:
         raise
     except Exception as e:
@@ -169,8 +230,8 @@ async def summarize_pdf(file: UploadFile = File(...)):
 async def summarize_image(file: UploadFile = File(...)):
     try:
         content = await file.read()
-        raw_text = extraction.extract("image", content=content, filename=file.filename)
-        return {"summary": summarize(raw_text)}
+        raw_text = await run_in_threadpool(extraction.extract, "image", content=content, filename=file.filename)
+        return {"summary": await run_in_threadpool(summarize, raw_text)}
     except HTTPException:
         raise
     except Exception as e:
@@ -181,8 +242,8 @@ async def summarize_image(file: UploadFile = File(...)):
 async def summarize_audio(file: UploadFile = File(...)):
     try:
         content = await file.read()
-        raw_text = extraction.extract("audio", content=content)
-        return {"summary": summarize(raw_text)}
+        raw_text = await run_in_threadpool(extraction.extract, "audio", content=content)
+        return {"summary": await run_in_threadpool(summarize, raw_text)}
     except HTTPException:
         raise
     except Exception as e:
@@ -192,9 +253,9 @@ async def summarize_audio(file: UploadFile = File(...)):
 @router.post("/url")
 async def summarize_url(url: str = Form(...)):
     try:
-        raw_text = extraction.extract("url", url=url)
-        return {"summary": summarize(raw_text)}
+        raw_text = await run_in_threadpool(extraction.extract, "url", url=url)
+        return {"summary": await run_in_threadpool(summarize, raw_text)}
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))

@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, UploadFile, File, Form, Body, HTTPException
 from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.concurrency import run_in_threadpool
 from datetime import datetime
 from collections import Counter
 from bson import ObjectId
@@ -144,7 +145,7 @@ async def upload(
             raise HTTPException(status_code=400, detail="file required")
         content = await file.read()
         try:
-            raw_text = extraction.extract(file_type, content=content, filename=file.filename)
+            raw_text = await run_in_threadpool(extraction.extract, file_type, content=content, filename=file.filename)
         except NotImplementedError as e:
             raise HTTPException(status_code=501, detail=str(e))
         except Exception as e:
@@ -236,9 +237,8 @@ async def upload(
     # 7. Generate Summary
     summary = ""
     try:
-        from fastapi.concurrency import run_in_threadpool
         from .summarize import summarize
-        summary = await run_in_threadpool(summarize, cleaned_text[:5000])
+        summary = await run_in_threadpool(summarize, cleaned_text)
     except Exception as e:
         import logging
         logging.getLogger("uvicorn.error").warning(f"Failed to generate summary during upload: {e}")
@@ -292,7 +292,6 @@ async def get_document(doc_id: str, user: dict = Depends(get_current_user)):
             or "sentences" not in analysis.get("data", {})
         ):
             try:
-                from fastapi.concurrency import run_in_threadpool
                 analysis_data = await run_in_threadpool(nlp.analyze, cleaned.get("text") or "")
                 if analysis:
                     await nlp_analysis_col.update_one(
@@ -317,9 +316,8 @@ async def get_document(doc_id: str, user: dict = Depends(get_current_user)):
     if not raw.get("summary") and cleaned and cleaned.get("text"):
         summary = ""
         try:
-            from fastapi.concurrency import run_in_threadpool
             from .summarize import summarize
-            summary = await run_in_threadpool(summarize, cleaned.get("text")[:5000])
+            summary = await run_in_threadpool(summarize, cleaned.get("text"))
         except Exception as e:
             import logging
             logging.getLogger("uvicorn.error").warning(f"Failed to auto-generate missing summary: {e}")

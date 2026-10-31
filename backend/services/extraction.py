@@ -1,6 +1,7 @@
 """Text extraction from various input formats."""
 import io
 import os
+import re
 import tempfile
 from typing import Optional
 
@@ -26,6 +27,110 @@ if pytesseract is not None:
     elif os.path.exists(r"C:\Program Files\Tesseract-OCR\tesseract.exe"):
         pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
+# --- OCR / readable-text helpers -------------------------------------------
+
+# Pages are OCR'd automatically when they are scanned images or use a non-Unicode
+# (legacy-font) text layer. Set this to True to OCR EVERY page of every PDF instead.
+ALWAYS_OCR_PDF = False
+
+MIN_CHARS_PER_PAGE = 20          # below this a page has no real text layer
+SCANNED_PAGE_MAX_TEXT_CHARS = 400  # a page picture + this little text = a scan with just a stamp/footer
+SCANNED_PAGE_IMAGE_COVERAGE = 0.5  # share of the page covered by pictures to call it a scan
+
+_COMMON_ENGLISH = {
+    "the", "and", "of", "to", "in", "is", "that", "for", "it", "with", "as", "on",
+    "was", "are", "be", "by", "this", "from", "or", "an", "at", "which", "not",
+    "have", "has", "were", "will", "can", "their", "his", "her", "but", "all",
+}
+
+
+def _get_ocr_languages() -> str:
+    """Return a Tesseract language string using only the languages actually installed."""
+    wanted = ["eng", "tam", "sin"]
+    available = []
+    if pytesseract is not None:
+        try:
+            available = list(pytesseract.get_languages(config=""))
+        except Exception:
+            available = []
+    chosen = [lang for lang in wanted if lang in available]
+    if not chosen:
+        chosen = ["eng"]
+    return "+".join(chosen)
+
+
+def _has_readable_pdf_text(text: str) -> bool:
+    """Heuristic: is this extracted PDF text real, readable text?
+
+    Non-Unicode (legacy-font) Tamil/Sinhala PDFs extract as Latin-looking
+    garbage such as "jkpo; nkhop" or "(cid:123)". That garbage is long enough
+    to pass a simple length check, so we also look at what the text looks like.
+    """
+    if not text:
+        return False
+    text = text.strip()
+    if not text:
+        return False
+
+    # Broken font mapping markers
+    if "(cid:" in text or text.count("\ufffd") > max(2, len(text) * 0.02):
+        return False
+
+    letters = [c for c in text if c.isalpha()]
+    if not letters:
+        return False
+
+    # Proper Unicode Tamil / Sinhala (or other non-Latin script) text
+    tamil_sinhala = sum(1 for c in letters if "\u0b80" <= c <= "\u0bff" or "\u0d80" <= c <= "\u0dff")
+    if tamil_sinhala / len(letters) >= 0.3:
+        return True
+
+    # Legacy-font garbage: Latin-1 accented letters/symbols and bracket/semicolon
+    # characters used as letter stand-ins, mixed inside words.
+    weird = sum(1 for c in text if "\u00a1" <= c <= "\u00ff" or c in ";[]{}~^|`\\")
+    if weird / max(len(text), 1) > 0.05:
+        return False
+
+    # Plain Latin text should contain ordinary English words (or other normal prose).
+    words = re.findall(r"[A-Za-z]+", text.lower())
+    if len(words) >= 8:
+        hits = sum(1 for w in words if w in _COMMON_ENGLISH)
+        if hits / len(words) < 0.04:
+            # Could be another Latin-script language; accept only if words look pronounceable
+            vowels = sum(1 for w in words if re.search(r"[aeiou]", w))
+            return vowels / len(words) > 0.85 and weird == 0
+    return True
+
+
+def _page_image_coverage(page) -> float:
+    """Fraction (0-1) of the page area covered by embedded pictures."""
+    try:
+        page_area = abs(page.rect.width * page.rect.height) or 1.0
+        covered = 0.0
+        for info in page.get_image_info():
+            visible = page.rect & type(page.rect)(info["bbox"])
+            if not visible.is_empty:
+                covered += visible.width * visible.height
+        return min(covered / page_area, 1.0)
+    except Exception:
+        return 0.0
+
+
+def _page_needs_ocr(page, page_text: str) -> bool:
+    """True when the page's text layer cannot be trusted as the page's real content:
+    no text, garbled (non-Unicode font) text, or a scanned page whose text layer is
+    only a short stamp/footer (for example "Digitized by Noolaham Foundation")."""
+    if ALWAYS_OCR_PDF:
+        return True
+    if len(page_text) < MIN_CHARS_PER_PAGE:
+        return True
+    if not _has_readable_pdf_text(page_text):
+        return True
+    return (
+        len(page_text) < SCANNED_PAGE_MAX_TEXT_CHARS
+        and _page_image_coverage(page) >= SCANNED_PAGE_IMAGE_COVERAGE
+    )
+
 
 def extract_from_text(content: bytes, encoding: str = "utf-8") -> str:
     return content.decode(encoding, errors="replace")
@@ -33,32 +138,40 @@ def extract_from_text(content: bytes, encoding: str = "utf-8") -> str:
 
 def extract_from_pdf(content: bytes) -> str:
     """PDF extraction using PyMuPDF (fitz).
-    Each page is checked for a real text layer; pages with one are
-    extracted directly, pages without one (scans/photos) are rendered
-    to an image and OCR'd. Handles text-only, scanned-only, and mixed PDFs."""
+    Each page is checked for a real, readable text layer. Pages with one are
+    extracted directly. Pages without one (scans/photos) AND pages whose text
+    layer is garbage (non-Unicode / legacy-font Tamil or Sinhala) are rendered
+    to an image and OCR'd instead."""
     import fitz  # PyMuPDF
     from PIL import Image
 
-    MIN_CHARS_PER_PAGE = 20  # below this, treat the page as "no real text"
-
     doc = fitz.open(stream=content, filetype="pdf")
     text_parts = []
+    ocr_langs = _get_ocr_languages()
 
     for page in doc:
         page_text = page.get_text().strip()
 
-        if len(page_text) >= MIN_CHARS_PER_PAGE:
+        if not _page_needs_ocr(page, page_text):
             text_parts.append(page_text)
-        else:
-            # 1. Use Matrix Zoom (compatible with all PyMuPDF versions) to scale up page image for high-quality OCR
-            zoom = 2  # 2x zoom factor
-            mat = fitz.Matrix(zoom, zoom)
-            pix = page.get_pixmap(matrix=mat)
-            
-            # 2. Convert to bytes and open with Pillow
+            continue
+
+        # Scanned page, or text layer is unreadable (non-Unicode font) -> OCR
+        ocr_text = ""
+        if pytesseract is not None:
+            zoom = 3  # higher zoom helps Tamil/Sinhala glyphs
+            pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom))
             img = Image.open(io.BytesIO(pix.tobytes("png")))
-            ocr_text = pytesseract.image_to_string(img, lang="eng+tam+sin") if pytesseract else ""
-            text_parts.append(ocr_text.strip())
+            try:
+                ocr_text = pytesseract.image_to_string(img, lang=ocr_langs).strip()
+            except Exception as exc:
+                print(f"[PDF OCR] failed on page {page.number + 1}: {exc}", flush=True)
+
+        if ocr_text:
+            text_parts.append(ocr_text)
+        elif page_text:
+            # OCR unavailable/empty: keep whatever the text layer gave us
+            text_parts.append(page_text)
 
     doc.close()
     return "\n\n".join(text_parts)
@@ -68,15 +181,13 @@ def detect_pdf_type(content: bytes) -> str:
     """Analyze PDF to determine its type: text_only, text_image, or image_only."""
     import fitz  # PyMuPDF
     
-    MIN_CHARS_PER_PAGE = 20  # Threshold for considering a page as having text
-    
     doc = fitz.open(stream=content, filetype="pdf")
     text_page_count = 0
     image_page_count = 0
     
     for page in doc:
         page_text = page.get_text().strip()
-        if len(page_text) >= MIN_CHARS_PER_PAGE:
+        if not _page_needs_ocr(page, page_text):
             text_page_count += 1
         else:
             image_page_count += 1
@@ -114,7 +225,7 @@ def extract_from_image(content: bytes) -> str:
 
     img = Image.open(io.BytesIO(content))
     try:
-        return pytesseract.image_to_string(img, lang="eng+tam+sin")
+        return pytesseract.image_to_string(img, lang=_get_ocr_languages())
     except pytesseract.pytesseract.TesseractNotFoundError as exc:
         raise RuntimeError(
             "Tesseract OCR executable not found. Install Tesseract and add it to PATH, "
@@ -192,7 +303,7 @@ def _pdf_is_mostly_text(content: bytes, min_chars_per_page: int = 20, text_ratio
 
     text_pages = sum(
         1 for page in doc
-        if len(page.get_text().strip()) >= min_chars_per_page
+        if not _page_needs_ocr(page, page.get_text().strip())
     )
     doc.close()
     return (text_pages / total_pages) >= text_ratio_threshold

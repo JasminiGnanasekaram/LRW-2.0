@@ -6,8 +6,16 @@ __pycache__/
 .venv/
 venv/
 
-# Environment - NEVER push this
+# Environment files - NEVER PUSH
 .env
+.env.*
+*.env
+backend/.env
+frontend/.env
+
+# Sensitive Gmail credentials
+backend/gmail_credentials.json
+backend/gmail_token.pickle
 
 # Uploads
 uploads/
@@ -15,6 +23,7 @@ uploads/
 # Node
 node_modules/
 dist/
+build/
 
 # Vite cache
 .vite/
@@ -26,12 +35,7 @@ dist/
 # IDE
 .vscode/
 .idea/
-backend/gmail_credentials.json
-backend/gmail_token.pickle
 
-# Environment files
-.env
-*.env
-
-backend/.env
-frontend/.env
+# OS
+.DS_Store
+Thumbs.db
