@@ -47,15 +47,41 @@ def document_to_csv(doc: dict) -> str:
             writer.writerow([i, kw])
         writer.writerow([])
 
-    # Section 3: Sentences
-    if sentences:
+    # Section 3: Text Classification
+    all_cats = classif.get("all") or []
+    if all_cats:
+        writer.writerow(["=== TEXT CLASSIFICATION ==="])
+        writer.writerow(["Category", "Category (Native)", "Score / Probability"])
+        for c in all_cats:
+            writer.writerow([
+                c.get("label_en", ""),
+                c.get("label", ""),
+                c.get("score", ""),
+            ])
+        writer.writerow([])
+
+    # Section 4: Sentence-Level Sentiment & Analysis
+    sent_list = sentiment.get("sentences") or []
+    if sent_list:
+        writer.writerow(["=== SENTENCE-LEVEL SENTIMENT ==="])
+        writer.writerow(["#", "Sentence", "Language", "Sentiment", "Confidence"])
+        for i, s_item in enumerate(sent_list, 1):
+            writer.writerow([
+                i,
+                s_item.get("sentence", ""),
+                s_item.get("language", ""),
+                s_item.get("sentiment", ""),
+                s_item.get("confidence", ""),
+            ])
+        writer.writerow([])
+    elif sentences:
         writer.writerow(["=== SENTENCES ==="])
         writer.writerow(["#", "Sentence"])
         for i, s in enumerate(sentences[:100], 1):
             writer.writerow([i, s if isinstance(s, str) else ""])
         writer.writerow([])
 
-    # Section 4: POS Distribution
+    # Section 5: POS Distribution
     pos_dist = nlp.get("pos_distribution") or {}
     if pos_dist:
         writer.writerow(["=== PART-OF-SPEECH DISTRIBUTION ==="])
@@ -64,7 +90,7 @@ def document_to_csv(doc: dict) -> str:
             writer.writerow([pos, count])
         writer.writerow([])
 
-    # Section 5: Top Words Frequency
+    # Section 6: Top Words Frequency
     top_words = nlp.get("top_words") or []
     if top_words:
         writer.writerow(["=== TOP WORDS ==="])
@@ -76,7 +102,7 @@ def document_to_csv(doc: dict) -> str:
                 writer.writerow([i, item.get("word", ""), item.get("count", "")])
         writer.writerow([])
 
-    # Section 6: Detailed Token Analysis
+    # Section 7: Detailed Token Analysis
     if tokens:
         writer.writerow(["=== TOKEN-LEVEL ANALYSIS ==="])
         writer.writerow([
@@ -156,4 +182,5 @@ def documents_summary_csv(docs: List[dict]) -> str:
             meta.get("publication_date", ""),
             d.get("created_at", ""),
         ])
+
     return buf.getvalue()

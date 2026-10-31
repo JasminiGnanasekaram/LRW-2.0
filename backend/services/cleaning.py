@@ -1,5 +1,4 @@
-"""Text cleaning and normalization for English, Tamil, Sinhala, and multilingual documents."""
-
+"""Text cleaning and normalization supporting English, Tamil, Sinhala, and multilingual documents."""
 import re
 import unicodedata
 
@@ -27,9 +26,10 @@ EXCESS_NEWLINES_RE = re.compile(r"\n{3,}")
 
 
 def normalize_unicode(text: str) -> str:
-    """NFC-normalize and drop control/format characters, keeping ZWJ and ZWNJ.
-
-    ZWJ (U+200D) and ZWNJ (U+200C) are required for Sinhala conjuncts and Tamil text.
+    """
+    NFC normalize and strip non-essential control characters.
+    CRITICAL: Preserves Zero-Width Joiner (U+200D) and Zero-Width Non-Joiner (U+200C)
+    which are required for Sinhala conjunct consonants (e.g. ශ්‍රී, ප්‍රවෘත්ති) and Tamil.
     """
     if not text:
         return ""
@@ -45,31 +45,19 @@ def remove_html_tags(text: str) -> str:
 
 
 def remove_emojis(text: str) -> str:
-    """Replace decorative emoji glyphs (and their variation selectors) with a space."""
-    return EMOJI_RE.sub(" ", text)
-
-
-def remove_hyphenated_line_breaks(text: str) -> str:
-    """Rejoin words split across lines with a hyphen ('infor-\\nmation' -> 'information')."""
-    return HYPHEN_BREAK_RE.sub("", text)
-
-
-def normalize_punctuation(text: str) -> str:
-    """Normalize quotes, dashes, ellipses, and bullets without touching decimals or abbreviations."""
-    text = DOUBLE_QUOTES_RE.sub('"', text)
-    text = SINGLE_QUOTES_RE.sub("'", text)
-    text = DASHES_RE.sub("-", text)
-    text = BULLETS_RE.sub(" ", text)
-    text = text.replace("…", "...")
-    text = LONG_ELLIPSIS_RE.sub("...", text)
-    return REPEATED_MARKS_RE.sub(r"\1", text)
+    """Remove standalone decorative emoji glyphs."""
+    emoji_pattern = re.compile(
+        "[\U0001F300-\U0001F6FF\U0001F900-\U0001F9FF\U0001FA70-\U0001FAFF\U00002700-\U000027BF]",
+        flags=re.UNICODE,
+    )
+    return emoji_pattern.sub(" ", text)
 
 
 def remove_unwanted_chars(text: str) -> str:
-    """Keep letters, numbers, combining marks, currency signs, and common punctuation.
-
-    Combining marks are kept so Tamil and Sinhala vowel signs survive. Unicode space
-    separators (such as a non-breaking space) become a normal space.
+    """
+    Keep letters (L), numbers (N), combining marks / vowel signs (M),
+    format characters (ZWJ/ZWNJ), standard punctuation, quotes, brackets, and currency signs.
+    Preserves English, Tamil, and Sinhala scripts without corruption.
     """
     kept = []
     for ch in text:
@@ -89,27 +77,22 @@ def remove_urls(text: str) -> str:
 def collapse_whitespace(text: str) -> str:
     """Collapse spaces and limit paragraph breaks to a single blank line."""
     text = text.replace("\r\n", "\n").replace("\r", "\n")
-    text = HORIZONTAL_SPACE_RE.sub(" ", text)
-    text = LINE_EDGE_SPACE_RE.sub("\n", text)
-    text = EXCESS_NEWLINES_RE.sub("\n\n", text)
+    # Replace multiple spaces/tabs with single space on each line
+    text = re.sub(r"[ \t]+", " ", text)
+    # Collapse lines with only whitespace
+    text = re.sub(r"\n\s+\n", "\n\n", text)
+    # Collapse 3 or more newlines into double newline (paragraph break)
+    text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
 
 
-PIPELINE = (
-    normalize_unicode,
-    remove_html_tags,
-    remove_emojis,
-    remove_hyphenated_line_breaks,
-    normalize_punctuation,
-    remove_unwanted_chars,
-    collapse_whitespace,
-)
-
-
 def clean(text: str) -> str:
-    """Run the full Unicode-safe cleaning pipeline without transliterating or dropping diacritics."""
+    """
+    Run the complete, Unicode-safe multilingual cleaning pipeline.
+    Preserves Tamil, Sinhala, and English text without transliteration or loss of diacritics.
+    """
     if not text or not text.strip():
         return ""
     for step in PIPELINE:
         text = step(text)
-    return text
+    return text

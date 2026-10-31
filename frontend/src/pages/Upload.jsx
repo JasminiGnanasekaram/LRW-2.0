@@ -40,6 +40,11 @@ const LICENSES = [
   ["restricted", "Restricted"],
   ["other", "Other"],
 ];
+const CATEGORIES = [
+  ["open", "Open"],
+  ["research", "Research"],
+  ["restricted", "Restricted"],
+];
 
 const EMPTY_META = {
   source: "",
@@ -211,7 +216,6 @@ export default function Upload() {
     setError(validationError);
     if (validationError) return;
 
-
     setLoading(true);
     try {
       const result = await uploadDocument({
@@ -342,6 +346,55 @@ export default function Upload() {
                 required
               />
             </Field>
+
+            <SelectField
+  id="meta-domain"
+  label="Domain"
+  placeholder="Select domain..."
+  options={DOMAINS}
+  value={meta.domain}
+  onChange={updateMeta("domain")}
+  required
+/>
+
+<SelectField
+  id="meta-license"
+  label="License"
+  placeholder="Select license..."
+  options={LICENSES}
+  value={meta.license}
+  onChange={updateMeta("license")}
+  required
+/>
+
+<SelectField
+  id="meta-category"
+  label="Category (optional)"
+  placeholder="Select category..."
+  options={CATEGORIES}
+  value={meta.category}
+  onChange={updateMeta("category")}
+/>
+
+<Field id="meta-author" label="Author (optional)">
+  <input
+    id="meta-author"
+    type="text"
+    value={meta.author}
+    onChange={updateMeta("author")}
+    placeholder="e.g. Author name"
+  />
+</Field>
+
+<Field id="meta-date" label="Publication Date (optional)">
+  <input
+    id="meta-date"
+    type="date"
+    value={meta.publication_date}
+    onChange={updateMeta("publication_date")}
+  />
+</Field>
+
 
             <SelectField
               id="meta-license"

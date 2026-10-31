@@ -4,9 +4,12 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
 } from "recharts";
-import { getDocument, exportDocument, updateDocumentMetadata, updateDocumentNlp } from "../api";
 
+import { getDocument, exportDocument, updateDocumentMetadata, updateDocumentNlp } from "../api";
+const LANG_NAMES = { en: "English", ta: "Tamil", si: "Sinhala" };
 const PIE_COLORS = ["#1a3a2a", "#4a7c59", "#8fb89a", "#d4e8d0", "#2d5a3d", "#6aaa80", "#b0d8b8", "#386641"];
+const SENTIMENT_COLORS = { positive: "#22c55e", neutral: "#eab308", negative: "#ef4444" };
+const LANG_COLORS = { English: "#3b82f6", Tamil: "#f97316", Sinhala: "#10b981", Other: "#8b5cf6" };
 
 const NLP_SECTIONS = [
   {
@@ -1284,8 +1287,6 @@ function StatisticsSection({ nlp, tr, desc }) {
   );
 }
 
-const LANG_COLORS = { English: "#3b82f6", Tamil: "#f97316", Sinhala: "#10b981", Other: "#8b5cf6", en: "#3b82f6", ta: "#f97316", si: "#10b981" };
-const LANG_NAMES = { en: "English", ta: "Tamil", si: "Sinhala" };
 
 const countBy = (items, keyFn) => {
   const out = {};

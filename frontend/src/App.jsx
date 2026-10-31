@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Routes, Route, Link, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { currentUser, logout } from "./api";
 import Login from "./pages/Login.jsx";
@@ -13,12 +13,12 @@ import ForgotPassword from "./pages/ForgotPassword.jsx";
 import ResetPassword from "./pages/ResetPassword.jsx";
 import Home from "./pages/Home.jsx";
 import ResendVerification from "./pages/ResendVerification.jsx";
-import Terms from "./pages/Terms.jsx";
-import Privacy from "./pages/Privacy.jsx";
-import Licenses from "./pages/Licenses.jsx";
-import About from "./pages/About.jsx";
 import Profile from "./pages/Profile.jsx";
 import Contact from "./pages/Contact.jsx";
+import Privacy from "./pages/Privacy";
+import Terms from "./pages/Terms.jsx";
+import Licenses from "./pages/Licenses.jsx";
+import About from "./pages/About.jsx";
 
 const LANG_KEY = "lrw_lang";
 const LANG_EVENT = "lrw_lang_changed";
