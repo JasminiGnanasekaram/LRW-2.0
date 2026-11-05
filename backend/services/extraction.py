@@ -19,7 +19,6 @@ except ImportError:
 
 PDF_MIN_CHARS = 20
 OCR_LANGUAGES = "eng+tam+sin"
-WINDOWS_TESSERACT_PATH = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".ogg", ".flac", ".aac", ".wma", ".webm"}
 
 _whisper_model = None
@@ -35,20 +34,19 @@ def _ocr_image(image) -> str:
     command = getattr(get_settings(), "TESSERACT_CMD", None)
     if command:
         pytesseract.pytesseract.tesseract_cmd = command
-    elif os.path.isfile(WINDOWS_TESSERACT_PATH):
-        pytesseract.pytesseract.tesseract_cmd = WINDOWS_TESSERACT_PATH
 
     try:
         return pytesseract.image_to_string(image, lang=OCR_LANGUAGES).strip()
     except pytesseract.pytesseract.TesseractNotFoundError as exc:
         raise RuntimeError(
-            "Tesseract executable not found. Install Tesseract, add it to PATH, "
-            "or set TESSERACT_CMD in backend/.env."
+            "Tesseract executable not found. Install it at the configured absolute path, "
+            "or set TESSERACT_CMD in backend/.env to the full executable path."
         ) from exc
     except Exception as exc:
         raise RuntimeError(f"OCR extraction failed: {exc}") from exc
 
 
+     
 def extract_from_text(content: bytes, encoding: str = "utf-8") -> str:
     return content.decode(encoding, errors="replace")
 

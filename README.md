@@ -22,6 +22,8 @@ admin dashboard, charts, CSV/JSON export, and optional async processing via Cele
 2. **MongoDB** — `docker run -d -p 27017:27017 --name lrw-mongo mongo:7`
 3. **Tesseract OCR** (for image uploads):
    - Windows: https://github.com/UB-Mannheim/tesseract/wiki
+   - Install the Tamil (`tam`) language data; English and Sinhala are used when available.
+   - For scanned Tamil PDFs, install Tesseract to `G:\001\LRW-2.0\Tesseract-OCR\tesseract.exe` (the default `TESSERACT_CMD`), or set `TESSERACT_CMD` in `backend/.env` to another absolute path.
    - macOS: `brew install tesseract`
    - Linux: `sudo apt install tesseract-ocr`
 4. **ffmpeg** (for audio uploads via Whisper):

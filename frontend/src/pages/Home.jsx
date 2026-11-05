@@ -100,10 +100,31 @@ const HERO_STATS = [
   ["2", "User roles"],
 ];
 
-const FOOTER_LINKS = [
-  { label: "Privacy Policy", to: "/privacy" },
-  { label: "Terms of Service", to: "/terms" },
-  { label: "Contact Support", to: "/contact" },
+const FOOTER_COLUMNS = [
+  {
+    heading: "Product",
+    links: [
+      { label: "Upload", to: "/upload" },
+      { label: "Search", to: "/search" },
+      { label: "Sign in", to: "/login" },
+      { label: "Get started", to: "/register" },
+    ],
+  },
+  {
+    heading: "Company",
+    links: [
+      { label: "About", to: "/about" },
+      { label: "Contact", to: "/contact" },
+    ],
+  },
+  {
+    heading: "Legal",
+    links: [
+      { label: "Terms of Service", to: "/terms" },
+      { label: "Privacy Policy", to: "/privacy" },
+      { label: "Licenses", to: "/licenses" },
+    ],
+  },
 ];
 
 const DEFAULT_DEMO_TEXT =
@@ -412,7 +433,7 @@ export default function Home() {
             <polyline points="2 17 12 22 22 17" />
             <polyline points="2 12 12 17 22 12" />
           </svg>
-          Language Resource Workspace
+          Language Resource Workbench
         </div>
 
         <h1 className="hero-title">
@@ -532,18 +553,54 @@ export default function Home() {
         <AuthButtons primaryLabel="Create free account" />
       </section>
 
-      <footer style={styles.footer}>
-        <span style={styles.footerBrand}>LRW</span>
-        <div style={{ display: "flex", gap: 24 }}>
-          {FOOTER_LINKS.map(({ label, to }) => (
-            <Hover key={to} as={Link} to={to} base={styles.footerLink} hover={{ color: "#fff" }}>
-              {label}
-            </Hover>
+      {/* ── Footer ────────────────────────────────────────── */}
+      <footer style={{ background: "#111d16", padding: "56px 32px 0" }}>
+        <div style={{
+          maxWidth: 960, margin: "0 auto", display: "grid",
+          gridTemplateColumns: "1.4fr repeat(3, 1fr)", gap: 32,
+          paddingBottom: 40, borderBottom: "1px solid rgba(255,255,255,0.08)",
+        }}>
+          <div>
+            <span style={{ fontFamily: "var(--font-head)", fontSize: 20, fontWeight: 700, color: "#fff" }}>
+              LR<span style={{ color: "var(--sage)" }}>W</span>
+            </span>
+            <p style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", marginTop: 12, lineHeight: 1.6, maxWidth: 240 }}>
+              A corpus management platform for uploading, processing, and analyzing language data.
+            </p>
+          </div>
+
+          {FOOTER_COLUMNS.map(({ heading, links }) => (
+            <div key={heading}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.55)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 16 }}>
+                {heading}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {links.map(({ label, to }) => (
+                  <Link
+                    key={label}
+                    to={to}
+                    style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}
+                  >
+                    {label}
+                  </Link>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
-        <span style={{ fontSize: 13, color: "rgba(255,255,255,0.3)" }}>
-          &copy; {new Date().getFullYear()} Language Resource Workspace
-        </span>
+
+        <div style={{
+          maxWidth: 960, margin: "0 auto", padding: "20px 0",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          flexWrap: "wrap", gap: 10,
+        }}>
+          <span style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>
+            © {new Date().getFullYear()} Language Resource Workbench. All rights reserved.
+          </span>
+          <span style={{ fontSize: 12, color: "rgba(255,255,255,0.25)" }}>
+            Built with FastAPI, React & MongoDB
+          </span>
+        </div>
       </footer>
     </div>
   );

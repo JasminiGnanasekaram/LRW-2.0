@@ -35,6 +35,7 @@ def document_to_csv(doc: dict) -> str:
     writer.writerow(["License", meta.get("license", "")])
     writer.writerow(["Author", meta.get("author", "")])
     writer.writerow(["Publication Date", meta.get("publication_date", "")])
+    writer.writerow(["Title", meta.get("title", "")])
     writer.writerow(["Created At", doc.get("created_at", "")])
     writer.writerow([])
 
@@ -116,13 +117,11 @@ def documents_summary_csv(docs: List[dict]) -> str:
     buf = io.StringIO()
     buf.write("\ufeff")
     writer = csv.writer(buf)
-
     writer.writerow([
         "ID",
         "Filename",
         "File Type",
         "Primary Language",
-        "Language Breakdown",
         "Token Count",
         "Unique Tokens",
         "Sentence Count",
@@ -133,9 +132,9 @@ def documents_summary_csv(docs: List[dict]) -> str:
         "License",
         "Author",
         "Publication Date",
+        "Title",
         "Created At",
     ])
-
     for d in docs:
         meta = d.get("metadata") or {}
         nlp = d.get("nlp") or {}
@@ -147,7 +146,6 @@ def documents_summary_csv(docs: List[dict]) -> str:
             d.get("filename", ""),
             d.get("file_type", ""),
             nlp.get("language", ""),
-            nlp.get("language_display", ""),
             nlp.get("token_count", ""),
             nlp.get("unique_tokens", ""),
             nlp.get("sentence_count", ""),
@@ -158,6 +156,7 @@ def documents_summary_csv(docs: List[dict]) -> str:
             meta.get("license", ""),
             meta.get("author", ""),
             meta.get("publication_date", ""),
+            meta.get("title", ""),
             d.get("created_at", ""),
         ])
     return buf.getvalue()

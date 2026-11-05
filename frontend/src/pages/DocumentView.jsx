@@ -222,6 +222,7 @@ const METADATA_FIELDS = [
   { key: "category", label: ["Category", "அணுகல் வகை (Category)", "ප්‍රවේශ කාණ්ඩය (Category)"], options: ["open", "research", "restricted"] },
   { key: "author", label: ["Author", "ஆசிரியர் (Author)", "කර්තෘ (Author)"], placeholder: "e.g. Author or Organization name" },
   { key: "publication_date", label: ["Publication Date", "வெளியீட்டு தேதி (Publication Date)", "ප්‍රකාශන දිනය (Publication Date)"], placeholder: "YYYY-MM-DD or text" },
+  { key: "title", label: ["Title", "தலைப்பு (Title)", "මාතෘකාව (Title)"], placeholder: "Document title" },
 ];
 const STANDARD_METADATA_KEYS = METADATA_FIELDS.map((f) => f.key);
 
@@ -309,11 +310,6 @@ function SectionDesc({ desc }) {
       padding: "12px 16px", marginBottom: 20, fontSize: 13, color: "var(--ink-lt)",
       lineHeight: 1.6, display: "flex", alignItems: "flex-start", gap: 10,
     }}>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 2 }}>
-        <circle cx="12" cy="12" r="10" />
-        <line x1="12" y1="16" x2="12" y2="12" />
-        <line x1="12" y1="8" x2="12.01" y2="8" />
-      </svg>
       {desc}
     </div>
   );
@@ -378,11 +374,11 @@ function ScrollTable({ headers, rows, emptyText, numbered = true }) {
   );
 }
 
-function ChartCard({ title, children }) {
+function ChartCard({ title, children, height = 280 }) {
   return (
     <div style={panelStyle}>
       <h4 style={{ color: "var(--forest)", margin: "0 0 14px 0", fontSize: 14 }}>{title}</h4>
-      <div style={{ width: "100%", height: 240 }}>
+      <div style={{ width: "100%", height }}>
         <ResponsiveContainer>{children}</ResponsiveContainer>
       </div>
     </div>
@@ -400,14 +396,15 @@ function EditTokenModal({
   onClose,
 }) {
   const [activeTab, setActiveTab] = useState(initialTab);
-  const [pos, setPos] = useState(token.pos || "X");
-  const [lemma, setLemma] = useState(token.lemma || tokenText(token));
-  const [morph, setMorph] = useState(token.morph || "");
+  const [pos, setPos] = useState(token?.pos || "X");
+  const [lemma, setLemma] = useState(token ? token.lemma || tokenText(token) : "");
+  const [morph, setMorph] = useState(token?.morph || "");
   const [applyAll, setApplyAll] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    if (!token) return;
     setActiveTab(initialTab);
     setPos(token.pos || "X");
     setLemma(token.lemma || tokenText(token));
@@ -415,6 +412,8 @@ function EditTokenModal({
     setApplyAll(true);
     setError(null);
   }, [token, initialTab]);
+
+  if (!isOpen || !token) return null;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -766,28 +765,8 @@ function TokensSection({ nlp, tr, desc, onEditToken }) {
   const filtered = allTokens.filter((tk) => !needle || tokenText(tk).toLowerCase().includes(needle));
 
   const rows = filtered.slice(0, 200).map((tk) => {
-    const info = getPosInfo(tk.pos);
     return [
       <strong>{tokenText(tk)}</strong>,
-      <span style={{
-        display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 6px", borderRadius: 4,
-        background: info.bg, color: info.color, border: `1px solid ${info.border}`, fontSize: 11, fontWeight: 600,
-      }}>
-        {tk.pos || "X"}
-      </span>,
-      <span style={{ color: "var(--forest)", fontWeight: 500, fontSize: 12 }}>{tk.lemma || tokenText(tk)}</span>,
-      <button
-        type="button"
-        onClick={() => onEditToken && onEditToken(tk, tk.__index, "pos")}
-        className="btn btn-ghost btn-sm"
-        style={{
-          padding: "3px 8px", fontSize: 11, display: "inline-flex",
-          alignItems: "center", gap: 4, borderRadius: 6,
-          border: "1px solid var(--border)", color: "var(--forest)", cursor: "pointer",
-        }}
-      >
-        {tr("Edit", "திருத்து", "සංස්කරණය")}
-      </button>,
     ];
   });
 
@@ -812,9 +791,6 @@ function TokensSection({ nlp, tr, desc, onEditToken }) {
       <ScrollTable
         headers={[
           { label: tr("Token", "சொல்", "ටෝකනය") },
-          { label: tr("POS", "இலக்கணம் (POS)", "පද වර්ගය"), width: 110 },
-          { label: tr("Base (Lemma)", "வேர்ச்சொல்", "මූල ස්වරූපය"), width: 140 },
-          { label: tr("Action", "செயல்", "ක්‍රියාව"), width: 85 },
         ]}
         rows={rows}
         emptyText={tr("No tokens found.", "சொற்கள் எதுவும் இல்லை.", "ටෝකන හමු නොවීය.")}
@@ -1283,164 +1259,185 @@ const countBy = (items, keyFn) => {
   return out;
 };
 
+const MORPH_EXPANDED_LABELS = {
+  English: {
+    "Number=Sing": "Singular",
+    "Number=Plur": "Plural",
+    "Tense=Pres": "Present tense",
+    "Tense=Past": "Past tense",
+    "Tense=Fut": "Future tense",
+    "VerbForm=Fin": "Finite verb",
+    "VerbForm=Part": "Participle",
+    "VerbForm=Inf": "Infinitive",
+    "Person=1": "First person",
+    "Person=2": "Second person",
+    "Person=3": "Third person",
+    "Aspect=Perf": "Perfective aspect",
+    "Aspect=Prog": "Progressive aspect",
+    "PronType=Prs": "Personal pronoun",
+    "PronType=Art": "Article",
+    "PronType=Dem": "Demonstrative",
+    "PronType=Int": "Interrogative",
+    "Definite=Def": "Article",
+    "Definite=Ind": "Indefinite article",
+    "Voice=Act": "Active voice",
+    "Voice=Pass": "Passive voice",
+    "Mood=Imp": "Imperative mood",
+    "Mood=Ind": "Indicative mood",
+    "Foreign=Yes": "Additional morphological feature",
+    "Typo=Yes": "Additional morphological feature",
+  },
+  Tamil: {
+    "Number=Sing": "ஒருமை",
+    "Number=Plur": "பன்மை",
+    "Tense=Pres": "நிகழ்காலம்",
+    "Tense=Past": "இறந்தகாலம்",
+    "Tense=Fut": "எதிர்காலம்",
+    "VerbForm=Fin": "முற்று வினை",
+    "VerbForm=Part": "பெயரெச்சம்/வினையெச்சம்",
+    "VerbForm=Inf": "தொழிற்பெயர்",
+    "Person=1": "தன்மை",
+    "Person=2": "முன்னிலை",
+    "Person=3": "படர்க்கை",
+    "Aspect=Perf": "முடிந்த நிலை",
+    "Aspect=Prog": "தொடர் நிலை",
+    "PronType=Prs": "தன்மை/முன்னிலை/படர்க்கைப் பெயர்",
+    "PronType=Art": "சுட்டுச்சொல்",
+    "Foreign=Yes": "கூடுதல் உருபனியல் அம்சம்",
+  },
+  Sinhala: {
+    "Number=Sing": "ඒකවචන",
+    "Number=Plur": "බහුවචන",
+    "Tense=Pres": "වර්තමාන කාලය",
+    "Tense=Past": "අතීත කාලය",
+    "Tense=Fut": "අනාගත කාලය",
+    "VerbForm=Fin": "සීමිත ක්‍රියාව",
+    "VerbForm=Part": "කෘදන්තය",
+    "VerbForm=Inf": "අනියම් ක්‍රියාව",
+    "Person=1": "උත්තම පුරුෂ",
+    "Person=2": "මධ්‍යම පුරුෂ",
+    "Person=3": "ප්‍රථම පුරුෂ",
+    "Aspect=Perf": "සම්පූර්ණ ආකාරය",
+    "PronType=Prs": "පුද්ගලික සර්වනාමය",
+    "PronType=Art": "නිපාතය / උපපදය",
+    "Foreign=Yes": "අමතර රූපවිද්‍යාත්මක ලක්ෂණය",
+  },
+};
+
+const getMorphDisplayLabel = (feat, lang) => {
+  if (!feat) return "";
+  if (MORPH_EXPANDED_LABELS[lang]?.[feat]) return MORPH_EXPANDED_LABELS[lang][feat];
+  if (MORPH_LABELS[lang]?.[feat]) return MORPH_LABELS[lang][feat];
+  if (MORPH_EXPANDED_LABELS.English?.[feat]) return MORPH_EXPANDED_LABELS.English[feat];
+  if (MORPH_LABELS.English?.[feat]) return MORPH_LABELS.English[feat];
+  if (feat.startsWith("Foreign=") || feat.startsWith("Typo=") || feat.startsWith("ExtPos=")) {
+    return lang === "Tamil"
+      ? "கூடுதல் உருபனியல் அம்சம்"
+      : lang === "Sinhala"
+      ? "අමතර රූපවිද්‍යාත්මක ලක්ෂණය"
+      : "Additional morphological feature";
+  }
+  if (feat.includes("=")) {
+    const [, val] = feat.split("=");
+    return val;
+  }
+  return feat;
+};
+
 function ChartsSection({ nlp, lang, tr, desc }) {
   const tokens = nlp.token_details || [];
-  const sentences = (nlp.sentences || []).map((s) => (typeof s === "string" ? s : s?.text || s?.sentence || ""));
 
-  const posAll = Object.entries(nlp.pos_distribution || {})
-    .map(([pos, count]) => ({
-      name: getPosLabel(pos, lang),
-      label: `${getPosLabel(pos, lang)} (${pos})`,
-      count,
-      color: getPosInfo(pos).color,
-    }))
-    .sort((a, b) => b.count - a.count);
-  const posChartData = posAll.slice(0, 8);
-  const posTotal = posAll.reduce((sum, p) => sum + p.count, 0) || 1;
-  const posPieData = posAll.slice(0, 6).map((p) => ({ name: p.name, value: Math.round((p.count / posTotal) * 1000) / 10, color: p.color }));
-
-  const topWordsData = (nlp.top_words || []).slice(0, 10).map((item) => {
-    if (Array.isArray(item)) return { word: String(item[0]), count: item[1] };
-    return { word: String(item.word ?? item.text ?? ""), count: item.count ?? item.frequency ?? 0 };
-  });
-
-  const langDist = nlp.statistics?.language_distribution;
-  const langPieData = langDist && Object.keys(langDist).length
-    ? Object.entries(langDist).map(([name, value]) => ({ name, value }))
-    : Object.entries(countBy(tokens, (tk) => LANG_NAMES[tk.language] || tk.language)).map(([name, value]) => ({ name, value }));
-
-  const buckets = [["1-5", 1, 5], ["6-10", 6, 10], ["11-15", 11, 15], ["16-20", 16, 20], ["21-30", 21, 30], ["31+", 31, Infinity]];
-  const sentenceLenData = buckets.map(([range, lo, hi]) => ({
-    range,
-    count: sentences.filter((s) => {
-      const n = s.trim().split(/\s+/).filter(Boolean).length;
-      return n >= lo && n <= hi;
-    }).length,
-  }));
-
-  const tokenLenData = Array.from({ length: 10 }, (_, i) => ({ length: i === 9 ? "10+" : String(i + 1), count: 0 }));
+  // 1. Tokens per Sentence
+  const sentenceTokenCounts = {};
   tokens.forEach((tk) => {
-    const len = Array.from(tokenText(tk)).length;
-    if (len > 0) tokenLenData[Math.min(len, 10) - 1].count += 1;
+    if (tk.sentence_id != null) {
+      sentenceTokenCounts[tk.sentence_id] = (sentenceTokenCounts[tk.sentence_id] || 0) + 1;
+    }
   });
 
-  const stopCount = tokens.filter((tk) => tk.is_stop).length;
-  const stopData = [
-    { name: tr("Content Words", "உள்ளடக்க சொற்கள்", "අන්තර්ගත වචන"), value: tokens.length - stopCount, color: "#4a7c59" },
-    { name: tr("Stop Words", "நிறுத்தச் சொற்கள்", "නවත්වන වචන"), value: stopCount, color: "#cbd5e1" },
-  ].filter((d) => d.value > 0);
+  const rawSentences = nlp.sentences || [];
+  let sentenceChartData = rawSentences.slice(0, 25).map((s, idx) => {
+    const sId = idx + 1;
+    const count = sentenceTokenCounts[sId] != null
+      ? sentenceTokenCounts[sId]
+      : (typeof s === "string" ? s.trim().split(/\s+/).filter(Boolean).length : 0);
+    return { name: `#${sId}`, count };
+  });
 
-  const lemmaChanged = tokens.filter((tk) => tk.lemma && tokenText(tk) && tk.lemma.toLowerCase() !== tokenText(tk).toLowerCase()).length;
-  const lemmaData = [
-    { name: tr("Reduced to Root", "வேர்ச்சொல்லாக மாற்றப்பட்டவை", "මූලයට අඩු කළ"), value: lemmaChanged, color: "#f97316" },
-    { name: tr("Already Base Form", "ஏற்கனவே வேர்ச்சொல்", "දැනටමත් මූල ස්වරූපය"), value: tokens.length - lemmaChanged, color: "#8fb89a" },
-  ].filter((d) => d.value > 0);
+  if (sentenceChartData.length === 0 && Object.keys(sentenceTokenCounts).length > 0) {
+    sentenceChartData = Object.entries(sentenceTokenCounts)
+      .map(([sId, count]) => ({ name: `#${sId}`, count }))
+      .slice(0, 25);
+  }
 
+  // 2. Part-of-Speech Distribution
+  const posChartData = Object.entries(nlp.pos_distribution || {})
+    .map(([pos, count]) => ({
+      name: `${getPosLabel(pos, lang)} (${pos})`,
+      count,
+    }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 12);
+
+  // 3. Morphological Feature Counts
   const morphCounts = {};
   tokens.forEach((tk) => {
     if (!tk.morph) return;
-    String(tk.morph).split("|").forEach((f) => { if (f) morphCounts[f] = (morphCounts[f] || 0) + 1; });
+    String(tk.morph)
+      .split("|")
+      .map((p) => p.trim())
+      .filter(Boolean)
+      .forEach((p) => {
+        const label = getMorphDisplayLabel(p, lang);
+        if (label) morphCounts[label] = (morphCounts[label] || 0) + 1;
+      });
   });
-  const morphData = Object.entries(morphCounts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 8)
-    .map(([feature, count]) => ({ feature: translateMorph(feature, lang), count }));
 
-  const lexicalVariety = tokens.length
-    ? [
-      { name: tr("Unique Tokens", "தனித்துவ சொற்கள்", "අනන්‍ය ටෝකන"), value: nlp.unique_tokens || 0, color: "#1a3a2a" },
-      { name: tr("Repeated Tokens", "மீண்டும் வரும் சொற்கள்", "නැවත යෙදුණු ටෝකන"), value: Math.max((nlp.token_count || tokens.length) - (nlp.unique_tokens || 0), 0), color: "#b0d8b8" },
-    ].filter((d) => d.value > 0)
-    : [];
-
-  const pieLabel = (entry) => `${entry.name} (${entry.value}%)`;
-  const countPieLabel = (entry) => `${entry.name}`;
-  const palette = (entry, i) => entry.color || LANG_COLORS[entry.name] || PIE_COLORS[i % PIE_COLORS.length];
-
-  const renderPie = (data, label, inner = 0) => (
-    <PieChart>
-      <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={inner} outerRadius={80} label={label}>
-        {data.map((entry, i) => <Cell key={entry.name} fill={palette(entry, i)} />)}
-      </Pie>
-      <Tooltip /><Legend />
-    </PieChart>
-  );
+  const morphChartData = Object.entries(morphCounts)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 15);
 
   const cards = [
-    posChartData.length > 0 && (
-      <ChartCard key="pos" title={tr("Part-of-Speech Distribution", "சொல் வகைப் பகிர்வு (POS)", "පද වර්ග බෙදාහැරීම (POS)")}>
-        <BarChart data={posChartData}>
-          <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={0} angle={-15} textAnchor="end" height={45} />
-          <YAxis tick={{ fontSize: 11 }} />
-          <Tooltip formatter={(value, name, item) => [value, item?.payload?.label || name]} />
-          <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-            {posChartData.map((entry) => <Cell key={entry.label} fill={entry.color} />)}
-          </Bar>
-        </BarChart>
-      </ChartCard>
-    ),
-    posPieData.length > 0 && (
-      <ChartCard key="pospie" title={tr("POS Share (%)", "சொல் வகை விகிதம் (%)", "පද වර්ග අනුපාතය (%)")}>
-        {renderPie(posPieData, pieLabel, 45)}
-      </ChartCard>
-    ),
-    topWordsData.length > 0 && (
-      <ChartCard key="topwords" title={tr("Top 10 Most Frequent Words", "அதிகம் பயன்படுத்தப்பட்ட 10 சொற்கள்", "වඩාත්ම භාවිත වචන 10")}>
-        <BarChart data={topWordsData} layout="vertical" margin={{ left: 20 }}>
+    sentenceChartData.length > 0 && (
+      <ChartCard
+        key="sent"
+        title={tr("Tokens per Sentence", "வாக்கியத்திற்கான சொற்கள்", "වාක්‍යයකට ටෝකන")}
+        height={Math.max(260, sentenceChartData.length * 28 + 40)}
+      >
+        <BarChart data={sentenceChartData} layout="vertical" margin={{ left: 10, right: 30, top: 10, bottom: 10 }}>
           <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
-          <YAxis type="category" dataKey="word" tick={{ fontSize: 11 }} width={90} />
+          <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={50} interval={0} />
           <Tooltip />
           <Bar dataKey="count" fill="#2d5a3d" radius={[0, 4, 4, 0]} />
         </BarChart>
       </ChartCard>
     ),
-    langPieData.length > 0 && (
-      <ChartCard key="lang" title={tr("Language Distribution", "மொழிப் பகிர்வு", "භාෂා බෙදාහැරීම")}>
-        {renderPie(langPieData, countPieLabel)}
-      </ChartCard>
-    ),
-    sentences.length > 0 && (
-      <ChartCard key="sentlen" title={tr("Sentence Length (words)", "வாக்கிய நீளம் (சொற்கள்)", "වාක්‍ය දිග (වචන)")}>
-        <BarChart data={sentenceLenData}>
-          <XAxis dataKey="range" tick={{ fontSize: 11 }} />
-          <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-          <Tooltip />
-          <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-        </BarChart>
-      </ChartCard>
-    ),
-    tokens.length > 0 && (
-      <ChartCard key="toklen" title={tr("Token Length (characters)", "சொல் நீளம் (எழுத்துக்கள்)", "ටෝකන දිග (අක්ෂර)")}>
-        <BarChart data={tokenLenData}>
-          <XAxis dataKey="length" tick={{ fontSize: 11 }} />
-          <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-          <Tooltip />
-          <Bar dataKey="count" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-        </BarChart>
-      </ChartCard>
-    ),
-    stopData.length > 1 && (
-      <ChartCard key="stop" title={tr("Stop Words vs Content Words", "நிறுத்தச் சொற்கள் vs உள்ளடக்க சொற்கள்", "නවත්වන වචන vs අන්තර්ගත වචන")}>
-        {renderPie(stopData, countPieLabel, 45)}
-      </ChartCard>
-    ),
-    lemmaData.length > 1 && (
-      <ChartCard key="lemma" title={tr("Lemmatization Impact", "வேர்ச்சொல் தாக்கம்", "ලේමටීකරණ බලපෑම")}>
-        {renderPie(lemmaData, countPieLabel, 45)}
-      </ChartCard>
-    ),
-    lexicalVariety.length > 1 && (
-      <ChartCard key="variety" title={tr("Lexical Variety", "சொல் வளம்", "වචන විවිධත්වය")}>
-        {renderPie(lexicalVariety, countPieLabel, 45)}
-      </ChartCard>
-    ),
-    morphData.length > 0 && (
-      <ChartCard key="morph" title={tr("Top Morphological Features", "முக்கிய உருபியல் கூறுகள்", "ප්‍රධාන රූපවිද්‍යාත්මක ලක්ෂණ")}>
-        <BarChart data={morphData} layout="vertical" margin={{ left: 20 }}>
+    posChartData.length > 0 && (
+      <ChartCard
+        key="pos"
+        title={tr("Part-of-Speech Distribution", "சொல் வகைப் பகிர்வு (POS)", "පද වර්ග බෙදාහැරීම (POS)")}
+        height={Math.max(260, posChartData.length * 28 + 40)}
+      >
+        <BarChart data={posChartData} layout="vertical" margin={{ left: 10, right: 30, top: 10, bottom: 10 }}>
           <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
-          <YAxis type="category" dataKey="feature" tick={{ fontSize: 10 }} width={110} />
+          <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={180} interval={0} />
           <Tooltip />
-          <Bar dataKey="count" fill="#f97316" radius={[0, 4, 4, 0]} />
+          <Bar dataKey="count" fill="#1f3d2b" radius={[0, 4, 4, 0]} />
+        </BarChart>
+      </ChartCard>
+    ),
+    morphChartData.length > 0 && (
+      <ChartCard
+        key="morph"
+        title={tr("Morphological Feature Counts", "உருபனியல் அம்ச எண்ணிக்கை", "රූපවිද්‍යාත්මක ලක්ෂණ ගණන")}
+        height={Math.max(260, morphChartData.length * 28 + 40)}
+      >
+        <BarChart data={morphChartData} layout="vertical" margin={{ left: 10, right: 30, top: 10, bottom: 10 }}>
+          <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
+          <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={180} interval={0} />
+          <Tooltip />
+          <Bar dataKey="count" fill="#5b9374" radius={[0, 4, 4, 0]} />
         </BarChart>
       </ChartCard>
     ),
@@ -1449,9 +1446,15 @@ function ChartsSection({ nlp, lang, tr, desc }) {
   return (
     <div>
       <SectionDesc desc={desc} />
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20 }}>
-        {cards}
-      </div>
+      {cards.length > 0 ? (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 24 }}>
+          {cards}
+        </div>
+      ) : (
+        <div style={{ padding: 32, textAlign: "center", color: "var(--ink-lt)" }}>
+          {tr("No visual chart data available.", "வரைபடத் தகவல்கள் எதுவும் இல்லை.", "ප්‍රස්ථාර දත්ත නොමැත.")}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Environment variables — NEVER push this
+.env
+
+# Uploads folder
+uploads/
+
+# Token files — contain your Gmail credentials
+# ONLY exclude if you don't want teammates to get them via git
+# gmail_token.pickle
+# gmail_credentials.json
+
+# Tool config (optional — remove if you want team to share settings)
+tool_config.json
+
+# Test/debug scripts
+check_db.py
+delete_user.py
+make_admin.py
+reprocess_docs.py
+resend_verification.py
+test_email.py
+
+# IDE
+.vscode/
+.idea/

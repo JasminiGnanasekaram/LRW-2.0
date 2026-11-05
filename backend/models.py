@@ -27,12 +27,13 @@ class MetadataIn(BaseModel):
     # Required
     source: str
     license: str
-    domain: str
+    domain: Optional[str] = "general"
 
     # Optional
     publication_date: str | None = None
     author: str | None = None
     category: str | None = None # open | research | restricted
+    title: str | None = None
 
 
 class DocumentOut(BaseModel):

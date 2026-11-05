@@ -288,9 +288,9 @@ async def get_document(doc_id: str, user: dict = Depends(get_current_user)):
         analysis = await nlp_analysis_col.find_one({"cleaned_document_id": cleaned["_id"]})
         if (
             not analysis
-            or "sentiment" not in analysis.get("data", {})
-            or "classification" not in analysis.get("data", {})
-            or "sentences" not in analysis.get("data", {})
+            or not isinstance(analysis.get("data"), dict)
+            or "token_details" not in analysis["data"]
+            or "sentences" not in analysis["data"]
         ):
             try:
                 from fastapi.concurrency import run_in_threadpool
@@ -414,14 +414,14 @@ async def update_document_nlp(
         for idx, tk in enumerate(token_details):
             if not isinstance(tk, dict):
                 continue
-            tk_text = (tk.get("token") or tk.get("text") or "").strip().lower()
+            tk_text = (tk.get("text") or tk.get("token") or "").strip().lower()
             match = False
 
-            if apply_all and target_word:
+            if token_index is not None and idx == token_index:
+                match = True
+            elif apply_all and target_word:
                 if tk_text == target_word:
                     match = True
-            elif token_index is not None and idx == token_index:
-                match = True
             elif not apply_all and target_word and tk_text == target_word and updated_count == 0:
                 match = True
 
