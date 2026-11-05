@@ -1,231 +1,308 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useRef, useState } from "react";
 import { currentUser, updateProfile, uploadAvatar } from "../api";
-import { useNavigate } from "react-router-dom";
+
+const toForm = (user = {}) => ({
+  name: user.name || "",
+  email: user.email || "",
+  dob: user.date_of_birth || user.dob || "",
+  gender: user.gender || "",
+  phone: user.phone || "",
+  address: user.address || "",
+  bio: user.bio || "",
+});
+
+const formatDate = (value, options) => {
+  if (!value) return "—";
+  const date = new Date(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T00:00:00` : value);
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleDateString(undefined, options);
+};
+
+const errorMessage = (error, fallback) => {
+  const detail = error?.response?.data?.detail || error?.message;
+  return typeof detail === "string" ? detail : fallback;
+};
+
+const isNetworkError = (error) =>
+  !error?.response &&
+  ((typeof navigator !== "undefined" && !navigator.onLine) ||
+    error?.code === "ERR_NETWORK" ||
+    /network error|failed to fetch/i.test(error?.message || ""));
+
+const readFileAsDataUrl = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error("Could not read image."));
+    reader.readAsDataURL(file);
+  });
+
+const detailStyle = { borderBottom: "1px solid var(--border)", paddingBottom: 10 };
+const detailLabelStyle = {
+  fontSize: 11,
+  textTransform: "uppercase",
+  fontWeight: 600,
+  color: "var(--ink-lt)",
+  marginBottom: 4,
+};
+const detailValueStyle = { fontSize: 15, fontWeight: 500, color: "var(--ink)" };
+const formGridStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))",
+  gap: 16,
+};
+
+function Detail({ label, value }) {
+  return (
+    <div style={detailStyle}>
+      <div style={detailLabelStyle}>{label}</div>
+      <div style={detailValueStyle}>{value || "—"}</div>
+    </div>
+  );
+}
 
 export default function Profile() {
-  const navigate = useNavigate();
-  const [user, setUser] = useState(currentUser() || {});
+  const [user, setUser] = useState(() => currentUser() || {});
+  const [form, setForm] = useState(() => toForm(user));
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-
-  const [form, setForm] = useState({
-    name: user.name || "",
-    email: user.email || "",
-    dob: user.date_of_birth || user.dob || "",
-    bio: user.bio || "",
-    phone: user.phone || "",
-    address: user.address || "",
-    gender: user.gender || "",
-  });
-
   const fileRef = useRef(null);
 
-  // Sync state if currentUser changes
-  useEffect(() => {
-    const u = currentUser();
-    if (u) {
-      setUser(u);
-      setForm({
-        name: u.name || "",
-        email: u.email || "",
-        dob: u.date_of_birth || u.dob || "",
-        bio: u.bio || "",
-        phone: u.phone || "",
-        address: u.address || "",
-        gender: u.gender || "",
-      });
-    }
-  }, []);
+  const publishUser = (updated) => {
+    setUser(updated);
+    window.dispatchEvent(new CustomEvent("lrw_user_updated", { detail: updated }));
+  };
 
-  const onChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+  const saveLocally = (updated) => {
+    localStorage.setItem("lrw_user", JSON.stringify(updated));
+    publishUser(updated);
+  };
 
-  const handleSave = async (e) => {
-    e.preventDefault();
+  const startEditing = () => {
+    setForm(toForm(user));
+    setError("");
+    setSuccess("");
+    setEditing(true);
+  };
+
+  const cancelEditing = () => {
+    setForm(toForm(user));
+    setEditing(false);
+  };
+
+  const onChange = (event) => {
+    const { name, value } = event.target;
+    setForm((previous) => ({ ...previous, [name]: value }));
+  };
+
+  const handleSave = async (event) => {
+    event.preventDefault();
+    if (loading) return;
     setLoading(true);
     setError("");
     setSuccess("");
 
+    const changes = {
+      name: form.name.trim(),
+      phone: form.phone,
+      date_of_birth: form.dob ? form.dob.slice(0, 10) : "",
+      address: form.address,
+      gender: form.gender,
+      bio: form.bio,
+    };
+
     try {
-      // 1. Save to Backend API
-      const patchData = {
-        name: form.name,
-        phone: form.phone,
-        date_of_birth: form.dob,
-        address: form.address,
-        gender: form.gender,
-        bio: form.bio,
-      };
-      
-      const updatedUser = await updateProfile(patchData);
-      setUser(updatedUser);
-      
-      // 2. Dispatch event for TopBar and other components to sync
-      window.dispatchEvent(new CustomEvent("lrw_user_updated", { detail: updatedUser }));
-      
+      const result = await updateProfile(changes);
+      const updated = { ...user, ...changes, ...(result || {}) };
+      publishUser(updated);
+      setForm(toForm(updated));
+      setEditing(false);
       setSuccess("Profile updated successfully!");
-      setEditing(false);
     } catch (err) {
-      console.error(err);
-      // Fallback local persistence if backend is offline or errors
-      const fallbackUser = {
-        ...user,
-        name: form.name,
-        phone: form.phone,
-        date_of_birth: form.dob,
-        address: form.address,
-        gender: form.gender,
-        bio: form.bio,
-      };
-      localStorage.setItem("lrw_user", JSON.stringify(fallbackUser));
-      setUser(fallbackUser);
-      window.dispatchEvent(new CustomEvent("lrw_user_updated", { detail: fallbackUser }));
-      
-      setSuccess("Profile saved locally (Offline Mode).");
-      setEditing(false);
+      if (!isNetworkError(err)) {
+        setError(errorMessage(err, "Failed to update profile."));
+      } else {
+        try {
+          saveLocally({ ...user, ...changes });
+          setEditing(false);
+          setSuccess("Profile saved locally. Changes will not sync until you save online.");
+        } catch {
+          setError("Could not save the profile locally. Please try again.");
+        }
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const handleAvatarUpload = async (file) => {
-    if (!file) return;
+    if (!file || loading) return;
+    if (!file.type.startsWith("image/")) {
+      setError("Please select an image file.");
+      return;
+    }
+
     setLoading(true);
     setError("");
     setSuccess("");
 
     try {
-      const updatedUser = await uploadAvatar(file);
-      setUser(updatedUser);
-      window.dispatchEvent(new CustomEvent("lrw_user_updated", { detail: updatedUser }));
+      const result = await uploadAvatar(file);
+      publishUser({ ...user, ...(result || {}) });
       setSuccess("Avatar updated successfully!");
     } catch (err) {
-      console.error(err);
-      // Fallback FileReader for local preview if offline
-      const reader = new FileReader();
-      reader.onload = () => {
-        const dataUrl = reader.result;
-        const fallbackUser = { ...user, avatar_url: dataUrl, image: dataUrl };
-        localStorage.setItem("lrw_user", JSON.stringify(fallbackUser));
-        setUser(fallbackUser);
-        window.dispatchEvent(new CustomEvent("lrw_user_updated", { detail: fallbackUser }));
-        setSuccess("Avatar updated locally (Offline Mode).");
-      };
-      reader.readAsDataURL(file);
+      if (!isNetworkError(err)) {
+        setError(errorMessage(err, "Failed to upload avatar."));
+      } else {
+        try {
+          const dataUrl = await readFileAsDataUrl(file);
+          saveLocally({ ...user, avatar_url: dataUrl, image: dataUrl });
+          setSuccess("Avatar saved locally. Upload it again to sync online.");
+        } catch {
+          setError("Could not save the avatar locally. Try a smaller image.");
+        }
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  // Get display avatar
-  const avatarSrc = user.avatar_url || user.image || user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || "User")}&background=4a7c59&color=fff&size=128`;
+  const avatarSrc =
+    user.avatar_url ||
+    user.image ||
+    user.avatar ||
+    `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || "User")}&background=4a7c59&color=fff&size=128`;
+
+  const role = user.role
+    ? user.role.charAt(0).toUpperCase() + user.role.slice(1)
+    : "Guest";
+  const gender = user.gender
+    ? user.gender.replaceAll("_", " ").replace(/^./, (character) => character.toUpperCase())
+    : "—";
 
   return (
     <div className="page fade-up">
       <div className="page-header">
         <h1 className="page-title">My Account</h1>
-        <div className="page-subtitle">Manage your personal information, contact details, and security</div>
+        <div className="page-subtitle">
+          Manage your personal information, contact details, and security
+        </div>
       </div>
 
-      {success && <div className="alert-success" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-        {success}
-      </div>}
-      {error && <div className="alert-error" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-        {error}
-      </div>}
+      {success && <div className="alert-success" role="status">{success}</div>}
+      {error && <div className="alert-error" role="alert">{error}</div>}
 
-      <div className="row" style={{ alignItems: "flex-start", gap: 24 }}>
-        {/* Left Column - Profile Summary Card */}
-        <div style={{ flex: "0 0 320px", width: "100%" }}>
-          <div className="card" style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", position: "relative" }}>
-            {/* Avatar Container with Hover Overlay */}
-            <div 
-              onClick={() => fileRef.current && fileRef.current.click()}
+      <div className="row" style={{ alignItems: "flex-start", gap: 24, flexWrap: "wrap" }}>
+        <div style={{ flex: "0 1 320px", minWidth: 260, maxWidth: "100%" }}>
+          <div
+            className="card"
+            style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}
+          >
+            <button
+              type="button"
+              className="avatar-hover-container"
+              aria-label="Change profile photo"
+              disabled={loading}
+              onClick={() => fileRef.current?.click()}
               style={{
                 position: "relative",
                 width: 120,
                 height: 120,
+                padding: 0,
                 borderRadius: "50%",
                 overflow: "hidden",
-                cursor: "pointer",
+                cursor: loading ? "wait" : "pointer",
                 boxShadow: "var(--shadow-sm)",
                 border: "4px solid var(--paper)",
                 outline: "2px solid var(--forest-lt)",
-                transition: "transform 0.2s",
                 marginBottom: 16,
               }}
-              className="avatar-hover-container"
             >
-              <img 
-                src={avatarSrc} 
-                alt="avatar" 
-                style={{ width: "100%", height: "100%", objectFit: "cover" }} 
+              <img
+                src={avatarSrc}
+                alt="Profile avatar"
+                style={{ width: "100%", height: "100%", objectFit: "cover" }}
               />
-              <div style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                height: "100%",
-                background: "rgba(0,0,0,0.5)",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "#fff",
-                opacity: 0,
-                transition: "opacity 0.25s ease",
-              }} className="avatar-overlay">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginBottom: 4 }}>
-                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-                  <circle cx="12" cy="13" r="4"/>
+              <span
+                className="avatar-overlay"
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  background: "rgba(0,0,0,0.5)",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "#fff",
+                  opacity: 0,
+                  transition: "opacity 0.25s ease",
+                }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                  <circle cx="12" cy="13" r="4" />
                 </svg>
                 <span style={{ fontSize: 10, fontWeight: 500 }}>Change Photo</span>
-              </div>
-            </div>
+              </span>
+            </button>
 
-            <input 
-              ref={fileRef} 
-              type="file" 
-              accept="image/*" 
-              style={{ display: "none" }} 
-              onChange={(e) => handleAvatarUpload(e.target.files && e.target.files[0])} 
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              aria-label="Upload profile image"
+              style={{ display: "none" }}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                handleAvatarUpload(file);
+              }}
             />
 
-            <h2 style={{ fontSize: 20, fontWeight: 700, color: "var(--forest)", margin: "4px 0" }}>{user.name || "User"}</h2>
+            <h2 style={{ fontSize: 20, fontWeight: 700, color: "var(--forest)", margin: "4px 0" }}>
+              {user.name || "User"}
+            </h2>
             <div className="muted" style={{ marginBottom: 12 }}>{user.email}</div>
-            
+
             <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
-              <span className="badge">{user.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : "Guest"}</span>
-              {user.verified ? (
-                <span className="badge badge-blue">Verified</span>
-              ) : (
-                <span className="badge badge-amber">Unverified</span>
-              )}
+              <span className="badge">{role}</span>
+              <span className={`badge ${user.verified ? "badge-blue" : "badge-amber"}`}>
+                {user.verified ? "Verified" : "Unverified"}
+              </span>
             </div>
 
             {user.created_at && (
-              <div style={{ width: "100%", borderTop: "1px solid var(--border)", paddingTop: 12, marginTop: 4, fontSize: 12, color: "var(--ink-lt)", display: "flex", justifyContent: "space-between" }}>
+              <div
+                style={{
+                  width: "100%",
+                  borderTop: "1px solid var(--border)",
+                  paddingTop: 12,
+                  marginTop: 4,
+                  fontSize: 12,
+                  color: "var(--ink-lt)",
+                  display: "flex",
+                  justifyContent: "space-between",
+                }}
+              >
                 <span>Joined</span>
-                <span>{new Date(user.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short' })}</span>
+                <span>{formatDate(user.created_at, { year: "numeric", month: "short" })}</span>
               </div>
             )}
 
-            <button 
-              className="btn btn-ghost btn-sm btn-full" 
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm btn-full"
               style={{ marginTop: 20 }}
-              onClick={() => setEditing(!editing)}
+              disabled={loading}
+              onClick={editing ? cancelEditing : startEditing}
             >
               {editing ? "Cancel Editing" : "Edit Profile"}
             </button>
           </div>
         </div>
 
-        {/* Right Column - Profile Form / Details Card */}
-        <div style={{ flex: 1, width: "100%" }}>
+        <div style={{ flex: "1 1 360px", minWidth: 0 }}>
           <div className="card">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <h2 className="card-title" style={{ marginBottom: 0 }}>Basic Information</h2>
@@ -233,89 +310,71 @@ export default function Profile() {
             </div>
 
             {!editing ? (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 20 }}>
-                <div style={{ borderBottom: "1px solid #f9f7f5", paddingBottom: 10 }}>
-                  <div style={{ fontSize: 11, textTransform: "uppercase", fontWeight: 600, color: "var(--ink-lt)", marginBottom: 4 }}>Full Name</div>
-                  <div style={{ fontSize: 15, fontWeight: 500, color: "var(--ink)" }}>{user.name || "—"}</div>
-                </div>
-
-                <div style={{ borderBottom: "1px solid #f9f7f5", paddingBottom: 10 }}>
-                  <div style={{ fontSize: 11, textTransform: "uppercase", fontWeight: 600, color: "var(--ink-lt)", marginBottom: 4 }}>Email Address</div>
-                  <div style={{ fontSize: 15, fontWeight: 500, color: "var(--ink)" }}>{user.email || "—"}</div>
-                </div>
-
-                <div style={{ borderBottom: "1px solid #f9f7f5", paddingBottom: 10 }}>
-                  <div style={{ fontSize: 11, textTransform: "uppercase", fontWeight: 600, color: "var(--ink-lt)", marginBottom: 4 }}>Date of Birth</div>
-                  <div style={{ fontSize: 15, fontWeight: 500, color: "var(--ink)" }}>
-                    {user.date_of_birth ? new Date(user.date_of_birth).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : "—"}
-                  </div>
-                </div>
-
-                <div style={{ borderBottom: "1px solid #f9f7f5", paddingBottom: 10 }}>
-                  <div style={{ fontSize: 11, textTransform: "uppercase", fontWeight: 600, color: "var(--ink-lt)", marginBottom: 4 }}>Gender</div>
-                  <div style={{ fontSize: 15, fontWeight: 500, color: "var(--ink)" }}>
-                    {user.gender ? user.gender.charAt(0).toUpperCase() + user.gender.slice(1) : "—"}
-                  </div>
-                </div>
-
-                <div style={{ borderBottom: "1px solid #f9f7f5", paddingBottom: 10 }}>
-                  <div style={{ fontSize: 11, textTransform: "uppercase", fontWeight: 600, color: "var(--ink-lt)", marginBottom: 4 }}>Phone Number</div>
-                  <div style={{ fontSize: 15, fontWeight: 500, color: "var(--ink)" }}>{user.phone || "—"}</div>
-                </div>
-
-                <div style={{ borderBottom: "1px solid #f9f7f5", paddingBottom: 10 }}>
-                  <div style={{ fontSize: 11, textTransform: "uppercase", fontWeight: 600, color: "var(--ink-lt)", marginBottom: 4 }}>Location Address</div>
-                  <div style={{ fontSize: 15, fontWeight: 500, color: "var(--ink)" }}>{user.address || "—"}</div>
-                </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 20 }}>
+                <Detail label="Full Name" value={user.name} />
+                <Detail label="Email Address" value={user.email} />
+                <Detail
+                  label="Date of Birth"
+                  value={formatDate(user.date_of_birth || user.dob, {
+                    year: "numeric", month: "long", day: "numeric",
+                  })}
+                />
+                <Detail label="Gender" value={gender} />
+                <Detail label="Phone Number" value={user.phone} />
+                <Detail label="Location Address" value={user.address} />
 
                 <div style={{ gridColumn: "1 / -1", paddingTop: 10 }}>
-                  <div style={{ fontSize: 11, textTransform: "uppercase", fontWeight: 600, color: "var(--ink-lt)", marginBottom: 6 }}>About / Biography</div>
-                  <p style={{ fontSize: 14, color: "var(--ink-mid)", lineHeight: 1.6, background: "var(--ivory)", padding: 12, borderRadius: "var(--radius)", border: "1px solid var(--border)", whiteSpace: "pre-line" }}>
+                  <div style={detailLabelStyle}>About / Biography</div>
+                  <p
+                    style={{
+                      fontSize: 14,
+                      color: "var(--ink-mid)",
+                      lineHeight: 1.6,
+                      background: "var(--ivory)",
+                      padding: 12,
+                      borderRadius: "var(--radius)",
+                      border: "1px solid var(--border)",
+                      whiteSpace: "pre-line",
+                    }}
+                  >
                     {user.bio || "No biography provided yet. Click 'Edit Profile' to add something about yourself."}
                   </p>
                 </div>
               </div>
             ) : (
               <form onSubmit={handleSave} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                <div style={formGridStyle}>
                   <div className="field">
-                    <label className="label">Full Name</label>
-                    <input 
-                      type="text"
-                      name="name" 
-                      value={form.name} 
-                      onChange={onChange} 
-                      placeholder="e.g. Jasmini Gnanasekaram"
-                      required
-                    />
+                    <label className="label" htmlFor="profile-name">Full Name</label>
+                    <input id="profile-name" type="text" name="name" value={form.name} onChange={onChange} required />
                   </div>
-                  
                   <div className="field">
-                    <label className="label">Email Address (Read-only)</label>
-                    <input 
+                    <label className="label" htmlFor="profile-email">Email Address (Read-only)</label>
+                    <input
+                      id="profile-email"
                       type="email"
-                      name="email" 
-                      value={form.email} 
-                      disabled
+                      name="email"
+                      value={form.email}
+                      readOnly
                       style={{ background: "var(--ivory)", cursor: "not-allowed" }}
                     />
                   </div>
                 </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                <div style={formGridStyle}>
                   <div className="field">
-                    <label className="label">Date of Birth</label>
-                    <input 
-                      type="date" 
-                      name="dob" 
-                      value={form.dob ? form.dob.split("T")[0] : ""} 
-                      onChange={onChange} 
+                    <label className="label" htmlFor="profile-dob">Date of Birth</label>
+                    <input
+                      id="profile-dob"
+                      type="date"
+                      name="dob"
+                      value={form.dob ? String(form.dob).slice(0, 10) : ""}
+                      onChange={onChange}
                     />
                   </div>
-
                   <div className="field">
-                    <label className="label">Gender</label>
-                    <select name="gender" value={form.gender} onChange={onChange}>
+                    <label className="label" htmlFor="profile-gender">Gender</label>
+                    <select id="profile-gender" name="gender" value={form.gender} onChange={onChange}>
                       <option value="">Select Gender</option>
                       <option value="male">Male</option>
                       <option value="female">Female</option>
@@ -325,67 +384,34 @@ export default function Profile() {
                   </div>
                 </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                <div style={formGridStyle}>
                   <div className="field">
-                    <label className="label">Phone Number</label>
-                    <input 
-                      type="text" 
-                      name="phone" 
-                      value={form.phone} 
-                      onChange={onChange} 
-                      placeholder="e.g. +1 (555) 123-4567"
-                    />
+                    <label className="label" htmlFor="profile-phone">Phone Number</label>
+                    <input id="profile-phone" type="tel" name="phone" value={form.phone} onChange={onChange} />
                   </div>
-
                   <div className="field">
-                    <label className="label">Location Address</label>
-                    <input 
-                      type="text" 
-                      name="address" 
-                      value={form.address} 
-                      onChange={onChange} 
-                      placeholder="City, Country"
-                    />
+                    <label className="label" htmlFor="profile-address">Location Address</label>
+                    <input id="profile-address" type="text" name="address" value={form.address} onChange={onChange} placeholder="City, Country" />
                   </div>
                 </div>
 
                 <div className="field">
-                  <label className="label">About / Biography</label>
-                  <textarea 
-                    name="bio" 
-                    value={form.bio} 
-                    onChange={onChange} 
-                    rows={4} 
+                  <label className="label" htmlFor="profile-bio">About / Biography</label>
+                  <textarea
+                    id="profile-bio"
+                    name="bio"
+                    value={form.bio}
+                    onChange={onChange}
+                    rows={4}
                     placeholder="Tell us about yourself, your research interests, or background..."
                   />
                 </div>
 
                 <div style={{ display: "flex", gap: 12, marginTop: 12 }}>
-                  <button 
-                    type="submit" 
-                    className="btn btn-primary" 
-                    disabled={loading}
-                    style={{ minWidth: 100 }}
-                  >
+                  <button type="submit" className="btn btn-primary" disabled={loading} style={{ minWidth: 100 }}>
                     {loading ? "Saving..." : "Save Changes"}
                   </button>
-                  <button 
-                    type="button" 
-                    className="btn btn-ghost" 
-                    onClick={() => {
-                      setEditing(false);
-                      setForm({
-                        name: user.name || "",
-                        email: user.email || "",
-                        dob: user.date_of_birth || user.dob || "",
-                        bio: user.bio || "",
-                        phone: user.phone || "",
-                        address: user.address || "",
-                        gender: user.gender || "",
-                      });
-                    }}
-                    disabled={loading}
-                  >
+                  <button type="button" className="btn btn-ghost" onClick={cancelEditing} disabled={loading}>
                     Cancel
                   </button>
                 </div>

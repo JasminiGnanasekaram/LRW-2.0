@@ -4,7 +4,6 @@ import { resendVerification } from "../api";
 
 export default function ResendVerification() {
   const [searchParams] = useSearchParams();
-  // FIX: pre-fill email from URL query param when coming from Login page
   const [email, setEmail] = useState(searchParams.get("email") || "");
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);

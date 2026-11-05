@@ -254,7 +254,11 @@ const sectionTitleStyle = {
 const makeTr = (lang) => (en, ta, si) => (lang === "Tamil" ? ta : lang === "Sinhala" ? si : en);
 const pick = (obj, lang) => (obj && (obj[lang] || obj.English)) || "";
 const tokenText = (tk) => tk.text || tk.token || "";
-const formatDate = (value) => new Date(value).toLocaleDateString();
+const formatDate = (value) => {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleDateString();
+};
 const stringifyValue = (v) => (typeof v === "object" && v !== null ? JSON.stringify(v) : String(v ?? ""));
 
 const getErrorMessage = (err, fallback) => {
@@ -386,7 +390,6 @@ function ChartCard({ title, children }) {
 }
 
 function EditTokenModal({
-  isOpen,
   token,
   tokenIndex,
   initialTab = "pos",
@@ -396,8 +399,6 @@ function EditTokenModal({
   onSave,
   onClose,
 }) {
-  if (!isOpen || !token) return null;
-
   const [activeTab, setActiveTab] = useState(initialTab);
   const [pos, setPos] = useState(token.pos || "X");
   const [lemma, setLemma] = useState(token.lemma || tokenText(token));
@@ -472,7 +473,6 @@ function EditTokenModal({
         boxShadow: "0 20px 25px -5px rgba(0,0,0,0.2), 0 8px 10px -6px rgba(0,0,0,0.1)",
         border: "1px solid var(--border)", overflow: "hidden",
       }}>
-        {/* Header */}
         <div style={{
           padding: "16px 20px", borderBottom: "1px solid var(--border)",
           background: "var(--bg-lt)", display: "flex", justifyContent: "space-between", alignItems: "center",
@@ -503,8 +503,6 @@ function EditTokenModal({
             ✕
           </button>
         </div>
-
-        {/* Tab Switcher */}
         <div style={{
           display: "flex", borderBottom: "1px solid var(--border)", background: "var(--bg-lt)", padding: "0 16px",
         }}>
@@ -529,14 +527,10 @@ function EditTokenModal({
             </button>
           ))}
         </div>
-
-        {/* Form Body */}
         <form onSubmit={handleSubmit} style={{ overflowY: "auto", padding: "20px", flex: 1 }}>
           {error && (
             <div className="alert-error" style={{ marginBottom: 16 }}>{error}</div>
           )}
-
-          {/* POS Tab */}
           {activeTab === "pos" && (
             <div>
               <label style={{ display: "block", fontSize: 12, fontWeight: 700, marginBottom: 8, color: "var(--ink)" }}>
@@ -574,8 +568,6 @@ function EditTokenModal({
                   );
                 })}
               </div>
-
-              {/* POS Preview Card */}
               <div style={{
                 background: posInfo.bg, border: `1px solid ${posInfo.border}`,
                 borderRadius: 8, padding: "10px 14px", display: "flex", alignItems: "center", gap: 10,
@@ -593,8 +585,6 @@ function EditTokenModal({
               </div>
             </div>
           )}
-
-          {/* Lemma Tab */}
           {activeTab === "lemma" && (
             <div>
               <label style={{ display: "block", fontSize: 12, fontWeight: 700, marginBottom: 8, color: "var(--ink)" }}>
@@ -642,8 +632,6 @@ function EditTokenModal({
               </div>
             </div>
           )}
-
-          {/* Morphology Tab */}
           {activeTab === "morph" && (
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
@@ -669,8 +657,6 @@ function EditTokenModal({
                 placeholder="e.g. Case=Nom|Number=Sing|Tense=Past"
                 style={{ ...inputStyle, fontSize: 13, marginBottom: 10, fontFamily: "monospace" }}
               />
-
-              {/* Translation preview */}
               {morph && (
                 <div style={{
                   marginBottom: 14, padding: "8px 12px", background: "#f0fdf4",
@@ -680,8 +666,6 @@ function EditTokenModal({
                   {translateMorph(morph, lang) || morph}
                 </div>
               )}
-
-              {/* Quick toggle chips */}
               <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--ink-lt)", marginBottom: 6 }}>
                 {tr("Quick Pick Features:", "விரைவு தேர்வு:", "ඉක්මන් තේරීම්:")}
               </div>
@@ -718,8 +702,6 @@ function EditTokenModal({
               </div>
             </div>
           )}
-
-          {/* Scope selection */}
           <div style={{
             marginTop: 18, paddingTop: 14, borderTop: "1px solid var(--border)",
             background: "var(--bg-lt)", padding: "12px 14px", borderRadius: 8,
@@ -760,8 +742,6 @@ function EditTokenModal({
               </label>
             </div>
           </div>
-
-          {/* Footer Buttons */}
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 20 }}>
             <button type="button" className="btn btn-ghost" onClick={onClose} disabled={saving}>
               {tr("Cancel", "ரத்துசெய்", "අවලංගු කරන්න")}
@@ -855,7 +835,7 @@ function SentencesSection({ nlp, desc }) {
             background: i % 2 ? "var(--bg-lt)" : "transparent",
           }}>
             <span style={{ color: "var(--ink-lt)", minWidth: 24, flexShrink: 0, fontWeight: 600 }}>{i + 1}.</span>
-            <span>{s}</span>
+            <span>{typeof s === "string" ? s : s?.text || s?.sentence || ""}</span>
           </div>
         ))}
       </div>
@@ -1476,7 +1456,6 @@ function ChartsSection({ nlp, lang, tr, desc }) {
   );
 }
 
-
 const SECTION_COMPONENTS = {
   tokens: TokensSection,
   sentences: SentencesSection,
@@ -1578,22 +1557,23 @@ function NlpTab({ docId, nlp, lang, tr, onNlpUpdated }) {
         />
       </div>
 
-      <EditTokenModal
-        isOpen={Boolean(editingToken)}
-        token={editingToken?.token}
-        tokenIndex={editingToken?.index}
-        initialTab={editingToken?.tab || "pos"}
-        lang={lang}
-        tr={tr}
-        totalOccurrences={editingToken?.occurrences}
-        onSave={handleSaveEdit}
-        onClose={() => setEditingToken(null)}
-      />
+      {editingToken && (
+        <EditTokenModal
+          token={editingToken.token}
+          tokenIndex={editingToken.index}
+          initialTab={editingToken.tab || "pos"}
+          lang={lang}
+          tr={tr}
+          totalOccurrences={editingToken.occurrences}
+          onSave={handleSaveEdit}
+          onClose={() => setEditingToken(null)}
+        />
+      )}
     </div>
   );
 }
 
-function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDocumentUpdated }) {
+function WebCrawlerTab({ doc, tr, onOpenOverview, onSelectPage, onDocumentUpdated }) {
   const navigate = useNavigate();
   const targetUrl = doc.filename || doc.metadata?.crawled_url || "";
   const [currentUrl, setCurrentUrl] = useState(targetUrl);
@@ -1601,8 +1581,6 @@ function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDo
   const [crawling, setCrawling] = useState(false);
   const [totalAvailablePages, setTotalAvailablePages] = useState(doc?.total_available_pages || null);
   const [discovering, setDiscovering] = useState(false);
-
-  // ── Auto-discover total available pages under the website ──
   useEffect(() => {
     const url = (currentUrl || targetUrl).trim();
     if (!url) return;
@@ -1631,8 +1609,6 @@ function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDo
 
     return () => { active = false; };
   }, [currentUrl, targetUrl, doc?.id]);
-
-  // ── Scoped results: strictly load for THIS document ID / URL ──
   const [crawlResults, setCrawlResults] = useState(() => {
     if (doc?.crawled_pages && Array.isArray(doc.crawled_pages) && doc.crawled_pages.length > 0) {
       return doc.crawled_pages;
@@ -1641,7 +1617,7 @@ function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDo
       try {
         const byId = localStorage.getItem(`lrw_crawler_${doc.id}`);
         if (byId) return JSON.parse(byId);
-      } catch {}
+      } catch { }
     }
     return [];
   });
@@ -1651,14 +1627,12 @@ function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDo
       try {
         const byId = localStorage.getItem(`lrw_crawler_status_${doc.id}`);
         if (byId) return byId;
-      } catch {}
+      } catch { }
     }
     return "";
   });
 
   const [crawlError, setCrawlError] = useState("");
-
-  // ── When doc changes, reset state to strictly match THIS document ──
   useEffect(() => {
     const url = doc.filename || doc.metadata?.crawled_url || "";
     setCurrentUrl(url);
@@ -1688,13 +1662,11 @@ function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDo
       setCrawlStatus("");
     }
   }, [doc?.id, doc?.filename]);
-
-  // ── Sync to localStorage strictly keyed by document ID ──
   useEffect(() => {
     if (doc?.id && crawlResults && crawlResults.length > 0) {
       try {
         localStorage.setItem(`lrw_crawler_${doc.id}`, JSON.stringify(crawlResults));
-      } catch {}
+      } catch { }
     }
   }, [crawlResults, doc?.id]);
 
@@ -1702,11 +1674,9 @@ function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDo
     if (doc?.id && crawlStatus) {
       try {
         localStorage.setItem(`lrw_crawler_status_${doc.id}`, crawlStatus);
-      } catch {}
+      } catch { }
     }
   }, [crawlStatus, doc?.id]);
-
-  // ── Execute crawl and update pages ──
   const executeCrawl = async () => {
     const urlToCrawl = (currentUrl || targetUrl).trim();
     if (!urlToCrawl) {
@@ -1766,7 +1736,7 @@ function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDo
           localStorage.removeItem(`lrw_crawler_${doc.id}`);
           localStorage.removeItem(`lrw_crawler_status_${doc.id}`);
         }
-      } catch {}
+      } catch { }
     }
   };
 
@@ -1784,7 +1754,6 @@ function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDo
 
   return (
     <div style={{ padding: "8px 0" }}>
-      {/* Overview Metric Tiles */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 20 }}>
         <div style={{
           background: "var(--paper)", border: "1px solid var(--border)",
@@ -1840,8 +1809,6 @@ function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDo
           </span>
         </div>
       </div>
-
-      {/* Control Card */}
       <div style={{
         background: "var(--paper)", border: "1px solid var(--border)",
         borderRadius: 10, padding: "20px 24px", marginBottom: 20,
@@ -1945,8 +1912,6 @@ function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDo
           </div>
         )}
       </div>
-
-      {/* Crawled Results */}
       {crawlResults.length > 0 && (
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
@@ -2316,12 +2281,10 @@ function MetadataTab({ docId, metadata, tr, onSaved }) {
 
 export default function DocumentView() {
   const { id } = useParams();
-  const navigate = useNavigate();
   const location = useLocation();
   const [doc, setDoc] = useState(null);
   const [selectedSubpageDoc, setSelectedSubpageDoc] = useState(null);
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("overview");
   const [appLang, setAppLang] = useState(() => localStorage.getItem("lrw_lang") || "");
 
@@ -2329,7 +2292,7 @@ export default function DocumentView() {
     try {
       const data = await getDocument(docId);
       setDoc(data);
-    } catch {}
+    } catch { }
   }, [id]);
 
   const handleSelectPage = useCallback(async (page) => {
@@ -2373,13 +2336,11 @@ export default function DocumentView() {
     setDoc(null);
     setSelectedSubpageDoc(null);
     setError("");
-    setLoading(true);
 
     getDocument(id)
       .then((data) => {
         if (!cancelled) {
           setDoc(data);
-          setLoading(false);
           const requestedTab = location.state?.tab || new URLSearchParams(window.location.search).get("tab");
           if (requestedTab) {
             setTab(requestedTab);
@@ -2390,7 +2351,6 @@ export default function DocumentView() {
       })
       .catch((e) => {
         if (!cancelled) {
-          setLoading(false);
           setError(getErrorMessage(e, "Failed to load document."));
         }
       });
@@ -2539,7 +2499,6 @@ export default function DocumentView() {
               key={doc.id}
               doc={doc}
               tr={tr}
-              currentTab={tab}
               onOpenOverview={() => {
                 setSelectedSubpageDoc(null);
                 setTab("overview");

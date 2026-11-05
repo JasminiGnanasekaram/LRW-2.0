@@ -1,15 +1,4 @@
-"""Rule-based lemmatization for English, Tamil, and Sinhala.
-
-Public API:
-    lemmatize_english(word, pos=None) -> str
-    refine_english_lemma(text, spacy_lemma, pos) -> str
-    analyze_tamil_word(word)          -> (pos, tag, lemma, morph)
-    analyze_sinhala_word(word)        -> (pos, tag, lemma, morph)
-
-Closed classes and irregular forms come from lexicons. Suffix stripping only fires
-when there is real evidence; anything uncertain is returned unchanged. Zero-width
-joiners are ignored when matching and preserved in every returned lemma.
-"""
+"""Rule-based English, Tamil, and Sinhala lemmatization and morphology."""
 
 import re
 import unicodedata
@@ -179,7 +168,6 @@ def _vowel_groups(s: str) -> int:
 
 
 def _fix_stem(stem: str) -> str:
-    """Repair a stem left over after stripping -ing / -ed."""
     if len(stem) < 2 or stem in _EN_NO_E_STEMS:
         return stem
     if stem[-1] == stem[-2] and stem[-1].isalpha() and stem[-1] not in "lszaeiou":
@@ -311,7 +299,6 @@ def refine_english_lemma(text: str, spacy_lemma: Optional[str], pos: str) -> str
 
 
 def _latin_token(word: str) -> Analysis:
-    """Latin-script token inside a Tamil or Sinhala sentence."""
     if word[0].isupper():
         return ("X" if word.isupper() else "PROPN", "X", word, "")
     return ("NOUN", "NOUN", lemmatize_english(word, "NOUN"), "")
@@ -336,7 +323,6 @@ def _ta_syllables(s: str) -> int:
 
 
 def _ta_bare_candidates(stem: str) -> List[Tuple[str, str]]:
-    """Possible lemmas for a stem ending in a bare consonant, as (lemma, evidence)."""
     if len(stem) < 2 or stem[-1] not in _TA_CONS:
         return []
     last, head = stem[-1], stem[:-1]
@@ -358,7 +344,6 @@ def _ta_bare_candidates(stem: str) -> List[Tuple[str, str]]:
 
 
 def _ta_plural_lemmas(stem: str) -> List[str]:
-    """Singular candidates for a plural stem with 'கள்' removed."""
     if stem.endswith("ங்"):
         return [stem[:-2] + "ம்"]
     if stem.endswith("க்") and len(stem) >= 3 and (stem[-3] in _TA_SIGNS or stem[-3] in _TA_VOWELS):
@@ -605,7 +590,6 @@ _TA_CLOSED_FORMS = _build_tamil_closed_forms()
 
 
 def _ta_root_from_bare(stem: str) -> List[str]:
-    """Verb-root candidates from a stem whose tense/mood suffix has been removed."""
     out: List[str] = []
     if stem.endswith(("க்க", "ப்ப")):
         out.append(stem[:-3])
@@ -619,7 +603,6 @@ def _ta_root_from_bare(stem: str) -> List[str]:
 
 
 def _ta_verb(key: str) -> Optional[Tuple[str, str]]:
-    """Return (root, morph) for a verb form, or None."""
     if key in _TA_VERB_EXACT:
         return _TA_VERB_EXACT[key]
 
@@ -678,7 +661,6 @@ def _ta_verb(key: str) -> Optional[Tuple[str, str]]:
 
 
 def _ta_noun_candidates(key: str, allow_clitic: bool = True) -> List[Tuple[str, str, int]]:
-    """Return (lemma, morph, score) candidates for a noun-like word."""
     results: List[Tuple[str, str, int]] = []
 
     def lex_bonus(lemma: str) -> int:
@@ -731,7 +713,6 @@ def _ta_pos_for(lemma: str) -> str:
 
 
 def _ta_derived(key: str, suffixes: List[Tuple[str, str]], pos: str) -> Optional[Analysis]:
-    """Adjective (…ான) and adverb (…ாக) derivation back to the base noun."""
     for suffix, strength in suffixes:
         if not key.endswith(suffix) or len(key) <= len(suffix) + 1:
             continue
@@ -892,6 +873,32 @@ _SI_ADJ_KEYS = frozenset(_key(w) for w in _SI_ADJECTIVES)
 _SI_ADV_KEYS = frozenset(_key(w) for w in _SI_ADVERBS)
 
 
+def _si_pronoun_morph(form: str, lemma: str) -> str:
+    if form == "මා":
+        case = "Case=Nom"
+    elif form.endswith(("ගෙන්", "ෙන්")):
+        case = "Case=Abl"
+    elif form.endswith(("ගේ", "ේ")):
+        case = "Case=Gen"
+    elif form.endswith("ට"):
+        case = "Case=Dat"
+    elif form.endswith("ව"):
+        case = "Case=Acc"
+    elif form.endswith("හි"):
+        case = "Case=Loc"
+    elif form.endswith("යින්"):
+        case = "Case=Ins"
+    else:
+        case = ""
+
+    agreement = [
+        feature
+        for feature in _SI_PRONOUNS.get(lemma, "").split("|")
+        if feature and not feature.startswith("Case=")
+    ]
+    return "|".join(([case] if case else []) + agreement)
+
+
 def _build_sinhala_verb_forms() -> Dict[str, str]:
     forms: Dict[str, str] = {}
     for citation, past_forms in _SI_VERB_SPEC.items():
@@ -934,7 +941,8 @@ def analyze_sinhala_word(word: str) -> Analysis:
         lemma, feat = _SI_PRONOUN_LEX[key]
         return ("PRON", "PRON", lemma, feat)
     if key in _SI_PRONOUN_FORM_LEX:
-        return ("PRON", "PRON", _SI_PRONOUN_FORM_LEX[key], "")
+        lemma = _SI_PRONOUN_FORM_LEX[key]
+        return ("PRON", "PRON", lemma, _si_pronoun_morph(key, lemma))
     if key in _SI_CONJ_KEYS:
         return ("CONJ", "CCONJ", word, "")
     if key in _SI_POSTP_KEYS:
@@ -946,7 +954,8 @@ def analyze_sinhala_word(word: str) -> Analysis:
     if key in _SI_NOUN_LEX:
         return ("NOUN", "NOUN", _SI_NOUN_LEX[key], "Case=Nom|Number=Sing")
     if key in _SI_VERB_FORMS:
-        return ("VERB", "VERB", _SI_VERB_FORMS[key], "Mood=Ind")
+        morph = "Tense=Pres|Mood=Ind" if key.endswith(("නවා", "නවාද", "නවද")) else "Mood=Ind"
+        return ("VERB", "VERB", _SI_VERB_FORMS[key], morph)
 
     for suffix in _SI_VERB_ENDINGS:
         if key.endswith(suffix) and len(key) > len(suffix) + 1:
