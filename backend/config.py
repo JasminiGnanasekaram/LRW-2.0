@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     SMTP_FROM: str = "no-reply@lrw.local"
     APP_BASE_URL: str = "http://localhost:5173"
     GROQ_API_KEY: str | None = None
-    TESSERACT_CMD: str | None = None
+    TESSERACT_CMD: str | None = r"G:\001\LRW-2.0\Tesseract-OCR\tesseract.exe"
 
     model_config = SettingsConfigDict(env_file=env_file_path, extra="ignore")
 
