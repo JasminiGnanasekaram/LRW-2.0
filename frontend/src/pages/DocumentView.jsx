@@ -9,6 +9,7 @@ import {
   exportDocument,
   updateDocumentMetadata,
   updateDocumentNlp,
+  updateDocumentCleanedText,
   crawlWebsite,
   discoverPages,
 } from "../api";
@@ -280,6 +281,215 @@ const translateMorph = (morph, lang) => {
   return morph.split("|").map((f) => labels[f] || MORPH_LABELS.English[f] || f).join(" | ");
 };
 
+// -----------------------------------------------------------------------------
+// Download helpers: browser-only exports; no additional backend endpoint needed.
+// Each NLP tab exports its own data without the 200-row display restriction.
+// -----------------------------------------------------------------------------
+const saveNlpDownload = (filename, data, mimeType) => {
+  const blob = new Blob([data], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+
+const csvCell = (value) => {
+  const raw = String(value ?? "");
+  // Prevent formula execution in CSV viewers, including Excel.
+  const safe = /^[\s]*[=+@-]/.test(raw) ? `'${raw}` : raw;
+  return `"${safe.replace(/"/g, '""')}"`;
+};
+
+const downloadNlpCsv = (filename, headings, rows) => {
+  const csv = [headings, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n");
+  // UTF-8 BOM preserves Tamil and Sinhala text when opened directly in Excel.
+  saveNlpDownload(filename, "\uFEFF" + csv, "text/csv;charset=utf-8");
+};
+
+const downloadNlpChartsSvg = (filename) => {
+  const cards = Array.from(document.querySelectorAll('[data-nlp-export-chart="true"]'));
+  const chartNodes = cards.map((card) => ({
+    title: card.getAttribute("data-nlp-chart-title") || "Chart",
+    svg: card.querySelector("svg.recharts-surface"),
+  })).filter(({ svg }) => svg);
+  if (!chartNodes.length) {
+    throw new Error("No charts are available to download.");
+  }
+
+  const padding = 24;
+  const headerHeight = 46;
+  const gap = 22;
+  const sizes = chartNodes.map(({ svg }) => ({
+    width: Math.ceil(svg.getBoundingClientRect().width || Number(svg.getAttribute("width")) || 700),
+    height: Math.ceil(svg.getBoundingClientRect().height || Number(svg.getAttribute("height")) || 300),
+  }));
+  const canvasWidth = Math.max(...sizes.map((size) => size.width)) + padding * 2;
+  const canvasHeight = padding * 2 + sizes.reduce((total, size) => total + headerHeight + size.height + gap, 0);
+  const escapeXml = (value) => String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  let y = padding;
+  const panels = chartNodes.map(({ title, svg }, index) => {
+    const size = sizes[index];
+    const clone = svg.cloneNode(true);
+    clone.setAttribute("x", String(padding));
+    clone.setAttribute("y", String(y + headerHeight));
+    clone.setAttribute("width", String(size.width));
+    clone.setAttribute("height", String(size.height));
+    clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    const heading = `<text x="${padding}" y="${y + 25}" font-family="Arial, sans-serif" font-weight="bold" font-size="18" fill="#1a3a2a">${escapeXml(title)}</text>`;
+    const drawing = new XMLSerializer().serializeToString(clone);
+    y += headerHeight + size.height + gap;
+    return heading + drawing;
+  });
+  const svgFile = `<svg xmlns="http://www.w3.org/2000/svg" width="${canvasWidth}" height="${canvasHeight}" viewBox="0 0 ${canvasWidth} ${canvasHeight}"><rect width="100%" height="100%" fill="#fff"/>${panels.join("")}</svg>`;
+  saveNlpDownload(filename, svgFile, "image/svg+xml;charset=utf-8");
+};
+
+// A structured, UTF-8 JSON file for the currently selected NLP analysis tab.
+// All records supplied by the API are exported (not just the first 200 rows).
+const buildNlpSectionJson = (sectionKey, nlp, docId, lang) => {
+  const details = nlp.token_details || [];
+  const byToken = (fn) => details.map((tk, index) => fn(tk, index));
+  const base = {
+    document_id: String(docId || "document"),
+    section: sectionKey,
+    language: nlp.language || lang || "",
+  };
+
+  switch (sectionKey) {
+    case "tokens":
+      return {
+        ...base,
+        count: details.length || (nlp.tokens || []).length,
+        data: details.length
+          ? byToken((tk, i) => ({ index: i + 1, token: tokenText(tk), sentence_id: tk.sentence_id ?? null }))
+          : (nlp.tokens || []).map((token, i) => ({ index: i + 1, token })),
+      };
+    case "sentences":
+      return {
+        ...base,
+        count: (nlp.sentences || []).length,
+        data: (nlp.sentences || []).map((sentence, i) => ({ index: i + 1, sentence })),
+      };
+    case "pos":
+      return {
+        ...base,
+        count: details.length,
+        distribution: nlp.pos_distribution || {},
+        data: byToken((tk, i) => ({
+          index: i + 1, token: tokenText(tk), pos: tk.pos ?? null,
+          pos_label: getPosLabel(tk.pos, lang), tag: tk.tag ?? null,
+          language: tk.language ?? null, sentence_id: tk.sentence_id ?? null,
+        })),
+      };
+    case "lemma":
+      return {
+        ...base,
+        count: details.length,
+        data: byToken((tk, i) => ({
+          index: i + 1, token: tokenText(tk), lemma: tk.lemma || tokenText(tk),
+          pos: tk.pos ?? null, language: tk.language ?? null,
+          sentence_id: tk.sentence_id ?? null,
+        })),
+      };
+    case "morph":
+      return {
+        ...base,
+        count: details.length,
+        data: byToken((tk, i) => ({
+          index: i + 1, token: tokenText(tk), morph: tk.morph || "",
+          features: String(tk.morph || "").split("|").map((f) => f.trim()).filter(Boolean),
+          feature_description: translateMorph(tk.morph || "", lang),
+          pos: tk.pos ?? null, language: tk.language ?? null,
+          sentence_id: tk.sentence_id ?? null,
+        })),
+      };
+    case "statistics":
+      return {
+        ...base,
+        data: {
+          ...(nlp.statistics || {}),
+          tokens: nlp.statistics?.tokens ?? nlp.token_count ?? null,
+          unique_tokens: nlp.statistics?.unique_tokens ?? nlp.unique_tokens ?? null,
+          sentences: nlp.statistics?.sentences ?? nlp.sentence_count ?? null,
+        },
+      };
+    case "charts": {
+      const { sentenceChartData, posChartData, morphChartData } = buildNlpChartData(nlp, lang);
+      return {
+        ...base,
+        // JSON contains the chart values; SVG contains the actual chart drawing.
+        data: {
+          tokens_per_sentence: sentenceChartData,
+          pos_distribution: posChartData,
+          morphological_features: morphChartData,
+        },
+      };
+    }
+    default:
+      throw new Error("Unsupported NLP download type.");
+  }
+};
+
+const downloadNlpJson = (filename, payload) => {
+  saveNlpDownload(filename, JSON.stringify(payload, null, 2), "application/json;charset=utf-8");
+};
+
+const downloadNlpSection = (sectionKey, nlp, docId, lang, format = "csv") => {
+  const filename = `LRW_${String(docId || "document").replace(/[^a-zA-Z0-9_-]/g, "_")}_${sectionKey}`;
+  if (format === "json") {
+    return downloadNlpJson(`${filename}.json`, buildNlpSectionJson(sectionKey, nlp, docId, lang));
+  }
+  if (format !== "csv" && format !== "svg") {
+    throw new Error("Unsupported download format.");
+  }
+
+  const details = nlp.token_details || [];
+  const rowsByToken = (makeRow) => details.map((tk, index) => makeRow(tk, index));
+
+  switch (sectionKey) {
+    case "tokens": {
+      const rows = details.length
+        ? rowsByToken((tk, i) => [i + 1, tokenText(tk), tk.sentence_id ?? ""])
+        : (nlp.tokens || []).map((word, i) => [i + 1, word, ""]);
+      return downloadNlpCsv(`${filename}.csv`, ["#", "Token", "Sentence ID"], rows);
+    }
+    case "sentences":
+      return downloadNlpCsv(`${filename}.csv`, ["#", "Sentence"],
+        (nlp.sentences || []).map((sentence, i) => [i + 1, sentence]));
+    case "pos":
+      return downloadNlpCsv(`${filename}.csv`, ["#", "Token", "POS", "POS Label", "Tag", "Language", "Sentence ID"],
+        rowsByToken((tk, i) => [i + 1, tokenText(tk), tk.pos, getPosLabel(tk.pos, lang), tk.tag, tk.language, tk.sentence_id]));
+    case "lemma":
+      return downloadNlpCsv(`${filename}.csv`, ["#", "Token", "Lemma", "POS", "Language", "Sentence ID"],
+        rowsByToken((tk, i) => [i + 1, tokenText(tk), tk.lemma || tokenText(tk), tk.pos, tk.language, tk.sentence_id]));
+    case "morph":
+      return downloadNlpCsv(`${filename}.csv`, ["#", "Token", "Morphological Features", "Feature Description", "POS", "Language", "Sentence ID"],
+        rowsByToken((tk, i) => [i + 1, tokenText(tk), tk.morph || "", translateMorph(tk.morph, lang), tk.pos, tk.language, tk.sentence_id]));
+    case "statistics": {
+      const stats = nlp.statistics || {};
+      const basicMetrics = [
+        ["Total characters", stats.characters],
+        ["Characters without spaces", stats.characters_without_spaces],
+        ["Total tokens", stats.tokens ?? nlp.token_count],
+        ["Unique tokens", stats.unique_tokens ?? nlp.unique_tokens],
+        ["Sentence count", stats.sentences ?? nlp.sentence_count],
+        ["Paragraph count", stats.paragraphs],
+      ];
+      const languageRows = Object.entries(stats.language_distribution || {}).map(([language, percent]) => [`Language: ${language} (%)`, percent]);
+      const posRows = Object.entries(stats.pos_distribution || nlp.pos_distribution || {}).map(([pos, count]) => [`POS: ${pos}`, count]);
+      return downloadNlpCsv(`${filename}.csv`, ["Metric", "Value"], [...basicMetrics, ...languageRows, ...posRows]);
+    }
+    case "charts":
+      return downloadNlpChartsSvg(`${filename}.svg`);
+    default:
+      throw new Error("Unsupported NLP download type.");
+  }
+};
+
 function PdfTypeBadge({ pdfType }) {
   if (!pdfType) return null;
   const config = {
@@ -372,7 +582,7 @@ function ScrollTable({ headers, rows, emptyText, numbered = true }) {
 
 function ChartCard({ title, children, height = 280 }) {
   return (
-    <div style={panelStyle}>
+    <div style={panelStyle} data-nlp-export-chart="true" data-nlp-chart-title={title}>
       <h4 style={{ color: "var(--forest)", margin: "0 0 14px 0", fontSize: 14 }}>{title}</h4>
       <div style={{ width: "100%", height }}>
         <ResponsiveContainer>{children}</ResponsiveContainer>
@@ -396,6 +606,8 @@ function EditTokenModal({
   const [pos, setPos] = useState(token?.pos || "X");
   const [lemma, setLemma] = useState(token ? token.lemma || tokenText(token) : "");
   const [morph, setMorph] = useState(token?.morph || "");
+  const [customFeatureKey, setCustomFeatureKey] = useState("");
+  const [customFeatureValue, setCustomFeatureValue] = useState("");
   const [applyAll, setApplyAll] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -406,6 +618,8 @@ function EditTokenModal({
     setPos(token.pos || "X");
     setLemma(token.lemma || tokenText(token));
     setMorph(token.morph || "");
+    setCustomFeatureKey("");
+    setCustomFeatureValue("");
     setApplyAll(true);
     setError(null);
   }, [token, initialTab]);
@@ -451,6 +665,23 @@ function EditTokenModal({
     setMorph(updated.join("|"));
   };
 
+  // New features can be combined with the existing morphological annotations.
+  const addCustomFeature = () => {
+    const key = customFeatureKey.trim();
+    const value = customFeatureValue.trim();
+    if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(key) || !/^[A-Za-z0-9_-]+$/.test(value)) {
+      setError(tr("Enter a valid feature and value (e.g. Evident=Yes).", "சரியான கூறும் மதிப்பும் வழங்குங்கள் (எ.கா. Evident=Yes).", "නිවැරදි ලක්ෂණයක් සහ අගයක් ඇතුළත් කරන්න."));
+      return;
+    }
+    const entries = (morph || "").split("|").filter(Boolean);
+    const next = entries.filter((entry) => entry.split("=")[0] !== key);
+    next.push(`${key}=${value}`);
+    setMorph(next.join("|"));
+    setCustomFeatureKey("");
+    setCustomFeatureValue("");
+    setError(null);
+  };
+
   const word = tokenText(token);
   const posInfo = getPosInfo(pos);
   const activeMorphs = new Set(morph ? morph.split("|").filter(Boolean) : []);
@@ -477,7 +708,7 @@ function EditTokenModal({
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <span style={{ fontSize: 17, fontWeight: 700, color: "var(--ink)" }}>
-                {tr("Edit NLP Annotation", "NLP தரவைத் திருத்து", "NLP විවරණය සංස්කරණය")}
+                {tr("Add / Edit NLP Annotation", "NLP குறிப்பைச் சேர் / திருத்து", "NLP විවරණය එකතු / සංස්කරණය")}
               </span>
               <span className="badge" style={{ background: "var(--mint)", color: "var(--forest)", fontWeight: 700, fontSize: 13 }}>
                 {word}
@@ -572,6 +803,20 @@ function EditTokenModal({
                 })}
               </div>
 
+              {/* Custom POS tags not included in POS_INFO. */}
+              <label style={{ display: "block", fontSize: 12, fontWeight: 700, marginBottom: 6 }}>
+                {tr("Add or enter a custom POS tag", "புதிய POS குறியீட்டைச் சேர்க்கவும்", "නව POS ටැගයක් ඇතුළත් කරන්න")}
+              </label>
+              <input
+                type="text"
+                value={pos}
+                maxLength={32}
+                onChange={(e) => setPos(e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, ""))}
+                placeholder="e.g. PROPN, AUX, CUSTOM"
+                style={{ ...inputStyle, marginBottom: 14 }}
+                required
+              />
+
               {/* POS Preview Card */}
               <div style={{
                 background: posInfo.bg, border: `1px solid ${posInfo.border}`,
@@ -595,7 +840,7 @@ function EditTokenModal({
           {activeTab === "lemma" && (
             <div>
               <label style={{ display: "block", fontSize: 12, fontWeight: 700, marginBottom: 8, color: "var(--ink)" }}>
-                {tr("Base Dictionary Form (Lemma):", "வேர்ச்சொல் வடிவம் (Lemma):", "මූලික ශබ්දකෝෂ ස්වරූපය (Lemma):")}
+                {tr("Add or edit root word (Lemma):", "வேர்ச்சொல்லைச் சேர்க்கவும் அல்லது திருத்தவும்:", "මූල පදය එකතු කරන්න හෝ සංස්කරණය කරන්න:")}
               </label>
               <input
                 type="text"
@@ -677,6 +922,37 @@ function EditTokenModal({
                   {translateMorph(morph, lang) || morph}
                 </div>
               )}
+
+              {/* Existing / newly added features can be removed individually. */}
+              <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginBottom: 12 }}>
+                {(morph || "").split("|").filter(Boolean).map((feature) => (
+                  <button
+                    key={feature}
+                    type="button"
+                    title={tr("Remove feature", "கூறை நீக்கு", "ලක්ෂණය ඉවත් කරන්න")}
+                    onClick={() => setMorph((morph || "").split("|").filter((item) => item && item !== feature).join("|"))}
+                    style={{ padding: "5px 9px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--paper)", color: "var(--forest)", cursor: "pointer" }}
+                  >
+                    {feature} ×
+                  </button>
+                ))}
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 7 }}>
+                {tr("Add custom morphological feature", "புதிய உருபியல் கூறைச் சேர்க்கவும்", "නව රූප විද්‍යා ලක්ෂණයක් එක් කරන්න")}
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 7, marginBottom: 16 }}>
+                <input
+                  type="text" value={customFeatureKey} onChange={(e) => setCustomFeatureKey(e.target.value)}
+                  placeholder="Feature (e.g. Evident)" style={{ ...inputStyle, flex: "1 1 130px", width: "auto" }}
+                />
+                <input
+                  type="text" value={customFeatureValue} onChange={(e) => setCustomFeatureValue(e.target.value)}
+                  placeholder="Value (e.g. Yes)" style={{ ...inputStyle, flex: "1 1 110px", width: "auto" }}
+                />
+                <button type="button" className="btn btn-primary btn-sm" onClick={addCustomFeature}>
+                  + {tr("Add Feature", "கூறைச் சேர்", "ලක්ෂණය එක් කරන්න")}
+                </button>
+              </div>
 
               {/* Quick toggle chips */}
               <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--ink-lt)", marginBottom: 6 }}>
@@ -778,41 +1054,31 @@ function EditTokenModal({
 function TokensSection({ nlp, tr, desc, onEditToken }) {
   const [query, setQuery] = useState("");
   const needle = query.trim().toLowerCase();
-
   const allTokens = (nlp.token_details || []).map((tk, idx) => ({ ...tk, __index: idx }));
   const filtered = allTokens.filter((tk) => !needle || tokenText(tk).toLowerCase().includes(needle));
-
-  const rows = filtered.slice(0, 200).map((tk) => {
-    return [
-      <strong>{tokenText(tk)}</strong>,
-    ];
-  });
 
   return (
     <div>
       <SectionDesc desc={desc} />
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 10 }}>
         <div style={{ fontSize: 13, color: "var(--ink-lt)" }}>
-          {tr("Showing", "காட்டப்படுகிறது", "පෙන්වන්නේ")}: <strong>{Math.min(filtered.length, 200)}</strong> / {allTokens.length}
+          {tr("Showing", "காட்டப்படுகிறது", "පෙන්වන්නේ")}: <strong>{filtered.length}</strong> / {allTokens.length}
         </div>
         <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          type="text" value={query} onChange={(e) => setQuery(e.target.value)}
           placeholder={tr("Search token...", "சொல்லைத் தேடுங்கள்...", "ටෝකනය සොයන්න...")}
-          style={{
-            padding: "6px 12px", borderRadius: 6, border: "1px solid var(--border)",
-            fontSize: 12, background: "var(--paper)", color: "var(--ink)", width: 200,
-          }}
+          style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid var(--border)", fontSize: 12, background: "var(--paper)", color: "var(--ink)", width: 200 }}
         />
       </div>
-      <ScrollTable
-        headers={[
-          { label: tr("Token", "சொல்", "ටෝකනය") },
-        ]}
-        rows={rows}
-        emptyText={tr("No tokens found.", "சொற்கள் எதுவும் இல்லை.", "ටෝකන හමු නොවීය.")}
-      />
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-start", padding: 16, maxHeight: 350, overflowY: "auto", border: "1px solid var(--border)", borderRadius: 8, background: "var(--paper)" }}>
+        {filtered.map((tk) => (
+          <span
+            key={tk.__index}
+            style={{ display: "inline-flex", padding: "8px 14px", borderRadius: 8, background: "var(--bg-lt)", border: "1px solid var(--border)", color: "var(--forest)", fontSize: 14, fontWeight: 600, whiteSpace: "nowrap" }}
+          >{tokenText(tk)}</span>
+        ))}
+        {filtered.length === 0 && <div style={{ color: "var(--ink-lt)" }}>{tr("No tokens found.", "சொற்கள் எதுவும் இல்லை.", "ටෝකන හමු නොවීය.")}</div>}
+      </div>
     </div>
   );
 }
@@ -853,7 +1119,7 @@ function PosSection({ nlp, lang, tr, desc, onEditToken }) {
     return !needle || tokenText(tk).toLowerCase().includes(needle) || pos.toLowerCase().includes(needle);
   });
 
-  const rows = tokens.slice(0, 200).map((tk) => {
+  const rows = tokens.map((tk) => {
     const info = getPosInfo(tk.pos);
     return [
       <strong>{tokenText(tk)}</strong>,
@@ -874,7 +1140,7 @@ function PosSection({ nlp, lang, tr, desc, onEditToken }) {
           border: "1px solid var(--border)", color: "var(--forest)", cursor: "pointer",
         }}
       >
-        {tr("Edit POS", "POS திருத்து", "POS සංස්කරණය")}
+        {tr("Add / Edit POS", "POS சேர் / திருத்து", "POS එකතු / සංස්කරණය")}
       </button>,
     ];
   });
@@ -1003,7 +1269,7 @@ function PosSection({ nlp, lang, tr, desc, onEditToken }) {
 
 function LemmaSection({ nlp, lang, tr, desc, onEditToken }) {
   const [query, setQuery] = useState("");
-  const [filterMode, setFilterMode] = useState("modified"); // 'modified' | 'all'
+  const [filterMode, setFilterMode] = useState("all"); // 'modified' | 'all'
 
   const allTokens = (nlp.token_details || []).map((tk, idx) => ({ ...tk, __index: idx }));
   const needle = query.trim().toLowerCase();
@@ -1022,7 +1288,7 @@ function LemmaSection({ nlp, lang, tr, desc, onEditToken }) {
     return !needle || text.toLowerCase().includes(needle) || lemma.toLowerCase().includes(needle);
   });
 
-  const rows = tokens.slice(0, 200).map((tk) => {
+  const rows = tokens.map((tk) => {
     const text = tokenText(tk);
     const isModified = tk.lemma && text.toLowerCase() !== tk.lemma.toLowerCase();
     return [
@@ -1042,7 +1308,7 @@ function LemmaSection({ nlp, lang, tr, desc, onEditToken }) {
           border: "1px solid var(--border)", color: "var(--forest)", cursor: "pointer",
         }}
       >
-        {tr("Edit Lemma", "வேர்ச்சொல் திருத்து", "මූල පදය සංස්කරණය")}
+        {tr("Add / Edit Lemma", "வேர்ச்சொல் சேர் / திருத்து", "මූල පදය එකතු / සංස්කරණය")}
       </button>,
     ];
   });
@@ -1115,7 +1381,7 @@ function LemmaSection({ nlp, lang, tr, desc, onEditToken }) {
 
 function MorphSection({ nlp, lang, tr, desc, onEditToken }) {
   const [query, setQuery] = useState("");
-  const [filterMode, setFilterMode] = useState("has_morph"); // 'has_morph' | 'all'
+  const [filterMode, setFilterMode] = useState("all"); // 'has_morph' | 'all'
 
   const allTokens = (nlp.token_details || []).map((tk, idx) => ({ ...tk, __index: idx }));
   const needle = query.trim().toLowerCase();
@@ -1131,7 +1397,7 @@ function MorphSection({ nlp, lang, tr, desc, onEditToken }) {
     return text.includes(needle) || morphStr.includes(needle) || translated.includes(needle);
   });
 
-  const rows = filtered.slice(0, 200).map((tk) => {
+  const rows = filtered.map((tk) => {
     const hasMorph = Boolean(tk.morph && tk.morph.trim());
     return [
       <strong>{tokenText(tk)}</strong>,
@@ -1174,7 +1440,7 @@ function MorphSection({ nlp, lang, tr, desc, onEditToken }) {
           border: "1px solid var(--border)", color: "var(--forest)", cursor: "pointer",
         }}
       >
-        {tr("Edit Features", "உருபியல் திருத்து", "ලක්ෂණ සංස්කරණය")}
+        {tr("Add / Edit Features", "உருபியல் கூறு சேர் / திருத்து", "ලක්ෂණ එකතු / සංස්කරණය")}
       </button>,
     ];
   });
@@ -1362,7 +1628,8 @@ const getMorphDisplayLabel = (feat, lang) => {
   return feat;
 };
 
-function ChartsSection({ nlp, lang, tr, desc }) {
+// Use the same datasets for chart rendering and chart JSON downloads.
+const buildNlpChartData = (nlp, lang) => {
   const tokens = nlp.token_details || [];
 
   // 1. Tokens per Sentence
@@ -1415,6 +1682,12 @@ function ChartsSection({ nlp, lang, tr, desc }) {
     .map(([name, count]) => ({ name, count }))
     .sort((a, b) => b.count - a.count)
     .slice(0, 15);
+
+  return { sentenceChartData, posChartData, morphChartData };
+};
+
+function ChartsSection({ nlp, lang, tr, desc }) {
+  const { sentenceChartData, posChartData, morphChartData } = buildNlpChartData(nlp, lang);
 
   const cards = [
     sentenceChartData.length > 0 && (
@@ -1505,16 +1778,11 @@ function NlpTab({ docId, nlp, lang, tr, onNlpUpdated }) {
 
   const handleSaveEdit = async (patch) => {
     const res = await updateDocumentNlp(docId, patch);
-    if (onNlpUpdated && res.nlp) {
-      onNlpUpdated(res.nlp);
-    }
+    if (!res?.nlp) throw new Error("The server did not return updated NLP data.");
+    onNlpUpdated?.(res.nlp);
     setFeedback({
       type: "success",
-      text: tr(
-        "NLP annotation updated successfully.",
-        "NLP சிறுகுறிப்பு வெற்றிகரமாக புதுப்பிக்கப்பட்டது.",
-        "NLP විවරණය සාර්ථකව යාවත්කාලීන කරන ලදී."
-      ),
+      text: tr("NLP annotation updated successfully.", "NLP சிறுகுறிப்பு வெற்றிகரமாக புதுப்பிக்கப்பட்டது.", "NLP විවරණය සාර්ථකව යාවත්කාලීන කරන ලදී."),
     });
     setTimeout(() => setFeedback(null), 3500);
   };
@@ -1566,9 +1834,31 @@ function NlpTab({ docId, nlp, lang, tr, onNlpUpdated }) {
             {feedback.text}
           </div>
         )}
-        <h2 style={{ margin: "0 0 16px 0", fontSize: 18, fontWeight: 700, color: "var(--ink)" }}>
-          {pick(section?.label, lang)}
-        </h2>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
+          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--ink)" }}>
+            {pick(section?.label, lang)}
+          </h2>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {(sectionKey === "charts" ? ["svg", "json"] : ["csv", "json"]).map((format) => (
+              <button
+                key={format}
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  try {
+                    downloadNlpSection(sectionKey, nlp, docId, lang, format);
+                  } catch (error) {
+                    window.alert(error?.message || "Could not download this NLP section.");
+                  }
+                }}
+                style={{ padding: "8px 14px", fontSize: 12, whiteSpace: "nowrap", cursor: "pointer" }}
+                title={tr("Download this NLP section only", "இந்த NLP பகுதியை மட்டும் பதிவிறக்குக", "මෙම NLP කොටස පමණක් බාගන්න")}
+              >
+                ↓ {tr("Download", "பதிவிறக்குக", "බාගන්න")} {format.toUpperCase()}
+              </button>
+            ))}
+          </div>
+        </div>
         <Section
           key={sectionKey}
           nlp={nlp}
@@ -2315,6 +2605,165 @@ function MetadataTab({ docId, metadata, tr, onSaved }) {
   );
 }
 
+// Manual correction of extracted/cleaned text. The original raw text remains unchanged.
+function CleanedTextTab({ docId, text, tr, onSaved }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(text || "");
+  const [reanalyze, setReanalyze] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState(null);
+
+  const original = text || "";
+  const hasChanges = draft !== original;
+
+  const cancelEdit = () => {
+    setDraft(original);
+    setReanalyze(false);
+    setEditing(false);
+    setMessage(null);
+  };
+
+  const saveChanges = async (event) => {
+    event.preventDefault();
+    if (saving || !hasChanges) return;
+    if (!draft.trim()) {
+      setMessage({ type: "error", text: tr(
+        "Cleaned text cannot be empty.",
+        "சுத்திகரிக்கப்பட்ட உரை காலியாக இருக்க முடியாது.",
+        "පිරිසිදු කළ පෙළ හිස් විය නොහැක."
+      ) });
+      return;
+    }
+
+    setSaving(true);
+    setMessage(null);
+    try {
+      const result = await updateDocumentCleanedText(docId, {
+        cleaned_text: draft,
+        reanalyze,
+      });
+      const newText = result?.cleaned_text ?? draft;
+      onSaved(newText, reanalyze ? (result?.nlp ?? null) : null);
+      setDraft(newText);
+      setEditing(false);
+      setMessage({
+        type: "success",
+        text: reanalyze
+          ? tr(
+              "Cleaned text saved and NLP results regenerated.",
+              "சுத்திகரிக்கப்பட்ட உரை சேமிக்கப்பட்டது; NLP முடிவுகள் மீண்டும் உருவாக்கப்பட்டன.",
+              "පිරිසිදු කළ පෙළ සුරකින ලදි; NLP ප්‍රතිඵල නැවත ගණනය කරන ලදි."
+            )
+          : tr(
+              "Cleaned text saved. Existing NLP results have not changed.",
+              "சுத்திகரிக்கப்பட்ட உரை சேமிக்கப்பட்டது. பழைய NLP முடிவுகள் மாற்றப்படவில்லை.",
+              "පිරිසිදු කළ පෙළ සුරකින ලදි. පැරණි NLP ප්‍රතිඵල වෙනස් නොවීය."
+            ),
+      });
+      setReanalyze(false);
+    } catch (error) {
+      setMessage({
+        type: "error",
+        text: getErrorMessage(error, tr(
+          "Unable to save cleaned text. Check the backend API.",
+          "உரையைச் சேமிக்க முடியவில்லை. Backend API-ஐச் சரிபார்க்கவும்.",
+          "පෙළ සුරැකීමට නොහැකි විය. Backend API පරීක්ෂා කරන්න."
+        )),
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div>
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        flexWrap: "wrap", gap: 12, marginBottom: 14,
+      }}>
+        <div>
+          <h3 style={{ margin: 0, fontSize: 16, color: "var(--forest)" }}>
+            {tr("Cleaned Text", "சுத்திகரிக்கப்பட்ட உரை", "පිරිසිදු කළ පෙළ")}
+          </h3>
+          <span className="muted" style={{ fontSize: 12 }}>
+            {draft.length.toLocaleString()} {tr("characters", "எழுத்துகள்", "අක්ෂර")}
+          </span>
+        </div>
+        {!editing && (
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={() => {
+              setDraft(original);
+              setReanalyze(false);
+              setMessage(null);
+              setEditing(true);
+            }}
+          >
+            {tr("Edit Cleaned Text", "உரையைத் திருத்து", "පිරිසිදු කළ පෙළ සංස්කරණය")}
+          </button>
+        )}
+      </div>
+
+      {message && (
+        <div
+          role="status"
+          className={message.type === "error" ? "alert-error" : "alert-success"}
+          style={{ marginBottom: 14, padding: "10px 14px", borderRadius: 8 }}
+        >
+          {message.text}
+        </div>
+      )}
+
+      {editing ? (
+        <form onSubmit={saveChanges}>
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            disabled={saving}
+            aria-label={tr("Edit cleaned text", "சுத்திகரிக்கப்பட்ட உரையைத் திருத்து", "පිරිසිදු කළ පෙළ සංස්කරණය")}
+            spellCheck={false}
+            style={{
+              width: "100%", minHeight: 360, padding: 16, borderRadius: 9,
+              border: "1px solid var(--border)", background: "var(--paper)",
+              color: "var(--ink)", fontSize: 14, lineHeight: 1.8,
+              fontFamily: "inherit", resize: "vertical", boxSizing: "border-box",
+            }}
+          />
+          <label style={{ display: "flex", gap: 9, alignItems: "flex-start", marginTop: 12, fontSize: 13 }}>
+            <input
+              type="checkbox"
+              checked={reanalyze}
+              disabled={saving}
+              onChange={(e) => setReanalyze(e.target.checked)}
+              style={{ marginTop: 3 }}
+            />
+            <span>
+              {tr(
+                "Re-run NLP analysis after saving (replaces existing POS, lemma and morphology edits)",
+                "சேமித்த பிறகு NLP பகுப்பாய்வை மீண்டும் இயக்கு (ஏற்கனவே திருத்திய POS, வேர்ச்சொல், உருபியல் அம்சங்கள் மாற்றப்படும்)",
+                "සුරැකීමෙන් පසු NLP විශ්ලේෂණය නැවත කරන්න (පවතින POS, lemma සහ morphology සංස්කරණ ප්‍රතිස්ථාපනය වේ)"
+              )}
+            </span>
+          </label>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 16 }}>
+            <button type="submit" className="btn btn-primary" disabled={saving || !hasChanges || !draft.trim()}>
+              {saving ? tr("Saving...", "சேமிக்கிறது...", "සුරකිමින්...") : tr("Save Changes", "மாற்றங்களைச் சேமி", "වෙනස්කම් සුරකින්න")}
+            </button>
+            <button type="button" className="btn btn-ghost" disabled={saving} onClick={cancelEdit}>
+              {tr("Cancel", "ரத்துசெய்", "අවලංගු කරන්න")}
+            </button>
+          </div>
+        </form>
+      ) : (
+        <pre className="snippet" style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
+          {original || tr("No cleaned text available.", "சுத்திகரிக்கப்பட்ட உரை இல்லை.", "පිරිසිදු කළ පෙළ නොමැත.")}
+        </pre>
+      )}
+    </div>
+  );
+}
+
 export default function DocumentView() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -2552,7 +3001,29 @@ export default function DocumentView() {
         </div>
         {tab === "overview" && <OverviewTab doc={displayDoc} nlp={nlp} tr={tr} />}
         {tab === "raw" && <pre className="snippet">{displayDoc.raw_text || "No raw text available."}</pre>}
-        {tab === "cleaned" && <pre className="snippet">{displayDoc.cleaned_text || "No cleaned text available."}</pre>}
+        {tab === "cleaned" && (
+          <CleanedTextTab
+            key={displayDoc.id || id}
+            docId={displayDoc.id || id}
+            text={displayDoc.cleaned_text || ""}
+            tr={tr}
+            onSaved={(cleanedText, updatedNlp) => {
+              if (selectedSubpageDoc) {
+                setSelectedSubpageDoc((prev) => ({
+                  ...prev,
+                  cleaned_text: cleanedText,
+                  ...(updatedNlp ? { nlp: updatedNlp } : {}),
+                }));
+              } else {
+                setDoc((prev) => ({
+                  ...prev,
+                  cleaned_text: cleanedText,
+                  ...(updatedNlp ? { nlp: updatedNlp } : {}),
+                }));
+              }
+            }}
+          />
+        )}
         {tab === "nlp" && displayDoc.nlp && (
           <NlpTab
             docId={displayDoc.id || id}
