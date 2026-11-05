@@ -174,9 +174,9 @@ async def start_crawl(
     - Returns extracted text + summary + doc_id for every page.
     """
 
-    if not 1 <= req.max_pages <= 50:
+    if not 1 <= req.max_pages <= 1000:
         raise HTTPException(
-            status_code=400, detail="max_pages must be between 1 and 50."
+            status_code=400, detail="max_pages must be between 1 and 1000."
         )
 
     # Run blocking BFS crawler in a threadpool so we don't block the event loop
@@ -255,4 +255,4 @@ async def start_crawl(
                 f"[Crawl] Failed to update crawled_pages on document {target_parent_id}: {exc}"
             )
 
-    return CrawlResponse(total=len(results), pages=results)
+    return CrawlResponse(total=len(results), pages=results)
