@@ -6,7 +6,6 @@ import os
 
 from config import get_settings
 from database import init_indexes
-# 1. Add summarize to imports
 from routes import auth, documents, search, admin, jobs, summarize, crawl
 
 settings = get_settings()
@@ -25,14 +24,12 @@ async def lifespan(app: FastAPI):
     if not api_key:
         logger.warning("[Groq Check] WARNING: GROQ_API_KEY is not configured in backend/.env or system environment variables. Summarization endpoints will fail.")
     elif "..." in api_key:
-        # Mask the key
         masked_key = f"gsk_***{api_key[-4:]}" if api_key.startswith("gsk_") else f"{api_key[:4]}***{api_key[-4:]}"
         logger.warning(
             f"[Groq Check] WARNING: GROQ_API_KEY is loaded but contains placeholder dots: '{masked_key}' (raw: '{api_key}'). "
             "Please configure your actual Groq API key without placeholder dots."
         )
     else:
-        # Mask the key
         masked_key = f"gsk_***{api_key[-4:]}" if api_key.startswith("gsk_") else f"{api_key[:4]}***{api_key[-4:]}"
         logger.info(f"[Groq Check] SUCCESS: GROQ_API_KEY is successfully loaded (masked: '{masked_key}').")
 
@@ -64,9 +61,9 @@ app.include_router(documents.router)
 app.include_router(search.router)
 app.include_router(admin.router)
 app.include_router(jobs.router)
-# 2. Register the summarize router
-app.include_router(summarize.router) 
+app.include_router(summarize.router)
 app.include_router(crawl.router)
+
 
 @app.get("/")
 async def root():

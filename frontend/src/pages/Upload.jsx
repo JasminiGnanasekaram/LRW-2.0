@@ -146,6 +146,7 @@ export default function Upload() {
   const [dragging, setDragging] = useState(false);
   const [summary, setSummary] = useState("");
   const [summaryLoading, setSummaryLoading] = useState(false);
+  const audioLanguage = "ta";
 
   const accept = FILE_TYPES.find((type) => type.value === fileType)?.accept;
   const updateMeta = (key) => (e) => setMeta((prev) => ({ ...prev, [key]: e.target.value }));
@@ -173,6 +174,7 @@ export default function Upload() {
         if (!selectedFile && !file) return;
         const formData = new FormData();
         formData.append("file", selectedFile || file);
+        if (type === "audio") formData.append("language", audioLanguage);
         response = await api.post(`/summarize/${type}`, formData);
       }
       if (requestId === summaryRequestRef.current) {
@@ -224,7 +226,6 @@ export default function Upload() {
 
   const validate = () => {
     if (!meta.source.trim()) return "Source is required.";
-    if (!meta.domain) return "Domain is required.";
     if (!meta.license) return "License is required.";
     if (fileType === "url" && !url.trim()) return "URL is required for URL uploads.";
     if (fileType !== "url" && !file) return "Please choose a file to upload.";
@@ -405,7 +406,6 @@ export default function Upload() {
               options={DOMAINS}
               value={meta.domain}
               onChange={updateMeta("domain")}
-              required
             />
 
             <Field id="meta-category" label="Category">

@@ -1,11 +1,17 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
-
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
 } from "recharts";
-import { getDocument, exportDocument, updateDocumentMetadata, crawlWebsite, discoverPages } from "../api";
+import {
+  getDocument,
+  exportDocument,
+  updateDocumentMetadata,
+  updateDocumentNlp,
+  crawlWebsite,
+  discoverPages,
+} from "../api";
 
 const PIE_COLORS = ["#1a3a2a", "#4a7c59", "#8fb89a", "#d4e8d0", "#2d5a3d", "#6aaa80", "#b0d8b8", "#386641"];
 
@@ -51,7 +57,7 @@ const NLP_SECTIONS = [
     label: { English: "Morphological Analysis", Tamil: "உருபியல் பகுப்பாய்வு", Sinhala: "රූප විද්‍යාත්මක විශ්ලේෂණය" },
     desc: {
       English: "Extracts grammatical features including grammatical Case, Number, Tense, and Person.",
-      Tamil: "வேற்றுமை, எண், காலம் மற்றும் நபர் போன்ற உருபியல் கூறுகளை பகுப்பாய்வு செய்கிறது.",
+      Tamil: "உருபியல் பகுப்பாய்வு என்பது சொற்களின் கட்டமைப்பு, அவற்றின் தோற்றம் மற்றும் அவை எவ்வாறு உருவாகின்றன என்பதைப் பற்றி ஆராயும் ஒரு பகுப்பாய்வு முறை ஆகும்.",
       Sinhala: "විභක්ති, වචන, කාලය සහ පුරුෂ වැනි රූපවිද්‍යාත්මක ලක්ෂණ විග්‍රහ කරයි.",
     },
   },
@@ -143,6 +149,72 @@ const MORPH_LABELS = {
   },
 };
 
+const COMMON_MORPH_FEATURES = [
+  {
+    category: "Case",
+    name: { English: "Grammatical Case", Tamil: "வேற்றுமை", Sinhala: "විභක්තිය" },
+    items: [
+      { key: "Case=Nom", label: "Nom (Nominative / எழுவாய்)" },
+      { key: "Case=Acc", label: "Acc (Accusative / 2-ம் வேற்றுமை)" },
+      { key: "Case=Dat", label: "Dat (Dative / 4-ம் வேற்றுமை)" },
+      { key: "Case=Gen", label: "Gen (Genitive / 6-ம் வேற்றுமை)" },
+      { key: "Case=Loc", label: "Loc (Locative / 7-ம் வேற்றுமை)" },
+      { key: "Case=Ins", label: "Ins (Instrumental / 3-ம் வேற்றுமை)" },
+      { key: "Case=Abl", label: "Abl (Ablative / 5-ம் வேற்றுமை)" },
+      { key: "Case=Com", label: "Com (Comitative / உடன்)" },
+      { key: "Case=Ben", label: "Ben (Benefactive / பொருட்டு)" },
+    ],
+  },
+  {
+    category: "Number",
+    name: { English: "Number", Tamil: "எண்", Sinhala: "වචන" },
+    items: [
+      { key: "Number=Sing", label: "Singular (ஒருமை / ඒකවචන)" },
+      { key: "Number=Plur", label: "Plural (பன்மை / බහුවචන)" },
+    ],
+  },
+  {
+    category: "Gender",
+    name: { English: "Gender", Tamil: "பால்", Sinhala: "ලිංගය" },
+    items: [
+      { key: "Gender=Masc", label: "Masculine (ஆண்பால் / පුරුෂ)" },
+      { key: "Gender=Fem", label: "Feminine (பெண்பால் / ස්ත්‍රී)" },
+      { key: "Gender=Neut", label: "Neuter (ஒன்றன்பால் / නපුංසක)" },
+    ],
+  },
+  {
+    category: "Tense",
+    name: { English: "Tense", Tamil: "காலம்", Sinhala: "කාලය" },
+    items: [
+      { key: "Tense=Past", label: "Past (இறந்தகாலம் / අතීත)" },
+      { key: "Tense=Pres", label: "Present (நிகழ்காலம் / වර්තමාන)" },
+      { key: "Tense=Fut", label: "Future (எதிர்காலம் / අනාගත)" },
+    ],
+  },
+  {
+    category: "Person",
+    name: { English: "Person", Tamil: "இடம்", Sinhala: "පුරුෂ" },
+    items: [
+      { key: "Person=1", label: "1st Person (தன்மை / උත්තම)" },
+      { key: "Person=2", label: "2nd Person (முன்னிலை / මධ්‍යම)" },
+      { key: "Person=3", label: "3rd Person (படர்க்கை / ප්‍රථම)" },
+    ],
+  },
+  {
+    category: "Verb Form & Voice",
+    name: { English: "Verb Form & Voice", Tamil: "வினை வடிவம்", Sinhala: "ක්‍රියා ස්වරූපය" },
+    items: [
+      { key: "VerbForm=Fin", label: "Finite (முற்றுவினை)" },
+      { key: "VerbForm=Inf", label: "Infinitive (தொழிற்பெயர்)" },
+      { key: "VerbForm=Part", label: "Participle (வினையெச்சம்)" },
+      { key: "Voice=Act", label: "Active (செய்வினை)" },
+      { key: "Voice=Pass", label: "Passive (செயப்பாட்டுவினை)" },
+      { key: "Polarity=Neg", label: "Negative (எதிர்மறை)" },
+      { key: "Polite=Yes", label: "Polite (மரியாதை)" },
+    ],
+  },
+];
+
 const METADATA_FIELDS = [
   { key: "source", label: ["Source", "மூலம் (Source)", "මූලාශ්‍රය (Source)"], required: true, placeholder: "e.g. Daily News, Wikipedia, Research Paper" },
   { key: "domain", label: ["Domain", "பிரிவு (Domain)", "ක්ෂේත්‍රය (Domain)"], required: true, placeholder: "e.g. General, News, Technology, Legal, Sports" },
@@ -150,6 +222,7 @@ const METADATA_FIELDS = [
   { key: "category", label: ["Category", "அணுகல் வகை (Category)", "ප්‍රවේශ කාණ්ඩය (Category)"], options: ["open", "research", "restricted"] },
   { key: "author", label: ["Author", "ஆசிரியர் (Author)", "කර්තෘ (Author)"], placeholder: "e.g. Author or Organization name" },
   { key: "publication_date", label: ["Publication Date", "வெளியீட்டு தேதி (Publication Date)", "ප්‍රකාශන දිනය (Publication Date)"], placeholder: "YYYY-MM-DD or text" },
+  { key: "title", label: ["Title", "தலைப்பு (Title)", "මාතෘකාව (Title)"], placeholder: "Document title" },
 ];
 const STANDARD_METADATA_KEYS = METADATA_FIELDS.map((f) => f.key);
 
@@ -298,26 +371,446 @@ function ScrollTable({ headers, rows, emptyText, numbered = true }) {
   );
 }
 
-function ChartCard({ title, children }) {
+function ChartCard({ title, children, height = 280 }) {
   return (
     <div style={panelStyle}>
       <h4 style={{ color: "var(--forest)", margin: "0 0 14px 0", fontSize: 14 }}>{title}</h4>
-      <div style={{ width: "100%", height: 240 }}>
+      <div style={{ width: "100%", height }}>
         <ResponsiveContainer>{children}</ResponsiveContainer>
       </div>
     </div>
   );
 }
 
-function TokensSection({ nlp, tr, desc }) {
-  const rows = (nlp.token_details || []).slice(0, 250).map((tk) => [
-    <strong>{tokenText(tk)}</strong>,
-  ]);
+function EditTokenModal({
+  isOpen,
+  token,
+  tokenIndex,
+  initialTab = "pos",
+  lang,
+  tr,
+  totalOccurrences = 1,
+  onSave,
+  onClose,
+}) {
+  const [activeTab, setActiveTab] = useState(initialTab);
+  const [pos, setPos] = useState(token?.pos || "X");
+  const [lemma, setLemma] = useState(token ? token.lemma || tokenText(token) : "");
+  const [morph, setMorph] = useState(token?.morph || "");
+  const [applyAll, setApplyAll] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (!token) return;
+    setActiveTab(initialTab);
+    setPos(token.pos || "X");
+    setLemma(token.lemma || tokenText(token));
+    setMorph(token.morph || "");
+    setApplyAll(true);
+    setError(null);
+  }, [token, initialTab]);
+
+  if (!isOpen || !token) return null;
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      await onSave({
+        token_index: tokenIndex,
+        word: tokenText(token),
+        pos,
+        lemma,
+        morph,
+        apply_all: applyAll,
+      });
+      onClose();
+    } catch (err) {
+      setError(
+        getErrorMessage(
+          err,
+          tr("Failed to update token.", "சொல்லைப் புதுப்பிப்பதில் தோல்வி.", "ටෝකනය යාවත්කාලීන කිරීම අසාර්ථක විය.")
+        )
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleMorphFeature = (feature) => {
+    const existing = morph ? morph.split("|").filter(Boolean) : [];
+    const prefix = feature.split("=")[0] + "=";
+    let updated;
+    if (existing.includes(feature)) {
+      updated = existing.filter((f) => f !== feature);
+    } else {
+      updated = existing.filter((f) => !f.startsWith(prefix));
+      updated.push(feature);
+    }
+    setMorph(updated.join("|"));
+  };
+
+  const word = tokenText(token);
+  const posInfo = getPosInfo(pos);
+  const activeMorphs = new Set(morph ? morph.split("|").filter(Boolean) : []);
+
+  return (
+    <div style={{
+      position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+      background: "rgba(15, 23, 42, 0.65)", backdropFilter: "blur(4px)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      zIndex: 9999, padding: 16,
+    }}>
+      <div style={{
+        background: "var(--paper, #ffffff)", borderRadius: 12,
+        width: "100%", maxWidth: 640, maxHeight: "90vh",
+        display: "flex", flexDirection: "column",
+        boxShadow: "0 20px 25px -5px rgba(0,0,0,0.2), 0 8px 10px -6px rgba(0,0,0,0.1)",
+        border: "1px solid var(--border)", overflow: "hidden",
+      }}>
+        {/* Header */}
+        <div style={{
+          padding: "16px 20px", borderBottom: "1px solid var(--border)",
+          background: "var(--bg-lt)", display: "flex", justifyContent: "space-between", alignItems: "center",
+        }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 17, fontWeight: 700, color: "var(--ink)" }}>
+                {tr("Edit NLP Annotation", "NLP தரவைத் திருத்து", "NLP විවරණය සංස්කරණය")}
+              </span>
+              <span className="badge" style={{ background: "var(--mint)", color: "var(--forest)", fontWeight: 700, fontSize: 13 }}>
+                {word}
+              </span>
+            </div>
+            <div style={{ fontSize: 12, color: "var(--ink-lt)", marginTop: 4 }}>
+              {tr("Index", "குறியீட்டு எண்", "දර්ශකය")}: #{tokenIndex + 1}
+              {token.language && ` • ${tr("Lang", "மொழி", "භාෂාව")}: ${token.language.toUpperCase()}`}
+              {totalOccurrences > 1 && ` • ${totalOccurrences} ${tr("occurrences in document", "முறை ஆவணத்தில் உள்ளது", "වාර ගණනක් ලේඛනයේ ඇත")}`}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              background: "none", border: "none", fontSize: 20,
+              cursor: "pointer", color: "var(--ink-lt)", padding: "4px 8px",
+            }}
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Tab Switcher */}
+        <div style={{
+          display: "flex", borderBottom: "1px solid var(--border)", background: "var(--bg-lt)", padding: "0 16px",
+        }}>
+          {[
+            { key: "pos", label: tr("Part-of-Speech", "சொல் வகை (POS)", "පද වර්ගය (POS)") },
+            { key: "lemma", label: tr("Lemmatization", "வேர்ச்சொல் (Lemma)", "ලේමටීකරණය") },
+            { key: "morph", label: tr("Morphology", "உருபியல் (Morphology)", "රූපවිද්‍යාව") },
+          ].map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setActiveTab(t.key)}
+              style={{
+                padding: "10px 16px", border: "none", background: "none",
+                cursor: "pointer", fontSize: 13,
+                fontWeight: activeTab === t.key ? 700 : 500,
+                color: activeTab === t.key ? "var(--forest)" : "var(--ink-lt)",
+                borderBottom: activeTab === t.key ? "3px solid var(--forest)" : "3px solid transparent",
+              }}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Form Body */}
+        <form onSubmit={handleSubmit} style={{ overflowY: "auto", padding: "20px", flex: 1 }}>
+          {error && (
+            <div className="alert-error" style={{ marginBottom: 16 }}>{error}</div>
+          )}
+
+          {/* POS Tab */}
+          {activeTab === "pos" && (
+            <div>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 700, marginBottom: 8, color: "var(--ink)" }}>
+                {tr("Select Part-of-Speech Tag:", "இலக்கண வகையைத் தேர்ந்தெடுக்கவும்:", "පද වර්ග ටැගය තෝරන්න:")}
+              </label>
+
+              <div style={{
+                display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))",
+                gap: 8, maxHeight: 210, overflowY: "auto", padding: 2, marginBottom: 14,
+              }}>
+                {Object.keys(POS_INFO).map((tag) => {
+                  const info = POS_INFO[tag];
+                  const isSelected = pos === tag;
+                  return (
+                    <button
+                      type="button"
+                      key={tag}
+                      onClick={() => setPos(tag)}
+                      title={getPosDesc(tag, lang)}
+                      style={{
+                        padding: "8px 10px", borderRadius: 8, textAlign: "left", cursor: "pointer",
+                        border: isSelected ? `2px solid ${info.color}` : "1px solid var(--border)",
+                        background: isSelected ? info.bg : "var(--paper)",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: info.color }}>{tag}</span>
+                        {isSelected && <span style={{ color: info.color, fontSize: 12, fontWeight: 700 }}>✓</span>}
+                      </div>
+                      <div style={{ fontSize: 11, color: "var(--ink)", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {getPosLabel(tag, lang)}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* POS Preview Card */}
+              <div style={{
+                background: posInfo.bg, border: `1px solid ${posInfo.border}`,
+                borderRadius: 8, padding: "10px 14px", display: "flex", alignItems: "center", gap: 10,
+              }}>
+                <span style={{
+                  fontSize: 13, fontWeight: 700, color: posInfo.color,
+                  padding: "2px 8px", background: "#fff", borderRadius: 4, border: `1px solid ${posInfo.border}`,
+                }}>
+                  {pos}
+                </span>
+                <div>
+                  <strong style={{ fontSize: 13, color: posInfo.color }}>{getPosLabel(pos, lang)}</strong>
+                  <div style={{ fontSize: 11, color: "var(--ink-lt)", marginTop: 2 }}>{getPosDesc(pos, lang)}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Lemma Tab */}
+          {activeTab === "lemma" && (
+            <div>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 700, marginBottom: 8, color: "var(--ink)" }}>
+                {tr("Base Dictionary Form (Lemma):", "வேர்ச்சொல் வடிவம் (Lemma):", "මූලික ශබ්දකෝෂ ස්වරූපය (Lemma):")}
+              </label>
+              <input
+                type="text"
+                className="form-input"
+                value={lemma}
+                onChange={(e) => setLemma(e.target.value)}
+                placeholder="e.g. root/base word"
+                style={{ ...inputStyle, fontSize: 14, fontWeight: 600, marginBottom: 10 }}
+              />
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+                <button
+                  type="button"
+                  onClick={() => setLemma(word)}
+                  style={{
+                    background: "none", border: "1px solid var(--border)", borderRadius: 6,
+                    padding: "4px 10px", fontSize: 12, cursor: "pointer", color: "var(--ink)",
+                  }}
+                >
+                  {tr("Same as Word", "அசல் சொல்", "මුල් වචනය")} ({word})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLemma(word.toLowerCase())}
+                  style={{
+                    background: "none", border: "1px solid var(--border)", borderRadius: 6,
+                    padding: "4px 10px", fontSize: 12, cursor: "pointer", color: "var(--ink)",
+                  }}
+                >
+                  {tr("Lowercase", "சிறிய எழுத்து", "කුඩා අකුරු")} ({word.toLowerCase()})
+                </button>
+              </div>
+              <div style={{
+                background: "var(--bg-lt)", border: "1px solid var(--border)", borderRadius: 8,
+                padding: "10px 14px", fontSize: 12, color: "var(--ink-lt)", lineHeight: 1.5,
+              }}>
+                {tr(
+                  "Lemmatization normalizes words to their canonical dictionary root (e.g. 'marangal' → 'maram', 'walking' → 'walk').",
+                  "வேர்ச்சொல் என்பது ஒரு சொல்லின் அடிப்படை அகராதி வடிவமாகும் (எ.கா. 'மரங்கள்' → 'மரம்', 'நடந்தான்' → 'நட').",
+                  "ලේමටීකරණය මඟින් වචනයක ප්‍රභේද එහි මූලික ශබ්දකෝෂ ස්වරූපයට අඩු කරයි."
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Morphology Tab */}
+          {activeTab === "morph" && (
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <label style={{ fontSize: 12, fontWeight: 700, color: "var(--ink)" }}>
+                  {tr("Morphological Features:", "உருபியல் கூறுகள்:", "රූපවිද්‍යාත්මක ලක්ෂණ:")}
+                </label>
+                {morph && (
+                  <button
+                    type="button"
+                    onClick={() => setMorph("")}
+                    style={{ background: "none", border: "none", color: "var(--danger)", fontSize: 11, cursor: "pointer" }}
+                  >
+                    {tr("Clear All", "அனைத்தையும் நீக்கு", "සියල්ල ඉවත් කරන්න")}
+                  </button>
+                )}
+              </div>
+
+              <input
+                type="text"
+                className="form-input"
+                value={morph}
+                onChange={(e) => setMorph(e.target.value)}
+                placeholder="e.g. Case=Nom|Number=Sing|Tense=Past"
+                style={{ ...inputStyle, fontSize: 13, marginBottom: 10, fontFamily: "monospace" }}
+              />
+
+              {/* Translation preview */}
+              {morph && (
+                <div style={{
+                  marginBottom: 14, padding: "8px 12px", background: "#f0fdf4",
+                  borderRadius: 6, border: "1px solid #bbf7d0", fontSize: 12, color: "#166534",
+                }}>
+                  <strong>{tr("Interpreted:", "விளக்கம்:", "අර්ථය:")} </strong>
+                  {translateMorph(morph, lang) || morph}
+                </div>
+              )}
+
+              {/* Quick toggle chips */}
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--ink-lt)", marginBottom: 6 }}>
+                {tr("Quick Pick Features:", "விரைவு தேர்வு:", "ඉක්මන් තේරීම්:")}
+              </div>
+              <div style={{ maxHeight: 180, overflowY: "auto", border: "1px solid var(--border)", borderRadius: 8, padding: 8 }}>
+                {COMMON_MORPH_FEATURES.map((grp) => (
+                  <div key={grp.category} style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: "var(--forest)", marginBottom: 4 }}>
+                      {pick(grp.name, lang)}
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                      {grp.items.map((item) => {
+                        const active = activeMorphs.has(item.key);
+                        return (
+                          <button
+                            key={item.key}
+                            type="button"
+                            onClick={() => toggleMorphFeature(item.key)}
+                            style={{
+                              padding: "3px 8px", borderRadius: 4, fontSize: 11, cursor: "pointer",
+                              border: active ? "1px solid var(--forest)" : "1px solid var(--border)",
+                              background: active ? "var(--forest)" : "var(--paper)",
+                              color: active ? "#ffffff" : "var(--ink)",
+                              fontWeight: active ? 600 : 400,
+                              transition: "all 0.15s ease",
+                            }}
+                          >
+                            {active ? "✓ " : "+ "}{item.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Scope selection */}
+          <div style={{
+            marginTop: 18, paddingTop: 14, borderTop: "1px solid var(--border)",
+            background: "var(--bg-lt)", padding: "12px 14px", borderRadius: 8,
+          }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink)", marginBottom: 8 }}>
+              {tr("Update Scope:", "புதுப்பிக்கும் பரப்பு:", "යාවත්කාලීන කිරීමේ විෂය පථය:")}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 13 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                <input
+                  type="radio"
+                  name="scope"
+                  checked={applyAll}
+                  onChange={() => setApplyAll(true)}
+                />
+                <span>
+                  {tr(
+                    `Apply to all occurrences of "${word}" in document (${totalOccurrences || 1} occurrences)`,
+                    `ஆவணத்தில் உள்ள அனைத்து "${word}" சொற்களுக்கும் பொருத்துக (${totalOccurrences || 1} முறை)`,
+                    `ලේඛනයේ ඇති සියලුම "${word}" සඳහා යොදන්න (${totalOccurrences || 1} වාරයක්)`
+                  )}
+                </span>
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                <input
+                  type="radio"
+                  name="scope"
+                  checked={!applyAll}
+                  onChange={() => setApplyAll(false)}
+                />
+                <span>
+                  {tr(
+                    `Apply to this token instance only (Token #${tokenIndex + 1})`,
+                    `இந்த ஒரு சொல்லுக்கு மட்டும் பொருத்துக (சொல் #${tokenIndex + 1})`,
+                    `මෙම ටෝකනයට පමණක් යොදන්න (ටෝකනය #${tokenIndex + 1})`
+                  )}
+                </span>
+              </label>
+            </div>
+          </div>
+
+          {/* Footer Buttons */}
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 20 }}>
+            <button type="button" className="btn btn-ghost" onClick={onClose} disabled={saving}>
+              {tr("Cancel", "ரத்துசெய்", "අවලංගු කරන්න")}
+            </button>
+            <button type="submit" className="btn btn-primary" disabled={saving}>
+              {saving
+                ? tr("Saving...", "சேமிக்கிறது...", "සුරකිමින් පවතී...")
+                : tr("Save NLP Changes", "மாற்றங்களைச் சேமி", "වෙනස්කම් සුරකින්න")}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function TokensSection({ nlp, tr, desc, onEditToken }) {
+  const [query, setQuery] = useState("");
+  const needle = query.trim().toLowerCase();
+
+  const allTokens = (nlp.token_details || []).map((tk, idx) => ({ ...tk, __index: idx }));
+  const filtered = allTokens.filter((tk) => !needle || tokenText(tk).toLowerCase().includes(needle));
+
+  const rows = filtered.slice(0, 200).map((tk) => {
+    return [
+      <strong>{tokenText(tk)}</strong>,
+    ];
+  });
+
   return (
     <div>
       <SectionDesc desc={desc} />
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 10 }}>
+        <div style={{ fontSize: 13, color: "var(--ink-lt)" }}>
+          {tr("Showing", "காட்டப்படுகிறது", "පෙන්වන්නේ")}: <strong>{Math.min(filtered.length, 200)}</strong> / {allTokens.length}
+        </div>
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={tr("Search token...", "சொல்லைத் தேடுங்கள்...", "ටෝකනය සොයන්න...")}
+          style={{
+            padding: "6px 12px", borderRadius: 6, border: "1px solid var(--border)",
+            fontSize: 12, background: "var(--paper)", color: "var(--ink)", width: 200,
+          }}
+        />
+      </div>
       <ScrollTable
-        headers={[{ label: tr("Token", "சொல்", "ටෝකනය") }]}
+        headers={[
+          { label: tr("Token", "சொல்", "ටෝකනය") },
+        ]}
         rows={rows}
         emptyText={tr("No tokens found.", "சொற்கள் எதுவும் இல்லை.", "ටෝකන හමු නොවීය.")}
       />
@@ -345,7 +838,7 @@ function SentencesSection({ nlp, desc }) {
   );
 }
 
-function PosSection({ nlp, lang, tr, desc }) {
+function PosSection({ nlp, lang, tr, desc, onEditToken }) {
   const [filter, setFilter] = useState(null);
   const [query, setQuery] = useState("");
 
@@ -353,7 +846,9 @@ function PosSection({ nlp, lang, tr, desc }) {
   const total = distribution.reduce((sum, [, count]) => sum + (typeof count === "number" ? count : 0), 0) || 1;
   const needle = query.trim().toLowerCase();
 
-  const tokens = (nlp.token_details || []).filter((tk) => {
+  const allTokens = (nlp.token_details || []).map((tk, idx) => ({ ...tk, __index: idx }));
+
+  const tokens = allTokens.filter((tk) => {
     const pos = (tk.pos || "").toUpperCase();
     if (filter && pos !== filter.toUpperCase()) return false;
     return !needle || tokenText(tk).toLowerCase().includes(needle) || pos.toLowerCase().includes(needle);
@@ -370,6 +865,18 @@ function PosSection({ nlp, lang, tr, desc }) {
         <span>{getPosLabel(tk.pos, lang)}</span>
         <span style={{ opacity: 0.7, fontSize: 10, fontWeight: 700 }}>({tk.pos})</span>
       </span>,
+      <button
+        type="button"
+        onClick={() => onEditToken && onEditToken(tk, tk.__index, "pos")}
+        className="btn btn-ghost btn-sm"
+        style={{
+          padding: "3px 8px", fontSize: 11, display: "inline-flex",
+          alignItems: "center", gap: 4, borderRadius: 6,
+          border: "1px solid var(--border)", color: "var(--forest)", cursor: "pointer",
+        }}
+      >
+        {tr("Edit POS", "POS திருத்து", "POS සංස්කරණය")}
+      </button>,
     ];
   });
 
@@ -464,22 +971,28 @@ function PosSection({ nlp, lang, tr, desc }) {
               </button>
             )}
           </div>
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={tr("Search word or POS...", "சொல்லைத் தேடுங்கள்...", "වචනයක් සොයන්න...")}
-            style={{
-              padding: "6px 12px", borderRadius: 6, border: "1px solid var(--border)",
-              fontSize: 12, background: "var(--paper)", color: "var(--ink)", width: 220,
-            }}
-          />
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 12, color: "var(--ink-lt)" }}>
+              {tokens.length} {tr("tokens", "சொற்கள்", "ටෝකන")}
+            </span>
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={tr("Search word or POS...", "சொல்லைத் தேடுங்கள்...", "වචනයක් සොයන්න...")}
+              style={{
+                padding: "6px 12px", borderRadius: 6, border: "1px solid var(--border)",
+                fontSize: 12, background: "var(--paper)", color: "var(--ink)", width: 220,
+              }}
+            />
+          </div>
         </div>
 
         <ScrollTable
           headers={[
             { label: tr("Token", "சொல்", "වචනය (ටෝකනය)") },
-            { label: tr("Part-of-Speech", "இலக்கண வகை (POS)", "පද වර්ගය (POS)"), width: 220 },
+            { label: tr("Part-of-Speech", "இலக்கண வகை (POS)", "පද වර්ගය (POS)") },
+            { label: tr("Action", "செயல்", "ක්‍රියාව"), width: 110 },
           ]}
           rows={rows}
           emptyText={tr("No matching tokens found.", "பொருந்தும் சொற்கள் எதுவும் இல்லை.", "ගැලපෙන වචන හමු නොවීය.")}
@@ -489,67 +1002,239 @@ function PosSection({ nlp, lang, tr, desc }) {
   );
 }
 
-function LemmaSection({ nlp, tr, desc }) {
-  const seen = new Set();
-  const pairs = [];
-  for (const tk of nlp.token_details || []) {
+function LemmaSection({ nlp, lang, tr, desc, onEditToken }) {
+  const [query, setQuery] = useState("");
+  const [filterMode, setFilterMode] = useState("modified"); // 'modified' | 'all'
+
+  const allTokens = (nlp.token_details || []).map((tk, idx) => ({ ...tk, __index: idx }));
+  const needle = query.trim().toLowerCase();
+
+  const lemmaChanged = allTokens.filter((tk) => {
     const text = tokenText(tk);
-    if (!tk.lemma || text.toLowerCase() === tk.lemma.toLowerCase()) continue;
-    const key = `${text}→${tk.lemma}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    pairs.push(tk);
-    if (pairs.length >= 100) break;
-  }
+    return tk.lemma && text && tk.lemma.toLowerCase() !== text.toLowerCase();
+  });
+
+  const tokens = allTokens.filter((tk) => {
+    const text = tokenText(tk);
+    const lemma = tk.lemma || text;
+    if (filterMode === "modified" && (!tk.lemma || text.toLowerCase() === tk.lemma.toLowerCase())) {
+      return false;
+    }
+    return !needle || text.toLowerCase().includes(needle) || lemma.toLowerCase().includes(needle);
+  });
+
+  const rows = tokens.slice(0, 200).map((tk) => {
+    const text = tokenText(tk);
+    const isModified = tk.lemma && text.toLowerCase() !== tk.lemma.toLowerCase();
+    return [
+      <strong>{text}</strong>,
+      <span style={{ color: "var(--ink-lt)" }}>→</span>,
+      <span style={{ color: isModified ? "var(--forest)" : "var(--ink)", fontWeight: 600 }}>
+        {tk.lemma || text}
+      </span>,
+      <span className="badge" style={{ fontSize: 11 }}>{tk.language || "en"}</span>,
+      <button
+        type="button"
+        onClick={() => onEditToken && onEditToken(tk, tk.__index, "lemma")}
+        className="btn btn-ghost btn-sm"
+        style={{
+          padding: "3px 8px", fontSize: 11, display: "inline-flex",
+          alignItems: "center", gap: 4, borderRadius: 6,
+          border: "1px solid var(--border)", color: "var(--forest)", cursor: "pointer",
+        }}
+      >
+        {tr("Edit Lemma", "வேர்ச்சொல் திருத்து", "මූල පදය සංස්කරණය")}
+      </button>,
+    ];
+  });
 
   return (
     <div>
       <SectionDesc desc={desc} />
-      {pairs.length > 0 ? (
-        <ScrollTable
-          numbered={false}
-          headers={[
-            { label: tr("Original", "அசல் சொல்", "මුල් වචනය") },
-            { label: "", width: 32 },
-            { label: tr("Base Form (Lemma)", "வேர்ச்சொல்", "මූල ස්වරූපය") },
-            { label: tr("Language", "மொழி", "භාෂාව"), width: 80 },
-          ]}
-          rows={pairs.map((tk) => [
-            <strong>{tokenText(tk)}</strong>,
-            <span style={{ color: "var(--ink-lt)" }}>→</span>,
-            <span style={{ color: "var(--forest)", fontWeight: 600 }}>{tk.lemma}</span>,
-            <span className="badge" style={{ fontSize: 11 }}>{tk.language || "en"}</span>,
-          ])}
+
+      <div style={{
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+        flexWrap: "wrap", gap: 10, marginBottom: 16,
+        background: "var(--bg-lt)", padding: "10px 16px", borderRadius: 8, border: "1px solid var(--border)",
+      }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button
+            type="button"
+            onClick={() => setFilterMode("modified")}
+            style={{
+              padding: "5px 12px", borderRadius: 20, fontSize: 12, cursor: "pointer",
+              border: filterMode === "modified" ? "1px solid var(--forest)" : "1px solid var(--border)",
+              background: filterMode === "modified" ? "var(--forest)" : "var(--paper)",
+              color: filterMode === "modified" ? "#fff" : "var(--ink)",
+              fontWeight: filterMode === "modified" ? 700 : 500,
+            }}
+          >
+            {tr("Reduced to Base Form", "வேர்ச்சொல்லாக மாற்றப்பட்டவை", "මූල ස්වරූපයට අඩු කළ")} ({lemmaChanged.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterMode("all")}
+            style={{
+              padding: "5px 12px", borderRadius: 20, fontSize: 12, cursor: "pointer",
+              border: filterMode === "all" ? "1px solid var(--forest)" : "1px solid var(--border)",
+              background: filterMode === "all" ? "var(--forest)" : "var(--paper)",
+              color: filterMode === "all" ? "#fff" : "var(--ink)",
+              fontWeight: filterMode === "all" ? 700 : 500,
+            }}
+          >
+            {tr("All Tokens", "அனைத்து சொற்களும்", "සියලු ටෝකන")} ({allTokens.length})
+          </button>
+        </div>
+
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={tr("Search word or lemma...", "சொல்லைத் தேடுங்கள்...", "වචනයක් සොයන්න...")}
+          style={{
+            padding: "6px 12px", borderRadius: 6, border: "1px solid var(--border)",
+            fontSize: 12, background: "var(--paper)", color: "var(--ink)", width: 220,
+          }}
         />
-      ) : (
-        <p className="muted" style={{ fontSize: 13 }}>
-          {tr(
-            "All words are already in base form.",
-            "அனைத்து வார்த்தைகளும் ஏற்கனவே அவற்றின் வேர்ச்சொல் வடிவத்தில் உள்ளன.",
-            "සියලු වචන දැනටමත් මූල ස්වරූපයේ ඇත."
-          )}
-        </p>
-      )}
+      </div>
+
+      <ScrollTable
+        numbered={true}
+        headers={[
+          { label: tr("Original", "அசல் சொல்", "මුල් වචනය") },
+          { label: "", width: 32 },
+          { label: tr("Base Form (Lemma)", "வேர்ச்சொல்", "මූල ස්වරූපය") },
+          { label: tr("Language", "மொழி", "භාෂාව"), width: 80 },
+          { label: tr("Action", "செயல்", "ක්‍රියාව"), width: 110 },
+        ]}
+        rows={rows}
+        emptyText={tr("No lemmatized words found.", "பொருந்தும் வேர்ச்சொற்கள் எதுவும் இல்லை.", "ගැලපෙන මූල පද හමු නොවීය.")}
+      />
     </div>
   );
 }
 
-function MorphSection({ nlp, lang, tr, desc }) {
-  const rows = (nlp.token_details || [])
-    .filter((tk) => tk.morph)
-    .slice(0, 50)
-    .map((tk) => [
+function MorphSection({ nlp, lang, tr, desc, onEditToken }) {
+  const [query, setQuery] = useState("");
+  const [filterMode, setFilterMode] = useState("has_morph"); // 'has_morph' | 'all'
+
+  const allTokens = (nlp.token_details || []).map((tk, idx) => ({ ...tk, __index: idx }));
+  const needle = query.trim().toLowerCase();
+
+  const tokensWithMorph = allTokens.filter((tk) => Boolean(tk.morph && tk.morph.trim()));
+
+  const filtered = allTokens.filter((tk) => {
+    if (filterMode === "has_morph" && (!tk.morph || !tk.morph.trim())) return false;
+    if (!needle) return true;
+    const text = tokenText(tk).toLowerCase();
+    const morphStr = (tk.morph || "").toLowerCase();
+    const translated = translateMorph(tk.morph, lang).toLowerCase();
+    return text.includes(needle) || morphStr.includes(needle) || translated.includes(needle);
+  });
+
+  const rows = filtered.slice(0, 200).map((tk) => {
+    const hasMorph = Boolean(tk.morph && tk.morph.trim());
+    return [
       <strong>{tokenText(tk)}</strong>,
-      <span style={{ fontSize: 12 }}>{translateMorph(tk.morph, lang)}</span>,
-    ]);
+      hasMorph ? (
+        <div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 3 }}>
+            {tk.morph.split("|").filter(Boolean).map((feat) => {
+              const translated = (MORPH_LABELS[lang] || MORPH_LABELS.English)[feat] || feat;
+              return (
+                <span
+                  key={feat}
+                  className="badge"
+                  style={{
+                    fontSize: 11, padding: "2px 6px",
+                    background: "#ecfdf5", color: "#065f46", border: "1px solid #a7f3d0",
+                  }}
+                  title={feat}
+                >
+                  {translated}
+                </span>
+              );
+            })}
+          </div>
+          <div style={{ fontSize: 10, color: "var(--ink-lt)", fontFamily: "monospace" }}>
+            {tk.morph}
+          </div>
+        </div>
+      ) : (
+        <span className="muted" style={{ fontSize: 12 }}>
+          {tr("No morphological features assigned", "உருபியல் கூறுகள் இல்லை", "රූපවිද්‍යාත්මක ලක්ෂණ නොමැත")}
+        </span>
+      ),
+      <button
+        type="button"
+        onClick={() => onEditToken && onEditToken(tk, tk.__index, "morph")}
+        className="btn btn-ghost btn-sm"
+        style={{
+          padding: "3px 8px", fontSize: 11, display: "inline-flex",
+          alignItems: "center", gap: 4, borderRadius: 6,
+          border: "1px solid var(--border)", color: "var(--forest)", cursor: "pointer",
+        }}
+      >
+        {tr("Edit Features", "உருபியல் திருத்து", "ලක්ෂණ සංස්කරණය")}
+      </button>,
+    ];
+  });
 
   return (
     <div>
       <SectionDesc desc={desc} />
+
+      <div style={{
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+        flexWrap: "wrap", gap: 10, marginBottom: 16,
+        background: "var(--bg-lt)", padding: "10px 16px", borderRadius: 8, border: "1px solid var(--border)",
+      }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button
+            type="button"
+            onClick={() => setFilterMode("has_morph")}
+            style={{
+              padding: "5px 12px", borderRadius: 20, fontSize: 12, cursor: "pointer",
+              border: filterMode === "has_morph" ? "1px solid var(--forest)" : "1px solid var(--border)",
+              background: filterMode === "has_morph" ? "var(--forest)" : "var(--paper)",
+              color: filterMode === "has_morph" ? "#fff" : "var(--ink)",
+              fontWeight: filterMode === "has_morph" ? 700 : 500,
+            }}
+          >
+            {tr("Tokens with Features", "உருபியல் கூறுகள் உள்ளவை", "ලක්ෂණ සහිත ටෝකන")} ({tokensWithMorph.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterMode("all")}
+            style={{
+              padding: "5px 12px", borderRadius: 20, fontSize: 12, cursor: "pointer",
+              border: filterMode === "all" ? "1px solid var(--forest)" : "1px solid var(--border)",
+              background: filterMode === "all" ? "var(--forest)" : "var(--paper)",
+              color: filterMode === "all" ? "#fff" : "var(--ink)",
+              fontWeight: filterMode === "all" ? 700 : 500,
+            }}
+          >
+            {tr("All Tokens", "அனைத்து சொற்களும்", "සියලු ටෝකන")} ({allTokens.length})
+          </button>
+        </div>
+
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={tr("Search word or feature...", "சொல் அல்லது கூறைத் தேடுங்கள்...", "වචනයක් හෝ ලක්ෂණයක් සොයන්න...")}
+          style={{
+            padding: "6px 12px", borderRadius: 6, border: "1px solid var(--border)",
+            fontSize: 12, background: "var(--paper)", color: "var(--ink)", width: 230,
+          }}
+        />
+      </div>
+
       <ScrollTable
         headers={[
-          { label: tr("Word", "வார்த்தை", "වචනය"), width: 220 },
+          { label: tr("Word", "வார்த்தை", "වචනය"), width: 180 },
           { label: tr("Morphological Features", "இலக்கண உருபியல் கூறுகள்", "රූපවිද්‍යාත්මක ලක්ෂණ") },
+          { label: tr("Action", "செயல்", "ක්‍රියාව"), width: 120 },
         ]}
         rows={rows}
         emptyText={tr("No morphological features found.", "உருபியல் தரவு எதுவும் கிடைக்கவில்லை.", "රූපවිද්‍යාත්මක දත්ත හමු නොවීය.")}
@@ -593,164 +1278,185 @@ const countBy = (items, keyFn) => {
   return out;
 };
 
+const MORPH_EXPANDED_LABELS = {
+  English: {
+    "Number=Sing": "Singular",
+    "Number=Plur": "Plural",
+    "Tense=Pres": "Present tense",
+    "Tense=Past": "Past tense",
+    "Tense=Fut": "Future tense",
+    "VerbForm=Fin": "Finite verb",
+    "VerbForm=Part": "Participle",
+    "VerbForm=Inf": "Infinitive",
+    "Person=1": "First person",
+    "Person=2": "Second person",
+    "Person=3": "Third person",
+    "Aspect=Perf": "Perfective aspect",
+    "Aspect=Prog": "Progressive aspect",
+    "PronType=Prs": "Personal pronoun",
+    "PronType=Art": "Article",
+    "PronType=Dem": "Demonstrative",
+    "PronType=Int": "Interrogative",
+    "Definite=Def": "Article",
+    "Definite=Ind": "Indefinite article",
+    "Voice=Act": "Active voice",
+    "Voice=Pass": "Passive voice",
+    "Mood=Imp": "Imperative mood",
+    "Mood=Ind": "Indicative mood",
+    "Foreign=Yes": "Additional morphological feature",
+    "Typo=Yes": "Additional morphological feature",
+  },
+  Tamil: {
+    "Number=Sing": "ஒருமை",
+    "Number=Plur": "பன்மை",
+    "Tense=Pres": "நிகழ்காலம்",
+    "Tense=Past": "இறந்தகாலம்",
+    "Tense=Fut": "எதிர்காலம்",
+    "VerbForm=Fin": "முற்று வினை",
+    "VerbForm=Part": "பெயரெச்சம்/வினையெச்சம்",
+    "VerbForm=Inf": "தொழிற்பெயர்",
+    "Person=1": "தன்மை",
+    "Person=2": "முன்னிலை",
+    "Person=3": "படர்க்கை",
+    "Aspect=Perf": "முடிந்த நிலை",
+    "Aspect=Prog": "தொடர் நிலை",
+    "PronType=Prs": "தன்மை/முன்னிலை/படர்க்கைப் பெயர்",
+    "PronType=Art": "சுட்டுச்சொல்",
+    "Foreign=Yes": "கூடுதல் உருபனியல் அம்சம்",
+  },
+  Sinhala: {
+    "Number=Sing": "ඒකවචන",
+    "Number=Plur": "බහුවචන",
+    "Tense=Pres": "වර්තමාන කාලය",
+    "Tense=Past": "අතීත කාලය",
+    "Tense=Fut": "අනාගත කාලය",
+    "VerbForm=Fin": "සීමිත ක්‍රියාව",
+    "VerbForm=Part": "කෘදන්තය",
+    "VerbForm=Inf": "අනියම් ක්‍රියාව",
+    "Person=1": "උත්තම පුරුෂ",
+    "Person=2": "මධ්‍යම පුරුෂ",
+    "Person=3": "ප්‍රථම පුරුෂ",
+    "Aspect=Perf": "සම්පූර්ණ ආකාරය",
+    "PronType=Prs": "පුද්ගලික සර්වනාමය",
+    "PronType=Art": "නිපාතය / උපපදය",
+    "Foreign=Yes": "අමතර රූපවිද්‍යාත්මක ලක්ෂණය",
+  },
+};
+
+const getMorphDisplayLabel = (feat, lang) => {
+  if (!feat) return "";
+  if (MORPH_EXPANDED_LABELS[lang]?.[feat]) return MORPH_EXPANDED_LABELS[lang][feat];
+  if (MORPH_LABELS[lang]?.[feat]) return MORPH_LABELS[lang][feat];
+  if (MORPH_EXPANDED_LABELS.English?.[feat]) return MORPH_EXPANDED_LABELS.English[feat];
+  if (MORPH_LABELS.English?.[feat]) return MORPH_LABELS.English[feat];
+  if (feat.startsWith("Foreign=") || feat.startsWith("Typo=") || feat.startsWith("ExtPos=")) {
+    return lang === "Tamil"
+      ? "கூடுதல் உருபனியல் அம்சம்"
+      : lang === "Sinhala"
+      ? "අමතර රූපවිද්‍යාත්මක ලක්ෂණය"
+      : "Additional morphological feature";
+  }
+  if (feat.includes("=")) {
+    const [, val] = feat.split("=");
+    return val;
+  }
+  return feat;
+};
+
 function ChartsSection({ nlp, lang, tr, desc }) {
   const tokens = nlp.token_details || [];
-  const sentences = (nlp.sentences || []).map((s) => (typeof s === "string" ? s : s?.text || s?.sentence || ""));
 
-  const posAll = Object.entries(nlp.pos_distribution || {})
-    .map(([pos, count]) => ({
-      name: getPosLabel(pos, lang),
-      label: `${getPosLabel(pos, lang)} (${pos})`,
-      count,
-      color: getPosInfo(pos).color,
-    }))
-    .sort((a, b) => b.count - a.count);
-  const posChartData = posAll.slice(0, 8);
-  const posTotal = posAll.reduce((sum, p) => sum + p.count, 0) || 1;
-  const posPieData = posAll.slice(0, 6).map((p) => ({ name: p.name, value: Math.round((p.count / posTotal) * 1000) / 10, color: p.color }));
-
-  const topWordsData = (nlp.top_words || []).slice(0, 10).map((item) => {
-    if (Array.isArray(item)) return { word: String(item[0]), count: item[1] };
-    return { word: String(item.word ?? item.text ?? ""), count: item.count ?? item.frequency ?? 0 };
-  });
-
-  const langDist = nlp.statistics?.language_distribution;
-  const langPieData = langDist && Object.keys(langDist).length
-    ? Object.entries(langDist).map(([name, value]) => ({ name, value }))
-    : Object.entries(countBy(tokens, (tk) => LANG_NAMES[tk.language] || tk.language)).map(([name, value]) => ({ name, value }));
-
-  const buckets = [["1-5", 1, 5], ["6-10", 6, 10], ["11-15", 11, 15], ["16-20", 16, 20], ["21-30", 21, 30], ["31+", 31, Infinity]];
-  const sentenceLenData = buckets.map(([range, lo, hi]) => ({
-    range,
-    count: sentences.filter((s) => {
-      const n = s.trim().split(/\s+/).filter(Boolean).length;
-      return n >= lo && n <= hi;
-    }).length,
-  }));
-
-  const tokenLenData = Array.from({ length: 10 }, (_, i) => ({ length: i === 9 ? "10+" : String(i + 1), count: 0 }));
+  // 1. Tokens per Sentence
+  const sentenceTokenCounts = {};
   tokens.forEach((tk) => {
-    const len = Array.from(tokenText(tk)).length;
-    if (len > 0) tokenLenData[Math.min(len, 10) - 1].count += 1;
+    if (tk.sentence_id != null) {
+      sentenceTokenCounts[tk.sentence_id] = (sentenceTokenCounts[tk.sentence_id] || 0) + 1;
+    }
   });
 
-  const stopCount = tokens.filter((tk) => tk.is_stop).length;
-  const stopData = [
-    { name: tr("Content Words", "உள்ளடக்க சொற்கள்", "අන්තර්ගත වචන"), value: tokens.length - stopCount, color: "#4a7c59" },
-    { name: tr("Stop Words", "நிறுத்தச் சொற்கள்", "නවත්වන වචන"), value: stopCount, color: "#cbd5e1" },
-  ].filter((d) => d.value > 0);
+  const rawSentences = nlp.sentences || [];
+  let sentenceChartData = rawSentences.slice(0, 25).map((s, idx) => {
+    const sId = idx + 1;
+    const count = sentenceTokenCounts[sId] != null
+      ? sentenceTokenCounts[sId]
+      : (typeof s === "string" ? s.trim().split(/\s+/).filter(Boolean).length : 0);
+    return { name: `#${sId}`, count };
+  });
 
-  const lemmaChanged = tokens.filter((tk) => tk.lemma && tokenText(tk) && tk.lemma.toLowerCase() !== tokenText(tk).toLowerCase()).length;
-  const lemmaData = [
-    { name: tr("Reduced to Root", "வேர்ச்சொல்லாக மாற்றப்பட்டவை", "මූලයට අඩු කළ"), value: lemmaChanged, color: "#f97316" },
-    { name: tr("Already Base Form", "ஏற்கனவே வேர்ச்சொல்", "දැනටමත් මූල ස්වරූපය"), value: tokens.length - lemmaChanged, color: "#8fb89a" },
-  ].filter((d) => d.value > 0);
+  if (sentenceChartData.length === 0 && Object.keys(sentenceTokenCounts).length > 0) {
+    sentenceChartData = Object.entries(sentenceTokenCounts)
+      .map(([sId, count]) => ({ name: `#${sId}`, count }))
+      .slice(0, 25);
+  }
 
+  // 2. Part-of-Speech Distribution
+  const posChartData = Object.entries(nlp.pos_distribution || {})
+    .map(([pos, count]) => ({
+      name: `${getPosLabel(pos, lang)} (${pos})`,
+      count,
+    }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 12);
+
+  // 3. Morphological Feature Counts
   const morphCounts = {};
   tokens.forEach((tk) => {
     if (!tk.morph) return;
-    String(tk.morph).split("|").forEach((f) => { if (f) morphCounts[f] = (morphCounts[f] || 0) + 1; });
+    String(tk.morph)
+      .split("|")
+      .map((p) => p.trim())
+      .filter(Boolean)
+      .forEach((p) => {
+        const label = getMorphDisplayLabel(p, lang);
+        if (label) morphCounts[label] = (morphCounts[label] || 0) + 1;
+      });
   });
-  const morphData = Object.entries(morphCounts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 8)
-    .map(([feature, count]) => ({ feature: translateMorph(feature, lang), count }));
 
-  const lexicalVariety = tokens.length
-    ? [
-        { name: tr("Unique Tokens", "தனித்துவ சொற்கள்", "අනන්‍ය ටෝකන"), value: nlp.unique_tokens || 0, color: "#1a3a2a" },
-        { name: tr("Repeated Tokens", "மீண்டும் வரும் சொற்கள்", "නැවත යෙදුණු ටෝකන"), value: Math.max((nlp.token_count || tokens.length) - (nlp.unique_tokens || 0), 0), color: "#b0d8b8" },
-      ].filter((d) => d.value > 0)
-    : [];
-
-  const pieLabel = (entry) => `${entry.name} (${entry.value}%)`;
-  const countPieLabel = (entry) => `${entry.name}`;
-  const palette = (entry, i) => entry.color || LANG_COLORS[entry.name] || PIE_COLORS[i % PIE_COLORS.length];
-
-  const renderPie = (data, label, inner = 0) => (
-    <PieChart>
-      <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={inner} outerRadius={80} label={label}>
-        {data.map((entry, i) => <Cell key={entry.name} fill={palette(entry, i)} />)}
-      </Pie>
-      <Tooltip /><Legend />
-    </PieChart>
-  );
+  const morphChartData = Object.entries(morphCounts)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 15);
 
   const cards = [
-    posChartData.length > 0 && (
-      <ChartCard key="pos" title={tr("Part-of-Speech Distribution", "சொல் வகைப் பகிர்வு (POS)", "පද වර්ග බෙදාහැරීම (POS)")}>
-        <BarChart data={posChartData}>
-          <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={0} angle={-15} textAnchor="end" height={45} />
-          <YAxis tick={{ fontSize: 11 }} />
-          <Tooltip formatter={(value, name, item) => [value, item?.payload?.label || name]} />
-          <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-            {posChartData.map((entry) => <Cell key={entry.label} fill={entry.color} />)}
-          </Bar>
-        </BarChart>
-      </ChartCard>
-    ),
-    posPieData.length > 0 && (
-      <ChartCard key="pospie" title={tr("POS Share (%)", "சொல் வகை விகிதம் (%)", "පද වර්ග අනුපාතය (%)")}>
-        {renderPie(posPieData, pieLabel, 45)}
-      </ChartCard>
-    ),
-    topWordsData.length > 0 && (
-      <ChartCard key="topwords" title={tr("Top 10 Most Frequent Words", "அதிகம் பயன்படுத்தப்பட்ட 10 சொற்கள்", "වඩාත්ම භාවිත වචන 10")}>
-        <BarChart data={topWordsData} layout="vertical" margin={{ left: 20 }}>
+    sentenceChartData.length > 0 && (
+      <ChartCard
+        key="sent"
+        title={tr("Tokens per Sentence", "வாக்கியத்திற்கான சொற்கள்", "වාක්‍යයකට ටෝකන")}
+        height={Math.max(260, sentenceChartData.length * 28 + 40)}
+      >
+        <BarChart data={sentenceChartData} layout="vertical" margin={{ left: 10, right: 30, top: 10, bottom: 10 }}>
           <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
-          <YAxis type="category" dataKey="word" tick={{ fontSize: 11 }} width={90} />
+          <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={50} interval={0} />
           <Tooltip />
           <Bar dataKey="count" fill="#2d5a3d" radius={[0, 4, 4, 0]} />
         </BarChart>
       </ChartCard>
     ),
-    langPieData.length > 0 && (
-      <ChartCard key="lang" title={tr("Language Distribution", "மொழிப் பகிர்வு", "භාෂා බෙදාහැරීම")}>
-        {renderPie(langPieData, countPieLabel)}
-      </ChartCard>
-    ),
-    sentences.length > 0 && (
-      <ChartCard key="sentlen" title={tr("Sentence Length (words)", "வாக்கிய நீளம் (சொற்கள்)", "වාක්‍ය දිග (වචන)")}>
-        <BarChart data={sentenceLenData}>
-          <XAxis dataKey="range" tick={{ fontSize: 11 }} />
-          <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-          <Tooltip />
-          <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-        </BarChart>
-      </ChartCard>
-    ),
-    tokens.length > 0 && (
-      <ChartCard key="toklen" title={tr("Token Length (characters)", "சொல் நீளம் (எழுத்துக்கள்)", "ටෝකන දිග (අක්ෂර)")}>
-        <BarChart data={tokenLenData}>
-          <XAxis dataKey="length" tick={{ fontSize: 11 }} />
-          <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-          <Tooltip />
-          <Bar dataKey="count" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-        </BarChart>
-      </ChartCard>
-    ),
-    stopData.length > 1 && (
-      <ChartCard key="stop" title={tr("Stop Words vs Content Words", "நிறுத்தச் சொற்கள் vs உள்ளடக்க சொற்கள்", "නවත්වන වචන vs අන්තර්ගත වචන")}>
-        {renderPie(stopData, countPieLabel, 45)}
-      </ChartCard>
-    ),
-    lemmaData.length > 1 && (
-      <ChartCard key="lemma" title={tr("Lemmatization Impact", "வேர்ச்சொல் தாக்கம்", "ලේමටීකරණ බලපෑම")}>
-        {renderPie(lemmaData, countPieLabel, 45)}
-      </ChartCard>
-    ),
-    lexicalVariety.length > 1 && (
-      <ChartCard key="variety" title={tr("Lexical Variety", "சொல் வளம்", "වචන විවිධත්වය")}>
-        {renderPie(lexicalVariety, countPieLabel, 45)}
-      </ChartCard>
-    ),
-    morphData.length > 0 && (
-      <ChartCard key="morph" title={tr("Top Morphological Features", "முக்கிய உருபியல் கூறுகள்", "ප්‍රධාන රූපවිද්‍යාත්මක ලක්ෂණ")}>
-        <BarChart data={morphData} layout="vertical" margin={{ left: 20 }}>
+    posChartData.length > 0 && (
+      <ChartCard
+        key="pos"
+        title={tr("Part-of-Speech Distribution", "சொல் வகைப் பகிர்வு (POS)", "පද වර්ග බෙදාහැරීම (POS)")}
+        height={Math.max(260, posChartData.length * 28 + 40)}
+      >
+        <BarChart data={posChartData} layout="vertical" margin={{ left: 10, right: 30, top: 10, bottom: 10 }}>
           <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
-          <YAxis type="category" dataKey="feature" tick={{ fontSize: 10 }} width={110} />
+          <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={180} interval={0} />
           <Tooltip />
-          <Bar dataKey="count" fill="#f97316" radius={[0, 4, 4, 0]} />
+          <Bar dataKey="count" fill="#1f3d2b" radius={[0, 4, 4, 0]} />
+        </BarChart>
+      </ChartCard>
+    ),
+    morphChartData.length > 0 && (
+      <ChartCard
+        key="morph"
+        title={tr("Morphological Feature Counts", "உருபனியல் அம்ச எண்ணிக்கை", "රූපවිද්‍යාත්මක ලක්ෂණ ගණන")}
+        height={Math.max(260, morphChartData.length * 28 + 40)}
+      >
+        <BarChart data={morphChartData} layout="vertical" margin={{ left: 10, right: 30, top: 10, bottom: 10 }}>
+          <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
+          <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={180} interval={0} />
+          <Tooltip />
+          <Bar dataKey="count" fill="#5b9374" radius={[0, 4, 4, 0]} />
         </BarChart>
       </ChartCard>
     ),
@@ -759,9 +1465,15 @@ function ChartsSection({ nlp, lang, tr, desc }) {
   return (
     <div>
       <SectionDesc desc={desc} />
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20 }}>
-        {cards}
-      </div>
+      {cards.length > 0 ? (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 24 }}>
+          {cards}
+        </div>
+      ) : (
+        <div style={{ padding: 32, textAlign: "center", color: "var(--ink-lt)" }}>
+          {tr("No visual chart data available.", "வரைபடத் தகவல்கள் எதுவும் இல்லை.", "ප්‍රස්ථාර දත්ත නොමැත.")}
+        </div>
+      )}
     </div>
   );
 }
@@ -777,13 +1489,39 @@ const SECTION_COMPONENTS = {
   charts: ChartsSection,
 };
 
-function NlpTab({ nlp, lang, tr }) {
+function NlpTab({ docId, nlp, lang, tr, onNlpUpdated }) {
   const [sectionKey, setSectionKey] = useState("tokens");
+  const [editingToken, setEditingToken] = useState(null);
+  const [feedback, setFeedback] = useState(null);
   const section = NLP_SECTIONS.find((s) => s.key === sectionKey);
   const Section = SECTION_COMPONENTS[sectionKey];
 
+  const handleStartEdit = (token, index, tab = "pos") => {
+    const word = tokenText(token);
+    const count = (nlp.token_details || []).filter(
+      (t) => tokenText(t).toLowerCase() === word.toLowerCase()
+    ).length;
+    setEditingToken({ token, index, tab, occurrences: count });
+  };
+
+  const handleSaveEdit = async (patch) => {
+    const res = await updateDocumentNlp(docId, patch);
+    if (onNlpUpdated && res.nlp) {
+      onNlpUpdated(res.nlp);
+    }
+    setFeedback({
+      type: "success",
+      text: tr(
+        "NLP annotation updated successfully.",
+        "NLP சிறுகுறிப்பு வெற்றிகரமாக புதுப்பிக்கப்பட்டது.",
+        "NLP විවරණය සාර්ථකව යාවත්කාලීන කරන ලදී."
+      ),
+    });
+    setTimeout(() => setFeedback(null), 3500);
+  };
+
   return (
-    <div style={{ display: "flex", minHeight: 520 }}>
+    <div style={{ display: "flex", minHeight: 520, position: "relative" }}>
       <div style={{
         width: 220, flexShrink: 0, borderRight: "1px solid var(--border)",
         background: "var(--bg-lt)", padding: "12px 0",
@@ -818,11 +1556,41 @@ function NlpTab({ nlp, lang, tr }) {
       </div>
 
       <div style={{ flex: 1, padding: "20px 24px", overflowY: "auto", minWidth: 0 }}>
+        {feedback && (
+          <div
+            className="alert-success"
+            style={{
+              marginBottom: 16, padding: "10px 14px", borderRadius: 8, fontSize: 13,
+              background: "#dcfce7", color: "#15803d", border: "1px solid #bbf7d0",
+            }}
+          >
+            {feedback.text}
+          </div>
+        )}
         <h2 style={{ margin: "0 0 16px 0", fontSize: 18, fontWeight: 700, color: "var(--ink)" }}>
           {pick(section?.label, lang)}
         </h2>
-        <Section key={sectionKey} nlp={nlp} lang={lang} tr={tr} desc={pick(section?.desc, lang)} />
+        <Section
+          key={sectionKey}
+          nlp={nlp}
+          lang={lang}
+          tr={tr}
+          desc={pick(section?.desc, lang)}
+          onEditToken={handleStartEdit}
+        />
       </div>
+
+      <EditTokenModal
+        isOpen={Boolean(editingToken)}
+        token={editingToken?.token}
+        tokenIndex={editingToken?.index}
+        initialTab={editingToken?.tab || "pos"}
+        lang={lang}
+        tr={tr}
+        totalOccurrences={editingToken?.occurrences}
+        onSave={handleSaveEdit}
+        onClose={() => setEditingToken(null)}
+      />
     </div>
   );
 }
@@ -875,7 +1643,7 @@ function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDo
       try {
         const byId = localStorage.getItem(`lrw_crawler_${doc.id}`);
         if (byId) return JSON.parse(byId);
-      } catch {}
+      } catch { }
     }
     return [];
   });
@@ -885,13 +1653,12 @@ function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDo
       try {
         const byId = localStorage.getItem(`lrw_crawler_status_${doc.id}`);
         if (byId) return byId;
-      } catch {}
+      } catch { }
     }
     return "";
   });
 
   const [crawlError, setCrawlError] = useState("");
-  const [editingPageUrl, setEditingPageUrl] = useState(null);
 
   // ── When doc changes, reset state to strictly match THIS document ──
   useEffect(() => {
@@ -915,7 +1682,6 @@ function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDo
           setCrawlResults([]);
         }
       } else {
-        // Brand new URL: do NOT retain any summaries from previously processed URLs!
         setCrawlResults([]);
         setCrawlStatus("");
       }
@@ -925,19 +1691,12 @@ function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDo
     }
   }, [doc?.id, doc?.filename]);
 
-  // ── When switching away to another tab, clear any open inline edit ──
-  useEffect(() => {
-    if (currentTab !== "crawler") {
-      setEditingPageUrl(null);
-    }
-  }, [currentTab]);
-
   // ── Sync to localStorage strictly keyed by document ID ──
   useEffect(() => {
     if (doc?.id && crawlResults && crawlResults.length > 0) {
       try {
         localStorage.setItem(`lrw_crawler_${doc.id}`, JSON.stringify(crawlResults));
-      } catch {}
+      } catch { }
     }
   }, [crawlResults, doc?.id]);
 
@@ -945,7 +1704,7 @@ function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDo
     if (doc?.id && crawlStatus) {
       try {
         localStorage.setItem(`lrw_crawler_status_${doc.id}`, crawlStatus);
-      } catch {}
+      } catch { }
     }
   }, [crawlStatus, doc?.id]);
 
@@ -953,7 +1712,11 @@ function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDo
   const executeCrawl = async () => {
     const urlToCrawl = (currentUrl || targetUrl).trim();
     if (!urlToCrawl) {
-      setCrawlError(tr("No valid URL found for this document.", "இந்த ஆவணத்திற்கான சரியான URL இல்லை.", "මෙම ලேඛනය සඳහා වලංගු URL එකක් හමු නොවීය."));
+      setCrawlError(tr(
+        "No valid URL found for this document.",
+        "இந்த ஆவணத்திற்கான சரியான URL இல்லை.",
+        "මෙම ලේඛනය සඳහා වලංගු URL එකක් හමු නොවීය."
+      ));
       return;
     }
     setCrawlError("");
@@ -968,7 +1731,6 @@ function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDo
     try {
       const data = await crawlWebsite(urlToCrawl, Number(crawlMaxPages), doc?.id);
       const freshPages = data.pages || [];
-      // Replace completely: no previous crawl results remain
       setCrawlResults(freshPages);
 
       setCrawlStatus(tr(
@@ -977,7 +1739,6 @@ function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDo
         `පිටු ${freshPages.length} සාර්ථකව ක්‍රෝල් කරන ලදී.`
       ));
 
-      // Refresh parent document so Overview, Raw, Cleaned, and NLP update immediately
       if (typeof onDocumentUpdated === "function" && doc?.id) {
         onDocumentUpdated(doc.id);
       }
@@ -988,15 +1749,17 @@ function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDo
     }
   };
 
-  // ── Handle Start Crawling button click ──
   const handleStartCrawlClick = (e) => {
     if (e && e.preventDefault) e.preventDefault();
     executeCrawl();
   };
 
-  // ── Explicit clear/delete choice ──
   const handleClearResults = () => {
-    if (window.confirm(tr("Clear saved crawl results for this website?", "இந்த வலைத்தளத்திற்கான சேமிக்கப்பட்ட ஊர்தி முடிவுகளை அழிக்கவா?", "මෙම වෙබ් අඩවිය සඳහා සුරකින ලද ප්‍රතිඵල මකා දැமිය යුතුද?"))) {
+    if (window.confirm(tr(
+      "Clear saved crawl results for this website?",
+      "இந்த வலைத்தளத்திற்கான சேமிக்கப்பட்ட ஊர்தி முடிவுகளை அழிக்கவா?",
+      "මෙම වෙබ් අඩවිය සඳහා සුරකින ලද ප්‍රතිඵල මකා දැමිය යුතුද?"
+    ))) {
       setCrawlResults([]);
       setCrawlStatus("");
       setCrawlError("");
@@ -1005,11 +1768,10 @@ function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDo
           localStorage.removeItem(`lrw_crawler_${doc.id}`);
           localStorage.removeItem(`lrw_crawler_status_${doc.id}`);
         }
-      } catch {}
+      } catch { }
     }
   };
 
-  // ── Navigate to selected page's document and switch to Overview tab ──
   const handleViewDocument = (page) => {
     if (typeof onSelectPage === "function") {
       onSelectPage(page);
@@ -1021,16 +1783,6 @@ function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDo
       }
     }
   };
-
-  const displayHostname = (() => {
-    try {
-      const u = currentUrl || targetUrl;
-      if (!u) return "";
-      return new URL(u.startsWith("http") ? u : "https://" + u).hostname;
-    } catch {
-      return currentUrl || targetUrl || "";
-    }
-  })();
 
   return (
     <div style={{ padding: "8px 0" }}>
@@ -1128,7 +1880,7 @@ function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDo
         <div style={{ marginTop: 16, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <div style={{ flex: 1, minWidth: 260 }}>
             <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-lt)", display: "block", marginBottom: 4 }}>
-              {tr("Target URL", "இலக்கு முகவரி", "ඉலක්கගත URL")}
+              {tr("Target URL", "இலக்கு முகவரி", "ඉලක්කගත URL")}
             </span>
             <input
               type="url"
@@ -1172,7 +1924,9 @@ function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDo
               disabled={crawling}
               style={{ padding: "9px 20px", fontSize: 14, minWidth: 140 }}
             >
-              {crawling ? tr("Crawling…", "ஊர்கிறது…", "ක්‍රෝල් වෙමින්…") : tr("Start Crawling", "ஊரத் தொடங்கு", "ක්‍රෝල් කිරීම அරඹන්න")}
+              {crawling
+                ? tr("Crawling…", "ஊர்கிறது…", "ක්‍රෝල් වෙමින්…")
+                : tr("Start Crawling", "ஊரத் தொடங்கு", "ක්‍රෝල් කිරීම අරඹන්න")}
             </button>
           </div>
         </div>
@@ -1205,14 +1959,13 @@ function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDo
               </span>
             </div>
             <span style={{ fontSize: 12, color: "var(--ink-lt)" }}>
-              {tr("Saved automatically", "தானாக சேமிக்கப்பட்டது", "ස්වයංක්‍රීයව සුරකින லදි")}
+              {tr("Saved automatically", "தானாக சேமிக்கப்பட்டது", "ස්වයංක්‍රීයව සුරකින ලදි")}
             </span>
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {crawlResults.map((page, idx) => {
               const isCurrentDoc = page.doc_id === doc.id || page.url === doc.filename;
-              const isEditingThis = editingPageUrl === page.url;
 
               return (
                 <div
@@ -1238,7 +1991,6 @@ function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDo
                     )}
                   </div>
 
-                  {/* Summary & View Document button aligned to the right */}
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, marginTop: 6 }}>
                     <div style={{
                       flex: 1, minWidth: 0,
@@ -1579,7 +2331,7 @@ export default function DocumentView() {
     try {
       const data = await getDocument(docId);
       setDoc(data);
-    } catch {}
+    } catch { }
   }, [id]);
 
   const handleSelectPage = useCallback(async (page) => {
@@ -1641,21 +2393,12 @@ export default function DocumentView() {
       .catch((e) => {
         if (!cancelled) {
           setLoading(false);
-          const status = e?.response?.status;
-          if (status === 401) {
-            navigate("/login");
-            return;
-          }
-          if (status === 404) {
-            setError("Document not found. It may have been deleted.");
-            return;
-          }
           setError(getErrorMessage(e, "Failed to load document."));
         }
       });
 
     return () => { cancelled = true; };
-  }, [id, location.key]);
+  }, [id, location.state]);
 
   useEffect(() => {
     const handleLang = (e) => setAppLang(e.detail);
@@ -1663,16 +2406,16 @@ export default function DocumentView() {
     return () => window.removeEventListener("lrw_lang_changed", handleLang);
   }, []);
 
-  if (loading) return <div className="page"><p className="muted">Loading document…</p></div>;
+  if (loading) return <div className="page" style={{ paddingTop: 32 }}><p className="muted">Loading document…</p></div>;
   if (error) {
     return (
-      <div className="page" style={{ maxWidth: 720 }}>
+      <div className="page" style={{ maxWidth: 720, paddingTop: 32 }}>
         <div className="alert-error">{error}</div>
         <Link to="/" className="btn btn-ghost btn-sm">← Back to dashboard</Link>
       </div>
     );
   }
-  if (!doc) return <div className="page"><p className="muted">Loading…</p></div>;
+  if (!doc) return <div className="page" style={{ paddingTop: 32 }}><p className="muted">Loading…</p></div>;
 
   const displayDoc = selectedSubpageDoc || doc;
   const nlp = displayDoc.nlp || {};
@@ -1691,11 +2434,11 @@ export default function DocumentView() {
   ];
 
   return (
-    <div className="page">
-      <div className="page-header fade-up">
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 6, flexWrap: "wrap" }}>
+    <div className="page" style={{ paddingTop: 28 }}>
+      <div className="page-header fade-up" style={{ marginBottom: 24 }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+          <div style={{ flex: 1, minWidth: 260 }}>
+            <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 8, flexWrap: "wrap" }}>
               <Link to="/" className="muted" style={{ fontSize: 13, display: "inline-block" }}>
                 ← {tr("Dashboard", "முகப்பு", "පුවරුව")}
               </Link>
@@ -1708,7 +2451,7 @@ export default function DocumentView() {
                 </Link>
               )}
             </div>
-            <h1 className="page-title" style={{ wordBreak: "break-word" }}>{displayDoc.filename}</h1>
+            <h1 className="page-title" style={{ wordBreak: "break-word", fontSize: 28, margin: "4px 0 10px" }}>{displayDoc.filename}</h1>
             <div style={{ display: "flex", gap: 10, marginTop: 8, alignItems: "center", flexWrap: "wrap" }}>
               <span className="badge">{displayDoc.file_type}</span>
               {displayDoc.file_type === "pdf" && <PdfTypeBadge pdfType={displayDoc.pdf_type} />}
@@ -1721,7 +2464,7 @@ export default function DocumentView() {
               {nlp.token_count != null && <span className="muted">{nlp.token_count.toLocaleString()} tokens</span>}
             </div>
           </div>
-          <div style={{ display: "flex", gap: 8, flexShrink: 0, marginLeft: "auto", alignSelf: "flex-start" }}>
+          <div style={{ display: "flex", gap: 8, flexShrink: 0, marginTop: 4 }}>
             {["json", "csv"].map((format) => (
               <button
                 key={format}
@@ -1812,7 +2555,21 @@ export default function DocumentView() {
         {tab === "overview" && <OverviewTab doc={displayDoc} nlp={nlp} tr={tr} />}
         {tab === "raw" && <pre className="snippet">{displayDoc.raw_text || "No raw text available."}</pre>}
         {tab === "cleaned" && <pre className="snippet">{displayDoc.cleaned_text || "No cleaned text available."}</pre>}
-        {tab === "nlp" && displayDoc.nlp && <NlpTab nlp={nlp} lang={lang} tr={tr} />}
+        {tab === "nlp" && displayDoc.nlp && (
+          <NlpTab
+            docId={displayDoc.id || id}
+            nlp={nlp}
+            lang={lang}
+            tr={tr}
+            onNlpUpdated={(newNlp) => {
+              if (selectedSubpageDoc) {
+                setSelectedSubpageDoc((prev) => ({ ...prev, nlp: newNlp }));
+              } else {
+                setDoc((prev) => ({ ...prev, nlp: newNlp }));
+              }
+            }}
+          />
+        )}
         {tab === "metadata" && (
           <MetadataTab
             docId={displayDoc.id || id}

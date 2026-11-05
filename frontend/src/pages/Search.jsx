@@ -1,71 +1,100 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Link } from "react-router-dom";
 import { searchDocuments } from "../api";
 
-const POS_OPTIONS = ["", "NOUN", "VERB", "ADJ", "ADV", "PROPN", "PRON", "DET", "ADP", "NUM"];
-const FILE_TYPES = ["", "text", "pdf", "image", "audio", "url"];
+const POS_OPTIONS = ["NOUN", "VERB", "ADJ", "ADV", "PROPN", "PRON", "DET", "ADP", "NUM"];
+const FILE_TYPES = ["text", "pdf", "image", "audio", "url"];
 const LICENSES = [
-  { value: "", label: "Any" },
-  { value: "public-domain", label: "Public Domain" },
-  { value: "cc0", label: "CC0" },
-  { value: "cc-by", label: "CC BY" },
-  { value: "cc-by-sa", label: "CC BY-SA" },
-  { value: "cc-by-nc", label: "CC BY-NC" },
-  { value: "cc-by-nd", label: "CC BY-ND" },
-  { value: "mit", label: "MIT" },
-  { value: "apache-2.0", label: "Apache 2.0" },
-  { value: "gpl-3.0", label: "GPL 3.0" },
-  { value: "proprietary", label: "Proprietary" },
-  { value: "restricted", label: "Restricted" },
-  { value: "other", label: "Other" }
+  ["public-domain", "Public Domain"],
+  ["cc0", "CC0"],
+  ["cc-by", "CC BY"],
+  ["cc-by-sa", "CC BY-SA"],
+  ["cc-by-nc", "CC BY-NC"],
+  ["cc-by-nd", "CC BY-ND"],
+  ["mit", "MIT"],
+  ["apache-2.0", "Apache 2.0"],
+  ["gpl-3.0", "GPL 3.0"],
+  ["proprietary", "Proprietary"],
+  ["restricted", "Restricted"],
+  ["other", "Other"],
 ];
 
+const FILTER_KEYS = ["pos", "file_type", "domain", "license", "date_from", "date_to"];
+const EMPTY_FILTERS = { q: "", pos: "", file_type: "", domain: "", license: "", date_from: "", date_to: "" };
+const DEBOUNCE_MS = 300;
+
+const countActiveFilters = (filters) => FILTER_KEYS.filter((key) => filters[key]).length;
+
+function FilterField({ id, label, children }) {
+  return (
+    <div>
+      <label className="label" htmlFor={id}>
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+function FilterSelect({ id, label, value, onChange, options }) {
+  return (
+    <FilterField id={id} label={label}>
+      <select id={id} value={value} onChange={onChange}>
+        <option value="">Any</option>
+        {options.map(([optionValue, optionLabel]) => (
+          <option key={optionValue} value={optionValue}>
+            {optionLabel}
+          </option>
+        ))}
+      </select>
+    </FilterField>
+  );
+}
+
+const toOptions = (values) => values.map((value) => [value, value]);
+
 export default function Search() {
-  const [filters, setFilters] = useState({
-    q: "", pos: "", file_type: "", domain: "", license: "",
-    date_from: "", date_to: "",
-  });
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showFilters, setShowFilters] = useState(false);
+  const requestIdRef = useRef(0);
 
-  const upd = (k, v) => setFilters((f) => ({ ...f, [k]: v }));
+  const activeFilterCount = countActiveFilters(filters);
+  const update = (key) => (e) => setFilters((prev) => ({ ...prev, [key]: e.target.value }));
 
-  const runSearch = async () => {
-    const hasActiveFilters = [filters.pos, filters.file_type, filters.domain, filters.license, filters.date_from, filters.date_to]
-      .some(Boolean);
-    if (!filters.q.trim() && !hasActiveFilters) {
+  const runSearch = useCallback(async (current) => {
+    const requestId = ++requestIdRef.current;
+    setError("");
+
+    if (!current.q.trim() && !countActiveFilters(current)) {
       setResults(null);
+      setLoading(false);
       return;
     }
-    setLoading(true); setError("");
-    try {
-      const params = Object.fromEntries(
-        Object.entries(filters).filter(([_, v]) => v !== "")
-      );
-      const data = await searchDocuments(params);
-      setResults(data);
-    } catch (err) {
-      setError(err.response?.data?.detail || "Search failed.");
-    } finally { setLoading(false); }
-  };
 
-  // Live search: auto-run when filters change (debounced at 300ms)
+    setLoading(true);
+    try {
+      const params = Object.fromEntries(Object.entries(current).filter(([, value]) => value !== ""));
+      const data = await searchDocuments(params);
+      if (requestId === requestIdRef.current) setResults(data);
+    } catch (err) {
+      if (requestId === requestIdRef.current) setError(err.response?.data?.detail || "Search failed.");
+    } finally {
+      if (requestId === requestIdRef.current) setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
-    const timer = setTimeout(() => {
-      runSearch();
-    }, 300);
+    const timer = setTimeout(() => runSearch(filters), DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [filters]);
+  }, [filters, runSearch]);
 
   const submit = (e) => {
-    if (e) e.preventDefault();
-    runSearch();
+    e.preventDefault();
+    runSearch(filters);
   };
-
-  const activeFilterCount = [filters.pos, filters.file_type, filters.domain, filters.license, filters.date_from, filters.date_to]
-    .filter(Boolean).length;
 
   return (
     <div className="page">
@@ -78,73 +107,62 @@ export default function Search() {
         <form onSubmit={submit}>
           <div style={{ display: "flex", gap: 10, marginBottom: showFilters ? 20 : 0 }}>
             <input
+              type="text"
+              aria-label="Search keywords"
               value={filters.q}
-              onChange={(e) => upd("q", e.target.value)}
+              onChange={update("q")}
               placeholder="Search keywords…"
               autoFocus
-              style={{ flex: 1, marginBottom: 0 }}
+              style={{ flex: 1 }}
             />
             <button
               type="button"
               className="btn btn-ghost"
-              onClick={() => setShowFilters(!showFilters)}
-              style={{ whiteSpace: "nowrap", flexShrink: 0 }}
+              aria-expanded={showFilters}
+              onClick={() => setShowFilters((open) => !open)}
+              style={{ flexShrink: 0 }}
             >
               Filters {activeFilterCount > 0 && <span className="badge">{activeFilterCount}</span>}
             </button>
-            <button type="submit" disabled={loading} className="btn btn-primary" style={{ flexShrink: 0 }}>
+            <button type="submit" className="btn btn-primary" disabled={loading} style={{ flexShrink: 0 }}>
               {loading ? "…" : "Search"}
             </button>
           </div>
 
           {showFilters && (
-            <div style={{ paddingTop: 4 }}>
+            <>
               <div className="row">
-                <div>
-                  <label className="label">POS tag</label>
-                  <select value={filters.pos} onChange={(e) => upd("pos", e.target.value)}>
-                    {POS_OPTIONS.map((p) => <option key={p} value={p}>{p || "Any"}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="label">Source type</label>
-                  <select value={filters.file_type} onChange={(e) => upd("file_type", e.target.value)}>
-                    {FILE_TYPES.map((p) => <option key={p} value={p}>{p || "Any"}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="label">License</label>
-                  <select value={filters.license} onChange={(e) => upd("license", e.target.value)}>
-                    {LICENSES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-                  </select>
-                </div>
+                <FilterSelect id="filter-pos" label="POS tag" value={filters.pos} onChange={update("pos")} options={toOptions(POS_OPTIONS)} />
+                <FilterSelect id="filter-type" label="Source type" value={filters.file_type} onChange={update("file_type")} options={toOptions(FILE_TYPES)} />
+                <FilterSelect id="filter-license" label="License" value={filters.license} onChange={update("license")} options={LICENSES} />
               </div>
               <div className="row">
-                <div>
-                  <label className="label">Domain</label>
-                  <input value={filters.domain} onChange={(e) => upd("domain", e.target.value)} placeholder="news, science…" />
-                </div>
-                <div>
-                  <label className="label">Date from</label>
-                  <input type="date" value={filters.date_from} onChange={(e) => upd("date_from", e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Date to</label>
-                  <input type="date" value={filters.date_to} onChange={(e) => upd("date_to", e.target.value)} />
-                </div>
+                <FilterField id="filter-domain" label="Domain">
+                  <input id="filter-domain" type="text" value={filters.domain} onChange={update("domain")} placeholder="news, science…" />
+                </FilterField>
+                <FilterField id="filter-from" label="Date from">
+                  <input id="filter-from" type="date" value={filters.date_from} max={filters.date_to || undefined} onChange={update("date_from")} />
+                </FilterField>
+                <FilterField id="filter-to" label="Date to">
+                  <input id="filter-to" type="date" value={filters.date_to} min={filters.date_from || undefined} onChange={update("date_to")} />
+                </FilterField>
               </div>
-            </div>
+            </>
           )}
         </form>
       </div>
 
-      {error && <div className="alert-error">{error}</div>}
+      {error && (
+        <div className="alert-error" role="alert">
+          {error}
+        </div>
+      )}
 
       {results && (
         <div className="card fade-up">
-          <div style={{ marginBottom: 16, display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
             <span style={{ fontFamily: "var(--font-head)", fontSize: 18, color: "var(--forest)" }}>
-              {results.count} result{results.count !== 1 ? "s" : ""}
+              {results.count} result{results.count !== 1 && "s"}
             </span>
             <span className="muted">for {results.query ? `"${results.query}"` : "all matching documents"}</span>
           </div>
@@ -160,7 +178,7 @@ export default function Search() {
           {results.results.map((r) => (
             <div key={r.id} style={{ padding: "16px 0", borderBottom: "1px solid var(--border)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-                <Link to={`/documents/${r.raw_document_id}`} style={{ fontWeight: 600, color: "var(--forest)", fontSize: 15 }}>
+                <Link to={`/documents/${r.raw_document_id}`} style={{ fontSize: 15, fontWeight: 600 }}>
                   {r.filename}
                 </Link>
                 <span className="badge">{r.file_type}</span>

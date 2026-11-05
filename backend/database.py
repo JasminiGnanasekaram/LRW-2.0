@@ -1,9 +1,14 @@
+import certifi
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorGridFSBucket
 from config import get_settings
 
 settings = get_settings()
 
-client = AsyncIOMotorClient(settings.MONGO_URI)
+client_kwargs = {}
+if "mongodb+srv://" in settings.MONGO_URI or "ssl=true" in settings.MONGO_URI.lower() or "tls=true" in settings.MONGO_URI.lower():
+    client_kwargs["tlsCAFile"] = certifi.where()
+
+client = AsyncIOMotorClient(settings.MONGO_URI, **client_kwargs)
 db = client[settings.DB_NAME]
 
 # Collections
