@@ -23,10 +23,8 @@ if pytesseract is not None:
     settings = get_settings()
     if getattr(settings, "TESSERACT_CMD", None):
         pytesseract.pytesseract.tesseract_cmd = settings.TESSERACT_CMD
-    elif os.path.exists(r"C:\Program Files\Tesseract-OCR\tesseract.exe"):
-        pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
-
+     
 def extract_from_text(content: bytes, encoding: str = "utf-8") -> str:
     return content.decode(encoding, errors="replace")
 
@@ -109,15 +107,13 @@ def extract_from_image(content: bytes) -> str:
     settings = get_settings()
     if getattr(settings, "TESSERACT_CMD", None):
         pytesseract.pytesseract.tesseract_cmd = settings.TESSERACT_CMD
-    elif os.path.exists(r"C:\Program Files\Tesseract-OCR\tesseract.exe"):
-        pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
     img = Image.open(io.BytesIO(content))
     try:
         return pytesseract.image_to_string(img, lang="eng+tam+sin")
     except pytesseract.pytesseract.TesseractNotFoundError as exc:
         raise RuntimeError(
-            "Tesseract OCR executable not found. Install Tesseract and add it to PATH, "
+            "Tesseract OCR executable not found. Install Tesseract at the configured absolute path, "
             "or set TESSERACT_CMD in backend/.env to the full tesseract executable path."
         ) from exc
     except Exception as exc:

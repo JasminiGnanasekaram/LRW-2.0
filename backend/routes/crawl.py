@@ -176,7 +176,11 @@ async def start_crawl(
 
     if not 1 <= req.max_pages <= 1000:
         raise HTTPException(
+<<<<<<< HEAD
             status_code=400, detail="max_pages must be between 1 and 50."
+=======
+            status_code=400, detail="max_pages must be between 1 and 1000."
+>>>>>>> origin/main
         )
 
     # Run blocking BFS crawler in a threadpool so we don't block the event loop
