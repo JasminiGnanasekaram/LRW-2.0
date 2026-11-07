@@ -33,6 +33,16 @@ async def lifespan(app: FastAPI):
         masked_key = f"gsk_***{api_key[-4:]}" if api_key.startswith("gsk_") else f"{api_key[:4]}***{api_key[-4:]}"
         logger.info(f"[Groq Check] SUCCESS: GROQ_API_KEY is successfully loaded (masked: '{masked_key}').")
 
+    try:
+        from services.extraction import _resolve_tesseract_cmd
+        tess_path = _resolve_tesseract_cmd()
+        if tess_path and os.path.isfile(tess_path):
+            logger.info(f"[Tesseract Check] SUCCESS: Tesseract executable found at '{tess_path}'.")
+        else:
+            logger.warning(f"[Tesseract Check] WARNING: Tesseract executable not found at '{tess_path}'. Scanned PDFs and image OCR will fail.")
+    except Exception as exc:
+        logger.warning(f"[Tesseract Check] Check error: {exc}")
+
     await init_indexes()
     yield
 

@@ -13,7 +13,9 @@ from services.summarizer import get_text_summary
 router = APIRouter(prefix="/summarize", tags=["summarize"])
 settings = get_settings()
 
-MODEL = "qwen/qwen3.8-27b"
+PRIMARY_MODEL = "llama-3.3-70b-versatile"
+FALLBACK_MODEL = "llama-3.1-8b-instant"
+VISION_MODEL = "qwen/qwen3.8-27b"
 
 
 def get_groq_client():
@@ -84,7 +86,7 @@ def summarize(text: str) -> str:
     try:
         client = get_groq_client()
         response = client.chat.completions.create(
-            model=MODEL,
+            model=PRIMARY_MODEL,
             messages=[
                 {"role": "system", "content": system_content},
                 {"role": "user", "content": prompt_prefix + text[:5000]}
@@ -98,6 +100,22 @@ def summarize(text: str) -> str:
         return get_text_summary(text)
     except Exception as e:
         # Fallback to local extractive summary if Groq fails or API key is not configured
+        try:
+            client = get_groq_client()
+            fallback_res = client.chat.completions.create(
+                model=FALLBACK_MODEL,
+                messages=[
+                    {"role": "system", "content": system_content},
+                    {"role": "user", "content": prompt_prefix + text[:5000]}
+                ],
+                max_tokens=250 if lang != "English" else 80,
+                temperature=0.3,
+            )
+            fb_text = (fallback_res.choices[0].message.content or "").strip()
+            if fb_text:
+                return fb_text
+        except Exception:
+            pass
         print(f"[Summarize] Groq AI failed ({e}), using extractive summarizer fallback.", flush=True)
         return get_text_summary(text)
 
@@ -106,7 +124,7 @@ def summarize_image_b64(b64: str) -> str:
     try:
         client = get_groq_client()
         response = client.chat.completions.create(
-            model="openai/gpt-oss-120b",
+            model=VISION_MODEL,
             messages=[
                 {
                     "role": "system",
@@ -173,6 +191,14 @@ async def summarize_image(file: UploadFile = File(...)):
     try:
         content = await file.read()
         raw_text = extraction.extract("image", content=content, filename=file.filename)
+        if not raw_text and file.filename and not file.filename.lower().endswith(".pdf"):
+            try:
+                b64 = compress_image(content)
+                vision_summary = summarize_image_b64(b64)
+                if vision_summary and "could not process" not in vision_summary.lower():
+                    return {"summary": vision_summary}
+            except Exception:
+                pass
         return {"summary": summarize(raw_text)}
     except HTTPException:
         raise

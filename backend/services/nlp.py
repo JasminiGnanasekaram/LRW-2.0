@@ -24,6 +24,8 @@ except ImportError:
         refine_english_lemma,
     )
 
+NLP_RULES_VERSION = "2.0"
+
 # Precompiled Regexes
 _RE_URL_OR_EMAIL = re.compile(r"(https?://\S+|www\.\S+|\S+@\S+\.\S+)")
 _RE_DECIMAL = re.compile(r"(\d+)\.(\d+)")
@@ -203,110 +205,6 @@ def tokenize_and_tag(text: str) -> Dict[str, Any]:
                     continue
                 pos = token.pos_ or "X"
                 lemma = refine_english_lemma(text_clean, token.lemma_, pos)
-<<<<<<< HEAD
-                lemmas.append(lemma)
-                token_details.append({
-                    'token': text_clean,
-                    'text': text_clean,
-                    'normalized': text_clean.lower(),
-                    'lemma': lemma,
-                    'pos': pos,
-                    'tag': token.tag_ or pos,
-                    'morph': str(token.morph) if token.morph else '',
-                    'language': 'en',
-                    'sentence_id': sent_id,
-                    'is_stop': bool(token.is_stop),
-                })
-        elif sent_lang == 'Tamil':
-            raw_tokens = re.findall(r'[\u0B80-\u0BFF\u200C\u200D]+|[a-zA-Z0-9]+|[^\w\s]', sent)
-            for raw_tok in raw_tokens:
-                tok = raw_tok.strip()
-                if not tok:
-                    continue
-                pos, tag, lemma, morph = analyze_tamil_word(tok)
-                if pos != 'PUNCT':
-                    token_texts.append(tok)
-                    word_freq[tok] += 1
-                pos_counter[pos] += 1
-                lemmas.append(lemma)
-                token_details.append({
-                    'token': tok,
-                    'text': tok,
-                    'normalized': tok,
-                    'lemma': lemma,
-                    'pos': pos,
-                    'tag': tag,
-                    'morph': morph,
-                    'language': 'ta',
-                    'sentence_id': sent_id,
-                    'is_stop': False,
-                })
-        elif sent_lang == 'Sinhala':
-            raw_tokens = re.findall(r'[\u0D80-\u0DFF\u200C\u200D]+|[a-zA-Z0-9]+|[^\w\s]', sent)
-            for raw_tok in raw_tokens:
-                tok = raw_tok.strip()
-                if not tok:
-                    continue
-                pos, tag, lemma, morph = analyze_sinhala_word(tok)
-                if pos != 'PUNCT':
-                    token_texts.append(tok)
-                    word_freq[tok] += 1
-                pos_counter[pos] += 1
-                lemmas.append(lemma)
-                token_details.append({
-                    'token': tok,
-                    'text': tok,
-                    'normalized': tok,
-                    'lemma': lemma,
-                    'pos': pos,
-                    'tag': tag,
-                    'morph': morph,
-                    'language': 'si',
-                    'sentence_id': sent_id,
-                    'is_stop': False,
-                })
-        else:
-            raw_tokens = _tokenize_english_regex(sent)
-            for raw_tok in raw_tokens:
-                tok = raw_tok.strip()
-                if not tok:
-                    continue
-                is_punct = all(c in '.,!?;:|।॥\'"()[]{}<>-–—/\\@#$%&*+=_~^`' for c in tok)
-                pos = 'PUNCT' if is_punct else 'NUM' if tok.isdigit() else 'NOUN'
-                lemma = tok if is_punct else lemmatize_english(tok, pos)
-                if not is_punct:
-                    token_texts.append(tok)
-                    word_freq[tok.lower()] += 1
-                pos_counter[pos] += 1
-                lemmas.append(lemma)
-                token_details.append({
-                    'token': tok,
-                    'text': tok,
-                    'normalized': tok.lower(),
-                    'lemma': lemma,
-                    'pos': pos,
-                    'tag': pos,
-                    'morph': '',
-                    'language': 'en',
-                    'sentence_id': sent_id,
-                    'is_stop': False,
-                })
-    unique_tokens = len({t.lower() for t in token_texts})
-    top_words = [[w, count] for w, count in word_freq.most_common(50)]
-    top_keywords = [w for w, _ in top_words[:5]]
-    return {
-        'tokens': token_texts,
-        'token_count': len(token_texts),
-        'unique_tokens': unique_tokens,
-        'lemmas': lemmas,
-        'token_details': token_details[:5000],
-        'pos_distribution': dict(pos_counter),
-        'top_words': top_words,
-        'top_keywords': top_keywords,
-        'sentences': sentences,
-        'sentence_count': len(sentences),
-    }
-=======
                 _record_token(
                     tok=text_clean,
                     pos=pos,
@@ -323,8 +221,6 @@ def tokenize_and_tag(text: str) -> Dict[str, Any]:
                     token_details=token_details,
                     is_stop=bool(token.is_stop),
                 )
->>>>>>> origin/main
-
         else:
             # Route to respective analyzer
             if sent_lang == "Tamil":
@@ -386,11 +282,13 @@ def tokenize_and_tag(text: str) -> Dict[str, Any]:
     }
 
 
-def compute_statistics(text: str, token_data: Dict[str, Any], lang_data: Dict[str, Any]) -> Dict[str, Any]:
+def compute_statistics(text: str, token_data: Dict[str, Any], lang_data: Dict[str, Any] = None) -> Dict[str, Any]:
     """Compute high-level corpus & document statistics."""
     chars = len(text)
     chars_no_spaces = len(re.sub(r"\s+", "", text))
     paragraphs = [p for p in text.split("\n\n") if p.strip()]
+    if lang_data is None:
+        lang_data = detect_languages(text[:50000])
     lang_dist = {b["language"]: b["percentage"] for b in lang_data.get("languages_detected", [])}
 
     return {

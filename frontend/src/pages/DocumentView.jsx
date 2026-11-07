@@ -12,6 +12,7 @@ import {
   updateDocumentCleanedText,
   crawlWebsite,
   discoverPages,
+  crawlSpecificPage,
 } from "../api";
 
 const PIE_COLORS = ["#1a3a2a", "#4a7c59", "#8fb89a", "#d4e8d0", "#2d5a3d", "#6aaa80", "#b0d8b8", "#386641"];
@@ -1894,13 +1895,84 @@ function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDo
   const [totalAvailablePages, setTotalAvailablePages] = useState(doc?.total_available_pages || null);
   const [discovering, setDiscovering] = useState(false);
 
+  // ── Crawl Mode: 'multiple' vs 'specific' ──
+  const [crawlMode, setCrawlMode] = useState(() => {
+    if (doc?.id) {
+      try {
+        const saved = localStorage.getItem(`lrw_crawler_mode_${doc.id}`);
+        if (saved === "specific" || saved === "multiple") return saved;
+      } catch { }
+    }
+    return "multiple";
+  });
+  const [selectedPageForCrawl, setSelectedPageForCrawl] = useState(() => {
+    if (doc?.id) {
+      try {
+        const saved = localStorage.getItem(`lrw_selected_page_${doc.id}`);
+        if (saved) return JSON.parse(saved);
+      } catch { }
+    }
+    return null;
+  });
+  const [specificType, setSpecificType] = useState("page_number");
+  const [specificPageNumber, setSpecificPageNumber] = useState(1);
+  const [specificPageUrl, setSpecificPageUrl] = useState("");
+  const [specificLoading, setSpecificLoading] = useState(false);
+  const [specificError, setSpecificError] = useState("");
+  const [specificStatus, setSpecificStatus] = useState("");
+  const [viewMode, setViewMode] = useState("crawler"); // "crawler" | "available_pages"
+  const [pageSearchFilter, setPageSearchFilter] = useState("");
+  const [discoveredItems, setDiscoveredItems] = useState(() => {
+    if (doc?.discovered_items && Array.isArray(doc.discovered_items) && doc.discovered_items.length > 0) {
+      return doc.discovered_items;
+    }
+    if (doc?.discovered_pages && Array.isArray(doc.discovered_pages) && doc.discovered_pages.length > 0) {
+      return doc.discovered_pages.map((pUrl, idx) => ({
+        page_number: idx + 1,
+        url: pUrl,
+        title: pUrl.split("/").filter(Boolean).pop()?.replace(/[-_]+/g, " ") || pUrl,
+      }));
+    }
+    return [];
+  });
+  const [specificResult, setSpecificResult] = useState(() => {
+    if (doc?.specific_page_crawl) return doc.specific_page_crawl;
+    if (doc?.id) {
+      try {
+        const cached = localStorage.getItem(`lrw_specific_crawl_${doc.id}`);
+        if (cached) return JSON.parse(cached);
+      } catch { }
+    }
+    return null;
+  });
+
+  // ── Sync discovered items and total count when doc updates ──
+  useEffect(() => {
+    if (doc?.discovered_items && Array.isArray(doc.discovered_items) && doc.discovered_items.length > 0) {
+      setDiscoveredItems(doc.discovered_items);
+      setTotalAvailablePages(doc.discovered_items.length);
+    } else if (doc?.discovered_pages && Array.isArray(doc.discovered_pages) && doc.discovered_pages.length > 0) {
+      const items = doc.discovered_pages.map((pUrl, idx) => ({
+        page_number: idx + 1,
+        url: pUrl,
+        title: pUrl.split("/").filter(Boolean).pop()?.replace(/[-_]+/g, " ") || pUrl,
+      }));
+      setDiscoveredItems(items);
+      setTotalAvailablePages(items.length);
+    } else if (doc?.total_available_pages) {
+      setTotalAvailablePages(doc.total_available_pages);
+    }
+  }, [doc?.id, doc?.discovered_items, doc?.discovered_pages, doc?.total_available_pages]);
+
   // ── Auto-discover total available pages under the website ──
   useEffect(() => {
     const url = (currentUrl || targetUrl).trim();
     if (!url) return;
 
-    if (doc?.total_available_pages && url === targetUrl) {
-      setTotalAvailablePages(doc.total_available_pages);
+    // Always fetch fresh discovery to ensure accurate count
+    if (doc?.total_available_pages && doc?.discovered_items?.length && url === targetUrl) {
+      setTotalAvailablePages(doc.discovered_items.length);
+      setDiscoveredItems(doc.discovered_items);
       return;
     }
 
@@ -1908,8 +1980,41 @@ function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDo
     setDiscovering(true);
     discoverPages(url, doc?.id)
       .then((data) => {
-        if (active && data?.total_available) {
+        if (!active) return;
+        const rawList = (data?.discovered_items && Array.isArray(data.discovered_items) && data.discovered_items.length > 0)
+          ? data.discovered_items
+          : (data?.discovered_pages && Array.isArray(data.discovered_pages) && data.discovered_pages.length > 0)
+          ? data.discovered_pages.map((pUrl, idx) => ({ page_number: idx + 1, url: pUrl, title: pUrl.split("/").filter(Boolean).pop()?.replace(/[-_]+/g, " ") || pUrl }))
+          : [];
+        const seenUrls = new Set();
+        const uniqueList = [];
+        rawList.forEach((it) => {
+          if (!it || !it.url) return;
+          const cleanU = it.url.split("#")[0].replace(/\/+$/, "");
+          if (!seenUrls.has(cleanU)) {
+            seenUrls.add(cleanU);
+            uniqueList.push({ page_number: uniqueList.length + 1, url: it.url, title: it.title || it.url });
+          }
+        });
+        if (uniqueList.length > 0) {
+          setDiscoveredItems(uniqueList);
+          setTotalAvailablePages(uniqueList.length);
+        } else if (data?.total_available) {
           setTotalAvailablePages(data.total_available);
+        }
+        if (false && data?.total_available) {
+          setTotalAvailablePages(data.total_available);
+          if (data?.discovered_items && data.discovered_items.length > 0) {
+            setDiscoveredItems(data.discovered_items);
+          } else if (data?.discovered_pages && data.discovered_pages.length > 0) {
+            setDiscoveredItems(
+              data.discovered_pages.map((pUrl, idx) => ({
+                page_number: idx + 1,
+                url: pUrl,
+                title: pUrl.split("/").filter(Boolean).pop()?.replace(/[-_]+/g, " ") || pUrl,
+              }))
+            );
+          }
         }
       })
       .catch(() => {
@@ -1979,7 +2084,51 @@ function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDo
       setCrawlResults([]);
       setCrawlStatus("");
     }
+    if (doc?.specific_page_crawl) {
+      setSpecificResult(doc.specific_page_crawl);
+    } else if (doc?.id) {
+      try {
+        const byId = localStorage.getItem(`lrw_specific_crawl_${doc.id}`);
+        if (byId) setSpecificResult(JSON.parse(byId));
+        else setSpecificResult(null);
+      } catch {
+        setSpecificResult(null);
+      }
+    } else {
+      setSpecificResult(null);
+    }
+    if (doc?.id) {
+      try {
+        const sp = localStorage.getItem(`lrw_selected_page_${doc.id}`);
+        setSelectedPageForCrawl(sp ? JSON.parse(sp) : null);
+      } catch { setSelectedPageForCrawl(null); }
+    } else { setSelectedPageForCrawl(null); }
   }, [doc?.id, doc?.filename]);
+
+  useEffect(() => {
+    if (doc?.id) {
+      try {
+        if (selectedPageForCrawl) localStorage.setItem(`lrw_selected_page_${doc.id}`, JSON.stringify(selectedPageForCrawl));
+        else localStorage.removeItem(`lrw_selected_page_${doc.id}`);
+      } catch { }
+    }
+  }, [selectedPageForCrawl, doc?.id]);
+
+  useEffect(() => {
+    if (doc?.id) {
+      try {
+        localStorage.setItem(`lrw_crawler_mode_${doc.id}`, crawlMode);
+      } catch { }
+    }
+  }, [crawlMode, doc?.id]);
+
+  useEffect(() => {
+    if (doc?.id && specificResult) {
+      try {
+        localStorage.setItem(`lrw_specific_crawl_${doc.id}`, JSON.stringify(specificResult));
+      } catch { }
+    }
+  }, [specificResult, doc?.id]);
 
   // ── Sync to localStorage strictly keyed by document ID ──
   useEffect(() => {
@@ -2041,6 +2190,23 @@ function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDo
 
   const handleStartCrawlClick = (e) => {
     if (e && e.preventDefault) e.preventDefault();
+    const count = Number(crawlMaxPages);
+    if (!count || count < 1) {
+      alert(tr(
+        "Please enter a valid number of pages to crawl (at least 1).",
+        "ஊர்வதற்கு குறைந்தபட்சம் 1 பக்கத்தையாவது உள்ளிடவும்.",
+        "ක්‍රෝල් කිරීමට වලංගු පිටු ගණනක් ඇතුළත් කරන්න (අවම වශයෙන් 1)."
+      ));
+      return;
+    }
+    if (totalAvailablePages !== null && totalAvailablePages !== undefined && count > totalAvailablePages) {
+      alert(tr(
+        `The entered number of pages (${count}) exceeds the total available pages (${totalAvailablePages}) on this website. Please enter a number between 1 and ${totalAvailablePages}.`,
+        `உள்ளிடப்பட்ட பக்கங்களின் எண்ணிக்கை (${count}) இந்த வலைத்தளத்தின் மொத்த பக்கங்களை (${totalAvailablePages}) விட அதிகமாக உள்ளது. தயவுசெய்து 1 முதல் ${totalAvailablePages} வரையிலான எண்ணை உள்ளிடவும்.`,
+        `ඇතුළත් කළ පිටු ගණන (${count}) මෙම වෙබ් අඩවියේ ඇති මුළු පිටු ගණන (${totalAvailablePages}) ඉක්මවා ඇත. කරුණාකර 1 සහ ${totalAvailablePages} අතර අංකයක් ඇතුළත් කරන්න.`
+      ));
+      return;
+    }
     executeCrawl();
   };
 
@@ -2062,11 +2228,342 @@ function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDo
     }
   };
 
+  const executeSpecificCrawl = async () => {
+    const baseUrl = (currentUrl || targetUrl).trim();
+    if (!baseUrl) {
+      setSpecificError(tr(
+        "No valid website URL found for this document.",
+        "இந்த ஆவணத்திற்கான சரியான வலைத்தள முகவரி இல்லை.",
+        "මෙම ලේඛනය සඳහා වලංගු වෙබ් අඩවි URL එකක් හමු නොවීය."
+      ));
+      return;
+    }
+
+    if (!selectedPageForCrawl || !selectedPageForCrawl.url) {
+      const msg = tr(
+        "Please select a page from the available pages list to crawl.",
+        "ஊர்வதற்கு இருக்கக்கூடிய பக்கங்களின் பட்டியலிலிருந்து ஒரு பக்கத்தைத் தேர்ந்தெடுக்கவும்.",
+        "ක්‍රෝල් කිරීම සඳහා පවතින පිටු ලැයිස්තුවෙන් පිටුවක් තෝරන්න."
+      );
+      setSpecificError(msg);
+      alert(msg);
+      return;
+    }
+    if (false) {
+      const pNum = Number(specificPageNumber);
+      if (!pNum || pNum < 1) {
+        const msg = tr(
+          "Please enter a valid page number (at least 1).",
+          "குறைந்தபட்சம் 1 பக்க எண்ணையாவது உள்ளிடவும்.",
+          "වලංගු පිටු අංකයක් ඇතුළත් කරන්න (අවම වශයෙන් 1)."
+        );
+        setSpecificError(msg);
+        alert(msg);
+        return;
+      }
+      if (totalAvailablePages !== null && totalAvailablePages !== undefined && pNum > totalAvailablePages) {
+        const msg = tr(
+          `The entered page number (${pNum}) exceeds the total available pages (${totalAvailablePages}) on this website. Please enter a page number between 1 and ${totalAvailablePages}.`,
+          `உள்ளிடப்பட்ட பக்க எண் (${pNum}) இந்த வலைத்தளத்தின் மொத்த பக்கங்களை (${totalAvailablePages}) விட அதிகமாக உள்ளது. தயவுசெய்து 1 முதல் ${totalAvailablePages} வரையிலான பக்க எண்ணை உள்ளிடவும்.`,
+          `ඇතුළත් කළ පිටු අංකය (${pNum}) මෙම වෙබ් අඩවියේ ඇති මුළු පිටු ගණන (${totalAvailablePages}) ඉක්මවා ඇත. කරුණාකර 1 සහ ${totalAvailablePages} අතර පිටු අංකයක් ඇතුළත් කරන්න.`
+        );
+        setSpecificError(msg);
+        alert(msg);
+        return;
+      }
+    } else if (false) {
+      const pUrl = (specificPageUrl || "").trim();
+      if (!pUrl) {
+        const msg = tr(
+          "Please enter the direct URL of the specific page.",
+          "குறிப்பிட்ட பக்கத்தின் நேரடி முகவரியை உள்ளிடவும்.",
+          "නිශ්චිත පිටුවේ සෘජු URL එක ඇතුළත් කරන්න."
+        );
+        setSpecificError(msg);
+        alert(msg);
+        return;
+      }
+      try {
+        const parsedTarget = new URL(pUrl.startsWith("http") ? pUrl : `https://${pUrl}`);
+        const parsedBase = new URL(baseUrl.startsWith("http") ? baseUrl : `https://${baseUrl}`);
+        const cleanHost = (h) => h.toLowerCase().split(":")[0].replace(/^www\./, "");
+        if (cleanHost(parsedTarget.hostname) !== cleanHost(parsedBase.hostname)) {
+          const msg = tr(
+            `The entered URL belongs to "${parsedTarget.hostname}", but must belong to this website domain ("${cleanHost(parsedBase.hostname)}").`,
+            `உள்ளிடப்பட்ட URL "${parsedTarget.hostname}" க்கு சொந்தமானது, ஆனால் இந்த வலைத்தளத்திற்கு ("${cleanHost(parsedBase.hostname)}") சொந்தமானதாக இருக்க வேண்டும்.`,
+            `ඇතුළත් කළ URL "${parsedTarget.hostname}" ට අයත් වේ, නමුත් මෙම වෙබ් අඩවියේ ඩොමේනයට ("${cleanHost(parsedBase.hostname)}") අයත් විය යුතුය.`
+          );
+          setSpecificError(msg);
+          alert(msg);
+          return;
+        }
+      } catch {
+        const msg = tr(
+          "Please enter a valid, complete web URL (e.g., https://example.com/article).",
+          "சரியான வலைப்பக்க முகவரியை உள்ளிடவும் (எ.கா: https://example.com/article).",
+          "කරුණාකර වලංගු සම්පූර්ණ වෙබ් URL එකක් ඇතුළත් කරන්න (උදා: https://example.com/article)."
+        );
+        setSpecificError(msg);
+        alert(msg);
+        return;
+      }
+    }
+
+    setSpecificError("");
+    setSpecificLoading(true);
+    setSpecificStatus(tr(
+      "Crawling specific page and generating multilingual summary…",
+      "குறிப்பிட்ட பக்கத்தை ஊர்ந்து சுருக்கம் உருவாக்குகிறது…",
+      "නිශ්චිත පිටුව ක්‍රෝල් කර සාරාංශය ජනනය කරයි…"
+    ));
+
+    try {
+      const payload = {
+        base_url: baseUrl,
+        mode: "selected",
+        page_number: selectedPageForCrawl?.page_number || null,
+        page_url: selectedPageForCrawl?.url || null,
+        document_id: doc?.id || null,
+      };
+      const res = await crawlSpecificPage(payload);
+      setSpecificResult(res);
+      setSpecificStatus(tr(
+        "Specific page successfully crawled!",
+        "குறிப்பிட்ட பக்கம் வெற்றிகரமாக ஊரப்பட்டது!",
+        "නිශ්චිත පිටුව සාර්ථකව ක්‍රෝල් කරන ලදී!"
+      ));
+      if (typeof onDocumentUpdated === "function" && doc?.id) {
+        onDocumentUpdated(doc.id);
+      }
+    } catch (err) {
+      const errMsg = err.response?.data?.detail || err.message || "Failed to crawl specific page.";
+      setSpecificError(errMsg);
+      setSpecificStatus("");
+    } finally {
+      setSpecificLoading(false);
+    }
+  };
+
+  const handleClearSpecificResult = () => {
+    if (window.confirm(tr(
+      "Clear specific crawled page result?",
+      "குறிப்பிட்ட பக்க ஊர்தி முடிவை அழிக்கவா?",
+      "නිශ්චිත ක්‍රෝල් කළ පිටු ප්‍රතිඵලය මකා දැමිය යුතුද?"
+    ))) {
+      setSpecificResult(null);
+      setSpecificStatus("");
+      setSpecificError("");
+      if (doc?.id) {
+        try {
+          localStorage.removeItem(`lrw_specific_crawl_${doc.id}`);
+        } catch { }
+      }
+    }
+  };
+
+  const handleSelectAvailablePage = (item) => {
+    setSelectedPageForCrawl(item);
+    setSpecificError("");
+    if (doc?.id) { try { localStorage.setItem(`lrw_selected_page_${doc.id}`, JSON.stringify(item)); } catch {} }
+
+
+    setCrawlMode("specific");
+    setViewMode("crawler");
+  };
+
   const handleViewDocument = (page) => {
     if (typeof onSelectPage === "function") {
       onSelectPage(page);
     } else if (page?.doc_id && page.doc_id !== doc?.id) {
       navigate(`/documents/${page.doc_id}?tab=overview`, { state: { tab: "overview" } });
+    } else {
+      if (typeof onOpenOverview === "function") {
+        onOpenOverview();
+      }
+    }
+  };
+
+  if (viewMode === "available_pages") {
+    const filteredItems = discoveredItems.filter((item) => {
+      if (!pageSearchFilter.trim()) return true;
+      const q = pageSearchFilter.toLowerCase();
+      return (
+        (item.title && item.title.toLowerCase().includes(q)) ||
+        (item.url && item.url.toLowerCase().includes(q)) ||
+        String(item.page_number) === q
+      );
+    });
+
+    return (
+      <div style={{ padding: "8px 0" }}>
+        {/* Navigation & Header */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => setViewMode("crawler")}
+            style={{ fontWeight: 600, color: "var(--forest)", border: "1px solid var(--border)" }}
+          >
+            ← {tr("Back to Web Crawler", "வலை ஊர்திக்குத் திரும்பு", "වෙබ් ක්‍රෝලර් වෙත ආපසු")}
+          </button>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span className="badge" style={{ background: "var(--forest)", color: "#fff", fontSize: 13, fontWeight: 700, padding: "5px 12px", borderRadius: 14 }}>
+              {tr(`Total Available Pages: ${discoveredItems.length || totalAvailablePages || 0}`, `மொத்த பக்கங்கள்: ${discoveredItems.length || totalAvailablePages || 0}`, `මුළු පවතින පිටු: ${discoveredItems.length || totalAvailablePages || 0}`)}
+            </span>
+          </div>
+        </div>
+
+        {/* Available Pages Card */}
+        <div style={{
+          background: "var(--paper)",
+          border: "1px solid var(--border)",
+          borderRadius: 10,
+          padding: "20px 24px",
+          boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
+            <div>
+              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--forest)" }}>
+                {tr("Discovered Available Pages", "கண்டறியப்பட்ட இருக்கக்கூடிய பக்கங்கள்", "සොයාගත් පවතින පිටු")}
+              </h2>
+              <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--ink-mid)" }}>
+                {tr(
+                  "Select a page from the list below to automatically prepare it for specific page crawling.",
+                  "குறிப்பிட்ட பக்கத்தை ஊர்வதற்கு கீழேயுள்ள பட்டியலிலிருந்து ஒரு பக்கத்தைத் தேர்ந்தெடுக்கவும்.",
+                  "නිශ්චිත පිටුවක් ක්‍රෝල් කිරීම සඳහා පහත ලැයිස්තුවෙන් පිටුවක් තෝරන්න."
+                )}
+              </p>
+            </div>
+
+            {/* Filter Search Input */}
+            <div style={{ minWidth: 260 }}>
+              <input
+                type="text"
+                placeholder={tr("Filter by keyword, title, or URL…", "தலைப்பு அல்லது முகவரி மூலம் தேடு…", "මාතෘකාව හෝ URL මගින් සොයන්න…")}
+                value={pageSearchFilter}
+                onChange={(e) => setPageSearchFilter(e.target.value)}
+                style={{
+                  width: "100%", padding: "7px 12px", fontSize: 13,
+                  borderRadius: 6, border: "1px solid var(--border)",
+                  background: "var(--paper)", color: "var(--ink)",
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Loading or Empty State */}
+          {discovering && discoveredItems.length === 0 ? (
+            <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--ink-mid)" }}>
+              <div style={{ fontSize: 18, marginBottom: 8, fontWeight: 600 }}>
+                {tr("Scanning website to discover all available pages…", "வலைத்தளத்தின் அனைத்து பக்கங்களையும் கண்டறிகிறது…", "සියලුම පිටු සොයා ගැනීමට වෙබ් අඩවිය ස්කෑන් කරයි…")}
+              </div>
+              <p style={{ margin: 0, fontSize: 13 }}>
+                {tr("Checking sitemaps and exploring internal links. Please wait a moment.", "தளவரைபடங்கள் மற்றும் இணைப்புகளைச் சரிபார்க்கிறது. சிறிது நேரம் காத்திருக்கவும்.", "සයිට්මැප් සහ අභ්‍යන්තර සබැඳි පරීක්ෂා කරමින් පවතී.")}
+              </p>
+            </div>
+          ) : filteredItems.length === 0 ? (
+            <div style={{ padding: "36px 20px", textAlign: "center", color: "var(--ink-mid)" }}>
+              <p style={{ margin: 0, fontSize: 14 }}>
+                {pageSearchFilter
+                  ? tr("No pages matched your filter.", "வடிகட்டலுக்குப் பொருந்தும் பக்கங்கள் இல்லை.", "ගැලපෙන පිටු කිසිවක් හමු නොවීය.")
+                  : tr("No subpages could be discovered for this URL.", "இந்த முகவரிக்கான பக்கங்கள் எதுவும் கண்டறியப்படவில்லை.", "මෙම URL සඳහා උප පිටු කිසිවක් සොයාගත නොහැකි විය.")}
+              </p>
+            </div>
+          ) : (
+            <>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, fontSize: 12, color: "var(--ink-lt)" }}>
+                <span>
+                  {tr(
+                    `Showing ${filteredItems.length} of ${discoveredItems.length} pages`,
+                    `${discoveredItems.length} இல் ${filteredItems.length} பக்கங்கள் காட்டப்படுகின்றன`,
+                    `පිටු ${discoveredItems.length} න් ${filteredItems.length} ක් පෙන්වයි`
+                  )}
+                </span>
+              </div>
+
+              {/* Scrollable Pages Table */}
+              <div style={{
+                maxHeight: "540px",
+                overflowY: "auto",
+                border: "1px solid var(--border)",
+                borderRadius: 8,
+              }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, textAlign: "left" }}>
+                  <thead style={{
+                    position: "sticky", top: 0,
+                    background: "var(--bg-subtle, #f8fafc)",
+                    borderBottom: "1px solid var(--border)",
+                    zIndex: 2,
+                  }}>
+                    <tr>
+                      <th style={{ padding: "10px 14px", width: 70, color: "var(--ink-lt)", fontWeight: 700, fontSize: 11, textTransform: "uppercase" }}>
+                        {tr("Page #", "பக்கம் #", "පිටුව #")}
+                      </th>
+                      <th style={{ padding: "10px 14px", color: "var(--ink-lt)", fontWeight: 700, fontSize: 11, textTransform: "uppercase" }}>
+                        {tr("Page Title", "பக்க தலைப்பு", "පිටු මාතෘකාව")}
+                      </th>
+                      <th style={{ padding: "10px 14px", color: "var(--ink-lt)", fontWeight: 700, fontSize: 11, textTransform: "uppercase" }}>
+                        {tr("Full URL", "முழு முகவரி", "සම්පූර්ණ URL")}
+                      </th>
+                      <th style={{ padding: "10px 14px", width: 140, textAlign: "right", color: "var(--ink-lt)", fontWeight: 700, fontSize: 11, textTransform: "uppercase" }}>
+                        {tr("Action", "செயல்", "ක්‍රියාව")}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredItems.map((item) => (
+                      <tr
+                        key={`${item.page_number}-${item.url}`}
+                        style={{
+                          borderBottom: "1px solid var(--border)",
+                          transition: "background 0.15s ease",
+                        }}
+                      >
+                        <td style={{ padding: "10px 14px", fontWeight: 700, color: "var(--forest)" }}>
+                          <span className="badge" style={{ background: "var(--mint)", color: "var(--forest)", fontSize: 12, padding: "2px 8px" }}>
+                            #{item.page_number}
+                          </span>
+                        </td>
+                        <td style={{ padding: "10px 14px", fontWeight: 600, color: "var(--ink)" }}>
+                          {item.title || item.url}
+                        </td>
+                        <td style={{ padding: "10px 14px" }}>
+                          <a
+                            href={item.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: "var(--forest)", textDecoration: "none", wordBreak: "break-all", fontSize: 12 }}
+                            title={item.url}
+                          >
+                            {item.url} ↗
+                          </a>
+                        </td>
+                        <td style={{ padding: "10px 14px", textAlign: "right", whiteSpace: "nowrap" }}>
+                          <button
+                            type="button"
+                            className="btn btn-primary btn-sm"
+                            onClick={() => handleSelectAvailablePage(item)}
+                            style={{ fontSize: 12, padding: "5px 12px" }}
+                            title={tr("Select this page to crawl", "ஊர்வதற்கு இந்த பக்கத்தைத் தேர்ந்தெடு", "ක්‍රෝල් කිරීමට මෙම පිටුව තෝරන්න")}
+                          >
+                            {tr("Select Page", "பக்கத்தைத் தேர்ந்தெடு", "පිටුව තෝරන්න")}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  const _dummy = () => {
+    if (false) {
     } else {
       if (typeof onOpenOverview === "function") {
         onOpenOverview();
@@ -2089,10 +2586,30 @@ function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDo
           <span style={{ fontSize: 30, fontWeight: 800, color: "var(--forest)", lineHeight: 1.1 }}>
             {discovering
               ? tr("Scanning…", "கணக்கிடுகிறது…", "ස්කෑන් වෙමින්…")
-              : (totalAvailablePages !== null ? `${totalAvailablePages}` : "—")}
+              : ((discoveredItems.length || totalAvailablePages) !== null && (discoveredItems.length || totalAvailablePages) !== undefined ? `${discoveredItems.length || totalAvailablePages}` : "—")}
           </span>
           <span style={{ fontSize: 12, color: "var(--ink-mid)" }}>
             {tr("Pages found under this website", "வலைத்தளத்தின் கீழ் உள்ள பக்கங்கள்", "මෙම වෙබ් අඩවිය යටතේ හමු වූ පිටු")}
+          </span>
+          <button
+            type="button"
+            onClick={() => setViewMode("available_pages")}
+            style={{
+              alignSelf: "flex-start",
+              marginTop: 6,
+              padding: "4px 10px",
+              fontSize: 11,
+              fontWeight: 700,
+              borderRadius: 6,
+              display: "none",
+              color: "var(--forest, #1a3a2a)",
+              border: "1px solid var(--border)",
+              cursor: "pointer",
+            }}
+          >
+            {null}
+          </button>
+          <span style={{ display: "none" }}>
           </span>
         </div>
 
@@ -2154,7 +2671,17 @@ function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDo
             </p>
           </div>
 
-          {crawlResults.length > 0 && !crawling && (
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => setViewMode("available_pages")}
+            style={{ color: "var(--forest)", fontSize: 12, padding: "5px 12px", fontWeight: 600, border: "1px solid var(--border)", borderRadius: 6 }}
+            title={tr("View all discoverable pages", "அனைத்துப் பக்கங்களையும் பார்", "සියලුම පිටු බලන්න")}
+          >
+            📄 {tr("View Available Pages", "இருக்கக்கூடிய பக்கங்கள்", "පවතින පිටු බලන්න")}
+          </button>
+
+          {crawlMode === "multiple" && crawlResults.length > 0 && !crawling && (
             <button
               type="button"
               className="btn btn-ghost btn-sm"
@@ -2167,7 +2694,59 @@ function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDo
           )}
         </div>
 
-        <div style={{ marginTop: 16, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        {/* Crawling Mode Switcher */}
+        <div style={{
+          display: "inline-flex",
+          background: "var(--bg-subtle, #f1f5f9)",
+          padding: 4,
+          borderRadius: 8,
+          border: "1px solid var(--border)",
+          marginTop: 14,
+          marginBottom: 16,
+          gap: 4,
+        }}>
+          <button
+            type="button"
+            onClick={() => setCrawlMode("multiple")}
+            style={{
+              padding: "7px 18px",
+              fontSize: 13,
+              fontWeight: 600,
+              borderRadius: 6,
+              border: "none",
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+              background: crawlMode === "multiple" ? "var(--forest, #1a3a2a)" : "transparent",
+              color: crawlMode === "multiple" ? "#ffffff" : "var(--ink-mid)",
+              boxShadow: crawlMode === "multiple" ? "0 1px 3px rgba(0,0,0,0.12)" : "none",
+            }}
+          >
+            {tr("Crawl Multiple Pages", "பல பக்கங்களை ஊர்க", "බහු පිටු ක්‍රෝල් කරන්න")}
+          </button>
+          <button
+            type="button"
+            onClick={() => setCrawlMode("specific")}
+            style={{
+              padding: "7px 18px",
+              fontSize: 13,
+              fontWeight: 600,
+              borderRadius: 6,
+              border: "none",
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+              background: crawlMode === "specific" ? "var(--forest, #1a3a2a)" : "transparent",
+              color: crawlMode === "specific" ? "#ffffff" : "var(--ink-mid)",
+              boxShadow: crawlMode === "specific" ? "0 1px 3px rgba(0,0,0,0.12)" : "none",
+            }}
+          >
+            {tr("Crawl Specific Page", "குறிப்பிட்ட பக்கத்தை ஊர்க", "නිශ්චිත පිටුවක් ක්‍රෝල් කරන්න")}
+          </button>
+        </div>
+
+        {/* Mode 1: Multiple Pages Crawling */}
+        {crawlMode === "multiple" && (
+          <>
+            <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <div style={{ flex: 1, minWidth: 260 }}>
             <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-lt)", display: "block", marginBottom: 4 }}>
               {tr("Target URL", "இலக்கு முகவரி", "ඉලක්කගත URL")}
@@ -2197,9 +2776,15 @@ function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDo
                 id="crawler-pages-input"
                 type="number"
                 min={1}
-                max={totalAvailablePages ? Math.min(totalAvailablePages, 500) : 100}
+                max={totalAvailablePages || undefined}
                 value={crawlMaxPages}
                 onChange={(e) => setCrawlMaxPages(Math.max(1, Number(e.target.value)))}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleStartCrawlClick(e);
+                  }
+                }}
                 disabled={crawling}
                 style={{ width: 100, padding: "7px 10px", fontSize: 14, textAlign: "center", borderRadius: 6, border: "1px solid var(--border)" }}
               />
@@ -2236,10 +2821,355 @@ function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDo
             {crawlError}
           </div>
         )}
+      </>
+    )}
+
+    {/* Mode 2: Specific Page Crawling */}
+    {crawlMode === "specific" && (
+      <div>
+        {!selectedPageForCrawl ? (
+          <div style={{
+            background: "var(--bg-subtle, #f8fafc)",
+            border: "1px dashed var(--border)",
+            borderRadius: 8,
+            padding: "20px 24px",
+            textAlign: "center",
+          }}>
+            <p style={{ margin: "0 0 12px", fontSize: 14, color: "var(--ink-mid)" }}>
+              {tr(
+                "No page selected yet. Choose a specific page from the available pages list to crawl.",
+                "பக்கம் எதுவும் தேர்ந்தெடுக்கப்படவில்லை. ஊர்வதற்கு இருக்கக்கூடிய பக்கங்களின் பட்டியலிலிருந்து ஒரு பக்கத்தைத் தேர்ந்தெடுக்கவும்.",
+                "තවමත් පිටුවක් තෝරා නැත. ක්‍රෝල් කිරීම සඳහා පවතින පිටු ලැයිස්තුවෙන් පිටුවක් තෝරන්න."
+              )}
+            </p>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => setViewMode("available_pages")}
+              style={{ padding: "8px 20px", fontSize: 13, fontWeight: 600 }}
+            >
+              📄 {tr("Select Page from Available Pages", "இருக்கக்கூடிய பக்கங்களிலிருந்து தேர்ந்தெடுக்கவும்", "පවතින පිටු වලින් පිටුවක් තෝරන්න")}
+            </button>
+          </div>
+        ) : (
+          <div style={{
+            background: "var(--bg-subtle, #f8fafc)",
+            border: "1px solid var(--border)",
+            borderRadius: 8,
+            padding: "16px 20px",
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
+              <div style={{ flex: 1, minWidth: 260 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-lt)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                    {tr("Selected Page to Crawl", "ஊர்வதற்குத் தேர்ந்தெடுக்கப்பட்ட பக்கம்", "ක්‍රෝල් කිරීමට තෝරාගත් පිටුව")}
+                  </span>
+                  {selectedPageForCrawl.page_number && (
+                    <span className="badge" style={{ background: "var(--mint)", color: "var(--forest)", fontWeight: 700, fontSize: 12, padding: "2px 8px" }}>
+                      #{selectedPageForCrawl.page_number}
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: "var(--ink)", marginBottom: 4 }}>
+                  {selectedPageForCrawl.title || selectedPageForCrawl.url}
+                </div>
+                <a
+                  href={selectedPageForCrawl.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ fontSize: 12, color: "var(--forest)", textDecoration: "none", wordBreak: "break-all" }}
+                >
+                  {selectedPageForCrawl.url} ↗
+                </a>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => setViewMode("available_pages")}
+                  disabled={specificLoading}
+                  style={{ color: "var(--forest)", fontSize: 12, border: "1px solid var(--border)", padding: "6px 14px", fontWeight: 600 }}
+                  title={tr("Choose a different page from available pages", "வேறு பக்கத்தைத் தேர்ந்தெடுக்கவும்", "වෙනත් පිටුවක් තෝරන්න")}
+                >
+                  {tr("Change Page", "பக்கத்தை மாற்று", "පිටුව වෙනස් කරන්න")}
+                </button>
+
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={executeSpecificCrawl}
+                  disabled={specificLoading}
+                  style={{ padding: "8px 22px", fontSize: 14, minWidth: 140 }}
+                >
+                  {specificLoading
+                    ? tr("Crawling…", "ஊர்கிறது…", "ක්‍රෝල් වෙමින්…")
+                    : tr("Start Crawling", "ஊரத் தொடங்கு", "ක්‍රෝල් කිරීම අරඹන්න")}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        <div style={{ display: "none" }}>
+        <div style={{ display: "flex", gap: 24, alignItems: "center", marginBottom: 16 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>
+            <input
+              type="radio"
+              name="specificCrawlOption"
+              value="page_number"
+              checked={specificType === "page_number"}
+              onChange={() => { setSpecificType("page_number"); setSpecificError(""); }}
+              disabled={specificLoading}
+              style={{ accentColor: "var(--forest)", cursor: "pointer" }}
+            />
+            <span>{tr("Crawl by Page Number", "பக்க எண் மூலம் ஊர்க", "පිටු අංකය මගින් ක්‍රෝල් කරන්න")}</span>
+          </label>
+
+          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>
+            <input
+              type="radio"
+              name="specificCrawlOption"
+              value="page_url"
+              checked={specificType === "page_url"}
+              onChange={() => { setSpecificType("page_url"); setSpecificError(""); }}
+              disabled={specificLoading}
+              style={{ accentColor: "var(--forest)", cursor: "pointer" }}
+            />
+            <span>{tr("Crawl by Page URL", "பக்க முகவரி மூலம் ஊர்க", "පිටු URL මගින් ක්‍රෝල් කරන්න")}</span>
+          </label>
+        </div>
+
+        {specificType === "page_number" ? (
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 12, flexWrap: "wrap" }}>
+            <div style={{ minWidth: 240 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                <label htmlFor="specific-page-number" style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-lt)", margin: 0 }}>
+                  {tr("Enter Page Number", "பக்க எண்ணை உள்ளிடவும்", "පිටු අංකය ඇතුළත් කරන්න")}
+                  {totalAvailablePages ? ` (1 – ${totalAvailablePages})` : ""}
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("available_pages")}
+                  style={{
+                    background: "none", border: "none", padding: 0,
+                    color: "var(--forest)", fontSize: 11, fontWeight: 600,
+                    cursor: "pointer", textDecoration: "underline",
+                  }}
+                  title={tr("Browse and select from available pages", "இருக்கக்கூடிய பக்கங்களை உலாவவும்", "පවතින පිටු පිරික්සන්න")}
+                >
+                  {tr("View Available Pages", "பக்கங்களைப் பார்", "පිටු ලැයිස්තුව")}
+                </button>
+              </div>
+              <label style={{ display: "none" }}>
+                {tr("Enter Page Number", "பக்க எண்ணை உள்ளிடவும்", "පිටු අංකය ඇතුළත් කරන්න")}
+                {totalAvailablePages ? ` (1 – ${totalAvailablePages})` : ""}
+              </label>
+              <input
+                id="specific-page-number"
+                type="number"
+                min={1}
+                max={totalAvailablePages || undefined}
+                value={specificPageNumber}
+                onChange={(e) => setSpecificPageNumber(Math.max(1, Number(e.target.value)))}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    executeSpecificCrawl();
+                  }
+                }}
+                disabled={specificLoading}
+                placeholder="1"
+                style={{
+                  width: 140, padding: "8px 12px", fontSize: 14, textAlign: "center",
+                  borderRadius: 6, border: "1px solid var(--border)",
+                  background: "var(--paper)", color: "var(--ink)",
+                }}
+              />
+            </div>
+
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={executeSpecificCrawl}
+              disabled={specificLoading}
+              style={{ padding: "9px 22px", fontSize: 14, minWidth: 140 }}
+            >
+              {specificLoading
+                ? tr("Crawling…", "ஊர்கிறது…", "ක්‍රෝල් වෙමින්…")
+                : tr("Start Crawling", "ஊரத் தொடங்கு", "ක්‍රෝල් කිරීම අරඹන්න")}
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 12, flexWrap: "wrap" }}>
+            <div style={{ flex: 1, minWidth: 280 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                <label htmlFor="specific-page-url" style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-lt)", margin: 0 }}>
+                  {tr("Enter Specific Page URL", "குறிப்பிட்ட பக்க முகவரியை உள்ளிடவும்", "නිශ්චිත පිටු URL ඇතුළත් කරන්න")}
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("available_pages")}
+                  style={{
+                    background: "none", border: "none", padding: 0,
+                    color: "var(--forest)", fontSize: 11, fontWeight: 600,
+                    cursor: "pointer", textDecoration: "underline",
+                  }}
+                  title={tr("Browse and select from available pages", "இருக்கக்கூடிய பக்கங்களை உலாவவும்", "පවතින පිටු පිරික්සන්න")}
+                >
+                  {tr("View Available Pages", "பக்கங்களைப் பார்", "පිටු ලැයිස්තුව")}
+                </button>
+              </div>
+              <label style={{ display: "none" }}>
+                {tr("Enter Specific Page URL", "குறிப்பிட்ட பக்க முகவரியை உள்ளிடவும்", "නිශ්චිත පිටු URL ඇතුළත් කරන්න")}
+              </label>
+              <input
+                id="specific-page-url"
+                type="url"
+                value={specificPageUrl}
+                onChange={(e) => setSpecificPageUrl(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    executeSpecificCrawl();
+                  }
+                }}
+                disabled={specificLoading}
+                placeholder={currentUrl ? `${currentUrl.replace(/\/+$/, "")}/article-example` : "https://example.com/page"}
+                style={{
+                  width: "100%", padding: "8px 12px", fontSize: 13,
+                  borderRadius: 6, border: "1px solid var(--border)",
+                  background: "var(--paper)", color: "var(--ink)",
+                }}
+              />
+            </div>
+
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={executeSpecificCrawl}
+              disabled={specificLoading}
+              style={{ padding: "9px 22px", fontSize: 14, minWidth: 140 }}
+            >
+              {specificLoading
+                ? tr("Crawling…", "ஊர்கிறது…", "ක්‍රෝල් වෙමින්…")
+                : tr("Start Crawling", "ஊரத் தொடங்கு", "ක්‍රෝල් කිරීම අරඹන්න")}
+            </button>
+          </div>
+        )}
+
+        </div>
+        {specificStatus && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 8,
+            marginTop: 16, padding: "10px 14px", borderRadius: 8,
+            background: "var(--mint)", fontSize: 13, color: "var(--forest)", fontWeight: 600,
+          }}>
+            {specificStatus}
+          </div>
+        )}
+
+        {specificError && (
+          <div className="alert-error" style={{ marginTop: 16 }}>
+            {specificError}
+          </div>
+        )}
+      </div>
+    )}
+    {false && crawlError && (
+          <div className="alert-error" style={{ marginTop: 16 }}>
+            {crawlError}
+          </div>
+        )}
       </div>
 
       {/* Crawled Results */}
-      {crawlResults.length > 0 && (
+      {/* Specific Page Crawl Result */}
+      {crawlMode === "specific" && specificResult && (
+        <div style={{
+          background: "var(--paper)",
+          border: "1px solid var(--border)",
+          borderRadius: 10,
+          padding: "20px 24px",
+          marginBottom: 20,
+          boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 14 }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-lt)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                  {tr("Specific Page Crawl Result", "குறிப்பிட்ட பக்க ஊர்தி முடிவு", "නිශ්චිත පිටු ක්‍රෝලර් ප්‍රතිඵලය")}
+                </span>
+                {specificResult.page_number && (
+                  <span className="badge" style={{ background: "var(--mint)", color: "var(--forest)", fontWeight: 700, fontSize: 12, padding: "2px 8px" }}>
+                    {tr(`Page #${specificResult.page_number}`, `பக்கம் #${specificResult.page_number}`, `පිටුව #${specificResult.page_number}`)}
+                  </span>
+                )}
+              </div>
+              <h3 style={{ margin: "4px 0 8px", fontSize: 18, fontWeight: 700, color: "var(--ink)", lineHeight: 1.3 }}>
+                {specificResult.page_title || specificResult.page_url}
+              </h3>
+              <a
+                href={specificResult.page_url}
+                target="_blank"
+                rel="noreferrer"
+                style={{ fontSize: 13, color: "var(--forest)", textDecoration: "none", wordBreak: "break-all" }}
+              >
+                {specificResult.page_url} ↗
+              </a>
+            </div>
+
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => handleViewDocument({
+                  doc_id: specificResult.doc_id,
+                  url: specificResult.page_url,
+                  text: specificResult.raw_text || specificResult.text,
+                  summary: specificResult.summary,
+                  title: specificResult.page_title,
+                })}
+                style={{ padding: "8px 18px", fontSize: 13, fontWeight: 600 }}
+              >
+                {tr("View Document", "ஆவணத்தைப் பார்", "ලේඛනය බලන්න")}
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={handleClearSpecificResult}
+                style={{ color: "var(--danger)", fontSize: 12 }}
+                title={tr("Clear result", "முடிவை அழி", "ප්‍රතිඵලය මකන්න")}
+              >
+                {tr("Clear", "அழி", "මකන්න")}
+              </button>
+            </div>
+          </div>
+
+          <div style={{
+            marginTop: 16,
+            background: "var(--bg-subtle, #f8fafc)",
+            border: "1px solid var(--border)",
+            borderRadius: 8,
+            padding: "16px 18px",
+          }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--forest)", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              {tr("Extracted Content Summary", "பிரித்தெடுக்கப்பட்ட உள்ளடக்கச் சுருக்கம்", "උපුටාගත් අන්තර්ගත සාරාංශය")}
+            </div>
+            <p style={{
+              margin: 0,
+              fontSize: 14,
+              lineHeight: 1.6,
+              color: "var(--ink)",
+              whiteSpace: "pre-wrap",
+            }}>
+              {specificResult.summary || tr("No summary generated.", "சுருக்கம் இல்லை.", "සාරාංශයක් නොමැත.")}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Crawled Results */}
+      {crawlMode === "multiple" && crawlResults.length > 0 && (
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
             <div style={{ fontSize: 16, fontWeight: 700, color: "var(--ink)", display: "flex", alignItems: "center", gap: 10 }}>
@@ -2801,7 +3731,8 @@ export default function DocumentView() {
       created_at: doc?.created_at,
       is_crawled_subpage: true,
       parent_document_id: doc?.id,
-      metadata: { source: "crawler", crawled_url: page.url },
+      metadata: { source: "crawler", crawled_url: page.url, title: page.title },
+      title: page.title,
       nlp: null,
     };
     setSelectedSubpageDoc(previewDoc);

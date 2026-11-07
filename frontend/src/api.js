@@ -167,3 +167,6 @@ export const crawlWebsite = (url, max_pages = 10, document_id = null) =>
 
 export const discoverPages = (url, document_id = null) =>
   unwrap(api.get("/crawl/discover", { params: { url, document_id } }));
+
+export const crawlSpecificPage = (payload) =>
+  unwrap(api.post("/crawl/specific", payload));
