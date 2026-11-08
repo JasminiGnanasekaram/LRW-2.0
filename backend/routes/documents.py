@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, UploadFile, File, Form, Body, HTTPException
 from fastapi.responses import JSONResponse, PlainTextResponse
-from fastapi.concurrency import run_in_threadpool
 from datetime import datetime
 from collections import Counter
 from bson import ObjectId
@@ -86,6 +85,7 @@ async def upload(
     file_type: str = Form(...),   # text | pdf | image | audio | url
     url: Optional[str] = Form(None),
     metadata: Optional[str] = Form(None),  # JSON string
+    language: Optional[str] = Form(None),  # language hint for audio (e.g. 'ta', 'si', 'en')
     user: dict = Depends(get_current_user),
 ):
     """Upload a document or URL. Runs extraction + cleaning + NLP synchronously."""
@@ -145,7 +145,7 @@ async def upload(
             raise HTTPException(status_code=400, detail="file required")
         content = await file.read()
         try:
-            raw_text = await run_in_threadpool(extraction.extract, file_type, content=content, filename=file.filename)
+            raw_text = extraction.extract(file_type, content=content, filename=file.filename, language=language)
         except NotImplementedError as e:
             raise HTTPException(status_code=501, detail=str(e))
         except Exception as e:
@@ -237,8 +237,9 @@ async def upload(
     # 7. Generate Summary
     summary = ""
     try:
+        from fastapi.concurrency import run_in_threadpool
         from .summarize import summarize
-        summary = await run_in_threadpool(summarize, cleaned_text)
+        summary = await run_in_threadpool(summarize, cleaned_text[:5000])
     except Exception as e:
         import logging
         logging.getLogger("uvicorn.error").warning(f"Failed to generate summary during upload: {e}")
@@ -287,11 +288,12 @@ async def get_document(doc_id: str, user: dict = Depends(get_current_user)):
         analysis = await nlp_analysis_col.find_one({"cleaned_document_id": cleaned["_id"]})
         if (
             not analysis
-            or "sentiment" not in analysis.get("data", {})
-            or "classification" not in analysis.get("data", {})
-            or "sentences" not in analysis.get("data", {})
+            or not isinstance(analysis.get("data"), dict)
+            or "token_details" not in analysis["data"]
+            or "sentences" not in analysis["data"]
         ):
             try:
+                from fastapi.concurrency import run_in_threadpool
                 analysis_data = await run_in_threadpool(nlp.analyze, cleaned.get("text") or "")
                 if analysis:
                     await nlp_analysis_col.update_one(
@@ -316,8 +318,9 @@ async def get_document(doc_id: str, user: dict = Depends(get_current_user)):
     if not raw.get("summary") and cleaned and cleaned.get("text"):
         summary = ""
         try:
+            from fastapi.concurrency import run_in_threadpool
             from .summarize import summarize
-            summary = await run_in_threadpool(summarize, cleaned.get("text"))
+            summary = await run_in_threadpool(summarize, cleaned.get("text")[:5000])
         except Exception as e:
             import logging
             logging.getLogger("uvicorn.error").warning(f"Failed to auto-generate missing summary: {e}")
@@ -411,14 +414,14 @@ async def update_document_nlp(
         for idx, tk in enumerate(token_details):
             if not isinstance(tk, dict):
                 continue
-            tk_text = (tk.get("token") or tk.get("text") or "").strip().lower()
+            tk_text = (tk.get("text") or tk.get("token") or "").strip().lower()
             match = False
 
-            if apply_all and target_word:
+            if token_index is not None and idx == token_index:
+                match = True
+            elif apply_all and target_word:
                 if tk_text == target_word:
                     match = True
-            elif token_index is not None and idx == token_index:
-                match = True
             elif not apply_all and target_word and tk_text == target_word and updated_count == 0:
                 match = True
 

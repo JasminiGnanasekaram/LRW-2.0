@@ -283,11 +283,11 @@ const translateMorph = (morph, lang) => {
 function PdfTypeBadge({ pdfType }) {
   if (!pdfType) return null;
   const config = {
-    text_only: { label: "Text Only PDF", bg: "#e8f5e9", color: "#2d6a4f", icon: "📄" },
-    text_image: { label: "Text + Images PDF", bg: "#fff8e1", color: "#b45309", icon: "🖼️" },
-    image_only: { label: "Scanned / Image PDF", bg: "#fce4ec", color: "#c62828", icon: "📷" },
+    text_only: { label: "Text Only PDF", bg: "#e8f5e9", color: "#2d6a4f" },
+    text_image: { label: "Text + Images PDF", bg: "#fff8e1", color: "#b45309"},
+    image_only: { label: "Scanned / Image PDF", bg: "#fce4ec", color: "#c62828" },
   };
-  const c = config[pdfType] || { label: pdfType, bg: "#f5f5f5", color: "#555", icon: "📄" };
+  const c = config[pdfType] || { label: pdfType, bg: "#f5f5f5", color: "#555"};
   return (
     <span style={{
       display: "inline-flex", alignItems: "center", gap: 6, background: c.bg,
@@ -2359,7 +2359,7 @@ export default function DocumentView() {
                 title={`Download ${format.toUpperCase()} format`}
                 onClick={() => exportDocument(displayDoc.id || id, format, baseName)}
               >
-                📥 {format.toUpperCase()}
+                {format.toUpperCase()}
               </button>
             ))}
           </div>
@@ -2381,7 +2381,7 @@ export default function DocumentView() {
             marginBottom: 16,
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--forest)", fontWeight: 600, flex: 1, minWidth: 200 }}>
-              <span>📄</span>
+              <span></span>
               <span>{tr("Viewing crawled subpage:", "பார்வையிடும் ஊரப்பட்ட பக்கம்:", "නරඹන උප පිටුව:")}</span>
               <span style={{ color: "var(--ink)", fontWeight: 500, wordBreak: "break-all" }}>{selectedSubpageDoc.filename}</span>
             </div>

@@ -21,6 +21,7 @@ Pillow>=11.0.0
 pytesseract>=0.3.13
 beautifulsoup4>=4.12.3
 requests>=2.32.0
+open-tamil>=1.1
 
 # NLP
 spacy>=3.8.0
