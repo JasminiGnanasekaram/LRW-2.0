@@ -125,4 +125,8 @@ def get_structured_summary(text: str) -> Dict[str, Any]:
         "short_summary": _summarize(text, sentences, scores),
         "key_points": key_points,
         "important_topics": [w for w, _ in word_freq.most_common(MAX_TOPICS)],
+<<<<<<< HEAD
     }
+=======
+    }
+>>>>>>> Miruthviga

@@ -2,6 +2,7 @@ import inspect
 import os
 import sys
 import unittest
+from collections import Counter
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -31,6 +32,27 @@ class CsvExportTests(unittest.TestCase):
         self.assertIn("token", csv_lower)
         self.assertIn("hello", csv_lower)
         self.assertIn("world", csv_lower)
+<<<<<<< HEAD
+=======
+        self.assertNotIn("language breakdown", csv_lower)
+        self.assertNotIn("named entities", csv_lower)
+        self.assertNotIn("sentiment", csv_lower)
+        self.assertNotIn("classification", csv_lower)
+
+    def test_document_routes_are_not_duplicated_and_list_supports_limit(self):
+        export_paths = [route.path for route in router.routes if route.path and "export" in route.path]
+        self.assertEqual(export_paths.count("/documents/{document_id}/export"), 1)
+        self.assertIn("limit", inspect.signature(list_documents).parameters)
+>>>>>>> Miruthviga
+
+        route_keys = [
+            (method, route.path)
+            for route in router.routes
+            if route.path
+            for method in getattr(route, "methods", set())
+        ]
+        duplicate_routes = [key for key, count in Counter(route_keys).items() if count > 1]
+        self.assertEqual(duplicate_routes, [])
 
 
 if __name__ == "__main__":

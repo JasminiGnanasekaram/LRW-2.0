@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_BASE = "/api";
+const API_BASE = import.meta.env.VITE_API_URL || "/api";
 const TOKEN_KEY = "lrw_token";
 const USER_KEY = "lrw_user";
 const USER_EVENT = "lrw_user_updated";
@@ -82,10 +82,12 @@ export async function login(email, password) {
 }
 
 export async function logout() {
-  try { await api.post("/auth/logout"); } catch { }
-  localStorage.removeItem("lrw_token");
-  localStorage.removeItem("lrw_user");
-  window.dispatchEvent(new CustomEvent("lrw_user_updated", { detail: null }));
+  try {
+    await api.post("/auth/logout");
+  } catch {
+    // Always clear the local session, including when the server is unavailable.
+  }
+  clearSession();
 }
 
 export function currentUser() {
@@ -107,14 +109,15 @@ export async function uploadAvatar(file) {
   return data.user;
 }
 
-export async function uploadDocument({ file, fileType, url, metadata }) {
+export function uploadDocument({ file, fileType, url, metadata, summary, language }) {
   const form = new FormData();
   form.append("file_type", fileType);
   if (file) form.append("file", file);
   if (url) form.append("url", url);
   if (metadata) form.append("metadata", JSON.stringify(metadata));
-  const { data } = await api.post("/documents/upload", form);
-  return data;
+  if (summary) form.append("summary", summary);
+  if (language) form.append("language", language);
+  return unwrap(api.post("/documents/upload", form));
 }
 
 export async function listDocuments() {
@@ -122,28 +125,13 @@ export async function listDocuments() {
   return data;
 }
 
-export async function getDocument(id) {
-  const { data } = await api.get(`/documents/${id}`);
-  return data;
-}
+// Save changes made by the user in the Cleaned Text tab.
+// payload: { cleaned_text: "...", reanalyze: false }
+export const updateDocumentCleanedText = (id, payload) =>
+  unwrap(api.patch(`/documents/${id}/cleaned-text`, payload));
 
-export async function deleteDocument(id) {
-  const { data } = await api.delete(`/documents/${id}`);
-  return data;
-}
-
-export async function updateDocumentNlp(id, patch) {
-  const { data } = await api.patch(`/documents/${id}/nlp`, patch);
-  return data;
-}
-export async function updateDocumentMetadata(id, metadata) {
-  const { data } = await api.patch(`/documents/${id}/metadata`, metadata);
-  return data;
-}
-
-function triggerBlobDownload(blobData, filename) {
-  const blob = blobData instanceof Blob ? blobData : new Blob([blobData]);
-  const url = window.URL.createObjectURL(blob);
+function saveBlob(blob, filename) {
+  const objectUrl = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
   link.download = filename;
@@ -208,8 +196,20 @@ export async function adminDeleteUser(id) {
   return data;
 }
 
-// ---- Jobs ----
-export async function getJob(id) {
-  const { data } = await api.get(`/jobs/${id}`);
-  return data;
-}
+export const adminStats = () => unwrap(api.get("/admin/stats"));
+export const adminListUsers = () => unwrap(api.get("/admin/users"));
+export const adminUpdateUser = (id, patch) => unwrap(api.patch(`/admin/users/${id}`, patch));
+export const adminDeleteUser = (id) => unwrap(api.delete(`/admin/users/${id}`));
+export const adminListDocuments = () => unwrap(api.get("/admin/documents"));
+export const adminDeleteDocument = (id) => unwrap(api.delete(`/admin/documents/${id}`));
+
+export const getJob = (id) => unwrap(api.get(`/jobs/${id}`));
+
+export const crawlWebsite = (url, max_pages = 10, document_id = null) =>
+  unwrap(api.post("/crawl", { url, max_pages, document_id }));
+
+export const discoverPages = (url, document_id = null) =>
+  unwrap(api.get("/crawl/discover", { params: { url, document_id } }));
+
+export const crawlSpecificPage = (payload) =>
+  unwrap(api.post("/crawl/specific", payload));

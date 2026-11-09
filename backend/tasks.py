@@ -23,7 +23,8 @@ def _set_status(job_id: str, **fields):
 
 @celery.task(name="lrw.process_document", bind=True)
 def process_document(self, job_id: str, raw_doc_id: str, file_type: str,
-                     content_b64: str | None = None, url: str | None = None):
+                     content_b64: str | None = None, url: str | None = None,
+                     filename: str | None = None, language: str | None = None):
     import base64
     try:
         _set_status(job_id, status="extracting")
@@ -31,7 +32,8 @@ def process_document(self, job_id: str, raw_doc_id: str, file_type: str,
             raw_text = extraction.extract("url", url=url)
         else:
             content = base64.b64decode(content_b64) if content_b64 else b""
-            raw_text = extraction.extract(file_type, content=content)
+            raw_text = extraction.extract(file_type, content=content,
+                                         filename=filename, language=language)
 
         _sync_db.raw_documents.update_one(
             {"_id": ObjectId(raw_doc_id)},

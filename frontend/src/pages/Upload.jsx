@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { uploadDocument, api } from "../api";
 
@@ -6,7 +6,7 @@ const FILE_TYPES = [
   { value: "text", label: "Text file", desc: ".txt", accept: ".txt" },
   { value: "pdf", label: "PDF", desc: ".pdf", accept: ".pdf" },
   { value: "image", label: "Image", desc: ".jpg, .png, .pdf", accept: ".jpg,.jpeg,.png,.webp,.bmp,.pdf" },
-  { value: "audio", label: "Audio", desc: ".mp3, .wav, .m4a", accept: ".mp3,.wav,.m4a,.ogg" },
+  { value: "audio", label: "Audio", desc: ".mp3, .wav, .m4a", accept: ".mp3,.wav,.m4a,.ogg,.flac,.aac,.webm" },
   { value: "url", label: "URL", desc: "web page" },
 ];
 
@@ -151,6 +151,7 @@ export default function Upload() {
   const [dragging, setDragging] = useState(false);
   const [summary, setSummary] = useState("");
   const [summaryLoading, setSummaryLoading] = useState(false);
+    const [audioLanguage, setAudioLanguage] = useState("ta");
 
   const accept = FILE_TYPES.find((type) => type.value === fileType)?.accept;
   const updateMeta = (key) => (e) => setMeta((prev) => ({ ...prev, [key]: e.target.value }));
@@ -161,30 +162,57 @@ export default function Upload() {
     setSummaryLoading(false);
   };
 
-  const fetchSummary = async (type, { file: selectedFile, url: selectedUrl }) => {
+    const fetchSummary = async (type, { file: selectedFile, url: selectedUrl, language: selectedLanguage }) => {
     const requestId = ++summaryRequestRef.current;
     setSummaryLoading(true);
     setSummary("");
 
-    const formData = new FormData();
-    if (type === "url") formData.append("url", selectedUrl);
-    else formData.append("file", selectedFile);
-
     try {
-      const { data } = await api.post(`/summarize/${type}`, formData);
-      if (requestId === summaryRequestRef.current) setSummary(data.summary);
-    } catch {
+      let response;
+      if (type === "url") {
+        const targetUrl = (selectedUrl || url || "").trim();
+        if (!targetUrl) return;
+        const formData = new FormData();
+        formData.append("url", targetUrl);
+        response = await api.post(`/summarize/url`, formData);
+      } else {
+        if (!selectedFile && !file) return;
+        const formData = new FormData();
+        formData.append("file", selectedFile || file);
+        if (type === "audio") formData.append("language", selectedLanguage || audioLanguage);
+        response = await api.post(`/summarize/${type}`, formData);
+      }
       if (requestId === summaryRequestRef.current) {
-        setSummary("Could not generate summary. Please try again.");
+        setSummary(response.data.summary || "No summary generated.");
+      }
+    } catch (err) {
+      if (requestId === summaryRequestRef.current) {
+        const detail = err.response?.data?.detail;
+        setSummary(detail || "Could not generate summary. Please try again.");
       }
     } finally {
       if (requestId === summaryRequestRef.current) setSummaryLoading(false);
     }
   };
 
+  // Automatically trigger summary generation when a valid URL is typed or pasted
+  useEffect(() => {
+    if (fileType !== "url") return;
+    const trimmed = url.trim();
+    if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) return;
+    if (trimmed.length < 10) return;
+
+    const timer = setTimeout(() => {
+      fetchSummary("url", { url: trimmed });
+    }, 600);
+
+    return () => clearTimeout(timer);
+  }, [url, fileType]);
+
   const selectType = (value) => {
     setFileType(value);
     setFile(null);
+    setUrl("");
     clearSummary();
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
@@ -203,7 +231,6 @@ export default function Upload() {
 
   const validate = () => {
     if (!meta.source.trim()) return "Source is required.";
-    if (!meta.domain) return "Domain is required.";
     if (!meta.license) return "License is required.";
     if (fileType === "url" && !url.trim()) return "URL is required for URL uploads.";
     if (fileType !== "url" && !file) return "Please choose a file to upload.";
@@ -223,7 +250,14 @@ export default function Upload() {
         fileType,
         url: fileType === "url" ? url.trim() : undefined,
         metadata: meta,
+        summary: summary || undefined,
+         language: fileType === "audio" ? audioLanguage : undefined,
       });
+      // Ensure clean state for the new URL document
+      try {
+        sessionStorage.removeItem("lrw_crawler_last_results");
+        sessionStorage.removeItem("lrw_crawler_last_status");
+      } catch {}
       navigate(`/documents/${result.id}`);
     } catch (err) {
       setError(err.response?.data?.detail || err.message || "Upload failed. Please try again.");
@@ -259,25 +293,58 @@ export default function Upload() {
               </label>
             ))}
           </div>
-
+                    {fileType === "audio" && (
+            <div style={{ marginTop: 20 }}>
+              <Field id="audio-language" label="Audio language">
+                <select
+                  id="audio-language"
+                  value={audioLanguage}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setAudioLanguage(value);
+                    if (file) fetchSummary("audio", { file, language: value });
+                  }}
+                >
+                  <option value="ta">Tamil (தமிழ்)</option>
+                  <option value="si">Sinhala (සිංහල)</option>
+                  <option value="en">English</option>
+                  <option value="auto">Auto-detect (less accurate)</option>
+                </select>
+              </Field>
+            </div>
+          )}
           <div style={{ marginTop: 20 }}>
             {fileType === "url" ? (
               <Field id="upload-url" label="URL">
-                <input
-                  id="upload-url"
-                  type="url"
-                  value={url}
-                  placeholder="https://example.com/article"
-                  required
-                  onChange={(e) => {
-                    setUrl(e.target.value);
-                    clearSummary();
-                  }}
-                  onBlur={(e) => {
-                    const value = e.target.value.trim();
-                    if (value) fetchSummary("url", { url: value });
-                  }}
-                />
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <input
+                    id="upload-url"
+                    type="url"
+                    value={url}
+                    placeholder="https://example.com/article"
+                    required
+                    style={{ flex: 1 }}
+                    onChange={(e) => {
+                      setUrl(e.target.value);
+                    }}
+                    onBlur={(e) => {
+                      const value = e.target.value.trim();
+                      if (value && !summary && !summaryLoading) fetchSummary("url", { url: value });
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    disabled={!url.trim() || summaryLoading}
+                    onClick={() => {
+                      const value = url.trim();
+                      if (value) fetchSummary("url", { url: value });
+                    }}
+                    style={{ whiteSpace: "nowrap", padding: "8px 14px", height: "100%" }}
+                  >
+                    {summaryLoading ? "Summarizing…" : "⚡ Summarize"}
+                  </button>
+                </div>
               </Field>
             ) : (
               <Field id="upload-file" label="File">
@@ -323,7 +390,7 @@ export default function Upload() {
 
           {summary && !summaryLoading && (
             <div style={styles.summary}>
-              <div style={styles.summaryHeading}>📋 Content Summary</div>
+              <div style={styles.summaryHeading}> Content Summary</div>
               <p>{summary}</p>
             </div>
           )}
@@ -344,6 +411,44 @@ export default function Upload() {
                 onChange={updateMeta("source")}
                 placeholder="e.g. Reuters"
                 required
+              />
+            </Field>
+
+            <Field id="meta-author" label="Author">
+              <input
+                id="meta-author"
+                type="text"
+                value={meta.author}
+                onChange={updateMeta("author")}
+                placeholder="Author name"
+              />
+            </Field>
+
+            <SelectField
+              id="meta-domain"
+              label="Domain"
+              placeholder="Select domain..."
+              options={DOMAINS}
+              value={meta.domain}
+              onChange={updateMeta("domain")}
+            />
+
+            <Field id="meta-category" label="Category">
+              <input
+                id="meta-category"
+                type="text"
+                value={meta.category}
+                onChange={updateMeta("category")}
+                placeholder="Category"
+              />
+            </Field>
+
+            <Field id="meta-date" label="Publication date">
+              <input
+                id="meta-date"
+                type="date"
+                value={meta.publication_date}
+                onChange={updateMeta("publication_date")}
               />
             </Field>
 
