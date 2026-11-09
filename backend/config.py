@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "./uploads"
     CORS_ORIGINS: str = "http://localhost:5173"
 
-    WHISPER_MODEL: str = "base"
+    WHISPER_MODEL: str = "small"
     REDIS_URL: str = "redis://localhost:6379/0"
     USE_CELERY: bool = False
     DEV_SKIP_EMAIL_VERIFICATION: bool = False

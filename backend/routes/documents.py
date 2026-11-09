@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, UploadFile, File, Form, Body, HTTPException
 from fastapi.responses import JSONResponse, PlainTextResponse, Response
+from starlette.concurrency import run_in_threadpool as run_blocking
 from datetime import datetime
 from collections import Counter
 from bson import ObjectId
@@ -244,7 +245,8 @@ async def upload(
         })
         celery.send_task(
             "lrw.process_document",
-            args=[str(job_res.inserted_id), str(raw_res.inserted_id), file_type, content_b64, url],
+            args=[str(job_res.inserted_id), str(raw_res.inserted_id), file_type, content_b64, url,
+                  filename, language],
         )
         return {
             "async": True,
@@ -268,7 +270,11 @@ async def upload(
             raise HTTPException(status_code=400, detail="file required")
         content = await file.read()
         try:
-            raw_text = extraction.extract(file_type, content=content, filename=file.filename, language=language)
+            # Run the blocking OCR / Whisper work in a worker thread so it does not freeze the API.
+                raw_text = await run_blocking(
+                extraction.extract, file_type,
+                content=content, filename=file.filename, language=language,
+            )
         except NotImplementedError as e:
             raise HTTPException(status_code=501, detail=str(e))
         except Exception as e:

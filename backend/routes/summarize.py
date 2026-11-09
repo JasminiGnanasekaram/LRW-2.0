@@ -2,6 +2,7 @@
 import base64
 import io
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from starlette.concurrency import run_in_threadpool
 from groq import Groq
 from PIL import Image
 
@@ -210,7 +211,10 @@ async def summarize_image(file: UploadFile = File(...)):
 async def summarize_audio(file: UploadFile = File(...), language: Optional[str] = Form(None)):
     try:
         content = await file.read()
-        raw_text = extraction.extract("audio", content=content, filename=file.filename, language=language)
+        raw_text = await run_in_threadpool(
+            extraction.extract, "audio",
+            content=content, filename=file.filename, language=language,
+        )
         return {"summary": summarize(raw_text)}
     except HTTPException:
         raise

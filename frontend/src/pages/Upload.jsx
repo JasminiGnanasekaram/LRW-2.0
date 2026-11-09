@@ -6,7 +6,7 @@ const FILE_TYPES = [
   { value: "text", label: "Text file", desc: ".txt", accept: ".txt" },
   { value: "pdf", label: "PDF", desc: ".pdf", accept: ".pdf" },
   { value: "image", label: "Image", desc: ".jpg, .png, .pdf", accept: ".jpg,.jpeg,.png,.webp,.bmp,.pdf" },
-  { value: "audio", label: "Audio", desc: ".mp3, .wav, .m4a", accept: ".mp3,.wav,.m4a,.ogg" },
+  { value: "audio", label: "Audio", desc: ".mp3, .wav, .m4a", accept: ".mp3,.wav,.m4a,.ogg,.flac,.aac,.webm" },
   { value: "url", label: "URL", desc: "web page" },
 ];
 
@@ -146,7 +146,7 @@ export default function Upload() {
   const [dragging, setDragging] = useState(false);
   const [summary, setSummary] = useState("");
   const [summaryLoading, setSummaryLoading] = useState(false);
-  const audioLanguage = "ta";
+    const [audioLanguage, setAudioLanguage] = useState("ta");
 
   const accept = FILE_TYPES.find((type) => type.value === fileType)?.accept;
   const updateMeta = (key) => (e) => setMeta((prev) => ({ ...prev, [key]: e.target.value }));
@@ -157,7 +157,7 @@ export default function Upload() {
     setSummaryLoading(false);
   };
 
-  const fetchSummary = async (type, { file: selectedFile, url: selectedUrl }) => {
+    const fetchSummary = async (type, { file: selectedFile, url: selectedUrl, language: selectedLanguage }) => {
     const requestId = ++summaryRequestRef.current;
     setSummaryLoading(true);
     setSummary("");
@@ -174,7 +174,7 @@ export default function Upload() {
         if (!selectedFile && !file) return;
         const formData = new FormData();
         formData.append("file", selectedFile || file);
-        if (type === "audio") formData.append("language", audioLanguage);
+        if (type === "audio") formData.append("language", selectedLanguage || audioLanguage);
         response = await api.post(`/summarize/${type}`, formData);
       }
       if (requestId === summaryRequestRef.current) {
@@ -246,6 +246,7 @@ export default function Upload() {
         url: fileType === "url" ? url.trim() : undefined,
         metadata: meta,
         summary: summary || undefined,
+         language: fileType === "audio" ? audioLanguage : undefined,
       });
       // Ensure clean state for the new URL document
       try {
@@ -287,7 +288,26 @@ export default function Upload() {
               </label>
             ))}
           </div>
-
+                    {fileType === "audio" && (
+            <div style={{ marginTop: 20 }}>
+              <Field id="audio-language" label="Audio language">
+                <select
+                  id="audio-language"
+                  value={audioLanguage}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setAudioLanguage(value);
+                    if (file) fetchSummary("audio", { file, language: value });
+                  }}
+                >
+                  <option value="ta">Tamil (தமிழ்)</option>
+                  <option value="si">Sinhala (සිංහල)</option>
+                  <option value="en">English</option>
+                  <option value="auto">Auto-detect (less accurate)</option>
+                </select>
+              </Field>
+            </div>
+          )}
           <div style={{ marginTop: 20 }}>
             {fileType === "url" ? (
               <Field id="upload-url" label="URL">
@@ -365,7 +385,7 @@ export default function Upload() {
 
           {summary && !summaryLoading && (
             <div style={styles.summary}>
-              <div style={styles.summaryHeading}>📋 Content Summary</div>
+              <div style={styles.summaryHeading}> Content Summary</div>
               <p>{summary}</p>
             </div>
           )}

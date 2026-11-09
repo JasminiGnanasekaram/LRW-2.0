@@ -1,8 +1,11 @@
 """Extract text from documents, images, web pages, and audio."""
 
+import hashlib
 import io
 import os
 import tempfile
+import threading
+from collections import OrderedDict
 from typing import Optional
 from urllib.parse import urlsplit
 
@@ -30,6 +33,22 @@ OCR_LANGUAGES = "eng+tam+sin"
 AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".ogg", ".flac", ".aac", ".wma", ".webm"}
 
 _whisper_model = None
+_whisper_init_lock = threading.Lock()
+
+# Only one transcription runs at a time, and finished transcripts are cached.
+# This means the "summary on file select" call and the real upload call do NOT
+# transcribe the same file twice, and both always see the identical transcript.
+_transcribe_lock = threading.Lock()
+_TRANSCRIPT_CACHE: "OrderedDict[str, str]" = OrderedDict()
+_TRANSCRIPT_CACHE_MAX = 16
+
+# Whisper may echo an invented prompt back over silence, so prompts are OFF by default.
+# Set to True only if you tested it and it helps your recordings.
+USE_INITIAL_PROMPT = False
+_INITIAL_PROMPTS = {
+    "ta": "வணக்கம், இது தெளிவான தமிழ் பேச்சு மற்றும் உரை ஒலிப்பதிவு.",
+    "si": "ආයුබෝවන්, මෙය සිංහල භාෂාවෙන් කරන ලද හඬ පටිගත කිරීමකි.",
+}
 
 
 def _resolve_tesseract_cmd() -> Optional[str]:
@@ -205,28 +224,56 @@ def extract_from_url(url: str, timeout: int = 20) -> str:
     return text
 
 
+def _pick_device():
+    """Use the GPU in float16 if one is available, otherwise CPU in int8."""
+    try:
+        import ctranslate2
+        if ctranslate2.get_cuda_device_count() > 0:
+            return "cuda", "float16"
+    except Exception:
+        pass
+    return "cpu", "int8"
+
+
 def _get_whisper():
     global _whisper_model
     if _whisper_model is None:
-        from faster_whisper import WhisperModel
+        with _whisper_init_lock:
+            if _whisper_model is None:
+                from faster_whisper import WhisperModel
 
-        _whisper_model = WhisperModel(
-            get_settings().WHISPER_MODEL,
-            device="cpu",
-            compute_type="int8",
-        )
+                device, compute_type = _pick_device()
+                _whisper_model = WhisperModel(
+                    get_settings().WHISPER_MODEL,
+                    device=device,
+                    compute_type=compute_type,
+                )
     return _whisper_model
 
 
+_LANG_ALIASES = {
+    "ta": "ta", "tamil": "ta", "தமிழ்": "ta",
+    "si": "si", "sinhala": "si", "sinhalese": "si", "සිංහල": "si",
+    "en": "en", "english": "en",
+}
+
+
 def _audio_language(language: Optional[str], filename: Optional[str]) -> Optional[str]:
-    lang = (language or "").strip().lower()
-    aliases = {
-        "ta": "ta", "tamil": "ta", "தமிழ்": "ta",
-        "si": "si", "sinhala": "si", "සිංහල": "si",
-        "en": "en", "english": "en",
-    }
-    if lang:
-        return aliases.get(lang)
+    """Return a Whisper language code, or None to let Whisper auto-detect.
+
+    An explicit but unrecognised language now raises instead of silently
+    falling back to auto-detect (which is unreliable for Tamil/Sinhala).
+    """
+    lang = (language or "").strip().lower().replace("_", "-")
+    if lang and lang != "auto":
+        if lang in _LANG_ALIASES:
+            return _LANG_ALIASES[lang]
+        base = lang.split("-")[0]          # "ta-lk" -> "ta"
+        if base in _LANG_ALIASES:
+            return _LANG_ALIASES[base]
+        raise ValueError(
+            f"Unsupported audio language '{language}'. Use 'ta', 'si', 'en' or 'auto'."
+        )
 
     name = (filename or "").lower()
     if "tamil" in name or "தமிழ்" in name or "_ta." in name or "_tam." in name:
@@ -236,39 +283,26 @@ def _audio_language(language: Optional[str], filename: Optional[str]) -> Optiona
     return None
 
 
-def extract_from_audio(
-    content: bytes,
-    filename: Optional[str] = None,
-    language: Optional[str] = None,
-) -> str:
-    """Transcribe multilingual audio with faster-whisper."""
-    extension = os.path.splitext(filename or "")[1].lower()
-    if extension not in AUDIO_EXTENSIONS:
-        extension = ".wav"
-
+def _transcribe(content: bytes, extension: str, selected_language: Optional[str]) -> str:
     with tempfile.NamedTemporaryFile(suffix=extension, delete=False) as temp:
         temp.write(content)
         temp_path = temp.name
 
     try:
-        selected_language = _audio_language(language, filename)
         options = {
             "beam_size": 5,
             "best_of": 5,
             "vad_filter": True,
-            "vad_parameters": {"min_silence_duration_ms": 400},
+            "vad_parameters": {"min_silence_duration_ms": 500, "speech_pad_ms": 400},
             "condition_on_previous_text": False,
             "temperature": [0.0, 0.2, 0.4],
         }
-
         if selected_language:
             options["language"] = selected_language
-        if selected_language == "ta":
-            options["initial_prompt"] = "வணக்கம், இது தெளிவான தமிழ் பேச்சு மற்றும் உரை ஒலிப்பதிவு."
-        elif selected_language == "si":
-            options["initial_prompt"] = "ආයුබෝවන්, මෙය සිංහල භාෂාවෙන් කරන ලද හඬ පටිගත කිරීමකි."
+            if USE_INITIAL_PROMPT and selected_language in _INITIAL_PROMPTS:
+                options["initial_prompt"] = _INITIAL_PROMPTS[selected_language]
 
-        segments, _ = _get_whisper().transcribe(temp_path, **options)
+        segments, _info = _get_whisper().transcribe(temp_path, **options)
         return "\n".join(
             segment.text.strip()
             for segment in segments
@@ -279,6 +313,42 @@ def extract_from_audio(
             os.unlink(temp_path)
         except OSError:
             pass
+
+
+def extract_from_audio(
+    content: bytes,
+    filename: Optional[str] = None,
+    language: Optional[str] = None,
+) -> str:
+    """Transcribe multilingual audio with faster-whisper (cached, one job at a time)."""
+    extension = os.path.splitext(filename or "")[1].lower()
+    if extension not in AUDIO_EXTENSIONS:
+        extension = ".wav"
+
+    selected_language = _audio_language(language, filename)
+    key = "|".join([
+        hashlib.sha256(content).hexdigest(),
+        selected_language or "auto",
+        get_settings().WHISPER_MODEL,
+    ])
+
+    with _transcribe_lock:
+        cached = _TRANSCRIPT_CACHE.get(key)
+        if cached is not None:
+            _TRANSCRIPT_CACHE.move_to_end(key)
+            return cached
+
+        text = _transcribe(content, extension, selected_language)
+        if not text.strip():
+            raise ValueError(
+                "No speech could be transcribed from this audio. "
+                "Check the file and the selected language."
+            )
+
+        _TRANSCRIPT_CACHE[key] = text
+        while len(_TRANSCRIPT_CACHE) > _TRANSCRIPT_CACHE_MAX:
+            _TRANSCRIPT_CACHE.popitem(last=False)
+        return text
 
 
 def _pdf_is_mostly_text(
