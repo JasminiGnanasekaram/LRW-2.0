@@ -2,6 +2,7 @@
 
 import io
 import os
+import shutil
 import tempfile
 from typing import Optional
 from urllib.parse import urlsplit
@@ -24,6 +25,20 @@ AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".ogg", ".flac", ".aac", ".wma", ".w
 _whisper_model = None
 
 
+def _resolve_tesseract_cmd() -> Optional[str]:
+    """Use the configured absolute path if it exists, else fall back to a system install."""
+    configured = getattr(get_settings(), "TESSERACT_CMD", None)
+    candidates = [
+        configured,
+        shutil.which("tesseract"),
+        r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+        r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+    ]
+    for candidate in candidates:
+        if candidate and os.path.isfile(candidate):
+            return candidate
+    return configured
+
 def _ocr_image(image) -> str:
     if pytesseract is None:
         raise RuntimeError(
@@ -31,7 +46,7 @@ def _ocr_image(image) -> str:
             "Install them before processing scanned documents or images."
         )
 
-    command = getattr(get_settings(), "TESSERACT_CMD", None)
+    command = _resolve_tesseract_cmd()
     if command:
         pytesseract.pytesseract.tesseract_cmd = command
 
