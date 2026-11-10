@@ -36,7 +36,9 @@ def _ocr_image(image) -> str:
         pytesseract.pytesseract.tesseract_cmd = command
 
     try:
-        return pytesseract.image_to_string(image, lang=OCR_LANGUAGES).strip()
+        text = pytesseract.image_to_string(image, lang=OCR_LANGUAGES)
+        # Tesseract emits invisible zero-width (non-)joiners after Tamil words; they break tokenization.
+        return text.replace("\u200c", "").replace("\u200d", "").strip()
     except pytesseract.pytesseract.TesseractNotFoundError as exc:
         raise RuntimeError(
             "Tesseract executable not found. Install it at the configured absolute path, "
@@ -47,6 +49,29 @@ def _ocr_image(image) -> str:
 
 
      
+# Legacy (non-Unicode) Tamil fonts store glyphs under Latin codes, so the PDF text
+# layer is gibberish (e.g. "ngNyhg;gplhR" instead of Tamil). Such pages must be OCR'd.
+LEGACY_TAMIL_FONT_MARKERS = (
+    "bamini", "baamini", "tscii", "tab-", "tam-", "vaigai", "shree", "shrilipi",
+    "amudham", "kavipriya", "lt-tm", "ltamil", "mylai", "nakkeeran", "indoweb", "tace",
+    "senthamil", "thendral",
+)
+
+
+def _page_has_legacy_tamil_font(page) -> bool:
+    for font in page.get_fonts():
+        name = str(font[3]).lower().split("+")[-1]
+        if any(marker in name for marker in LEGACY_TAMIL_FONT_MARKERS):
+            return True
+    return False
+
+
+def _page_has_usable_text(page) -> bool:
+    """True when the page has a real, correctly encoded Unicode text layer."""
+    if len(page.get_text().strip()) < PDF_MIN_CHARS:
+        return False
+    return not _page_has_legacy_tamil_font(page)
+
 def extract_from_text(content: bytes, encoding: str = "utf-8") -> str:
     return content.decode(encoding, errors="replace")
 
@@ -60,9 +85,8 @@ def extract_from_pdf(content: bytes) -> str:
     try:
         parts = []
         for page in document:
-            page_text = page.get_text().strip()
-            if len(page_text) >= PDF_MIN_CHARS:
-                parts.append(page_text)
+            if _page_has_usable_text(page):
+                parts.append(page.get_text().strip())
                 continue
 
             pixmap = page.get_pixmap(matrix=fitz.Matrix(2, 2))
@@ -85,7 +109,7 @@ def detect_pdf_type(content: bytes) -> str:
         embedded_images = False
 
         for page in document:
-            if len(page.get_text().strip()) >= PDF_MIN_CHARS:
+            if _page_has_usable_text(page):
                 text_pages += 1
                 if page.get_images(full=True):
                     embedded_images = True
@@ -232,7 +256,7 @@ def _pdf_is_mostly_text(
             return False
 
         text_pages = sum(
-            len(page.get_text().strip()) >= min_chars_per_page
+            _page_has_usable_text(page)
             for page in document
         )
         return text_pages / total_pages >= text_ratio_threshold
