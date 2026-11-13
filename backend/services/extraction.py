@@ -61,6 +61,42 @@ def _legacy_to_unicode(text: str) -> str:
     return ""
 
 
+# --- Scanned pages that only carry a small text stamp ----------------------
+# Digital-library PDFs (e.g. Noolaham) put a tiny "noolaham.org | aavanaham.org"
+# text stamp on pages whose real content is a scanned picture. That stamp must
+# not make the page count as "has text", otherwise OCR is skipped.
+_STAMP_RE = re.compile(r"noolaham|aavanaham|noolagam|digitized by|www\.\S+|https?://\S+", re.I)
+MIN_REAL_CHARS = 80        # fewer real characters than this -> page is a scan
+SCAN_IMAGE_COVERAGE = 0.5  # a picture covering this much of the page ...
+SCAN_MAX_TEXT = 400        # ... with little text on it -> page is a scan
+
+
+def _real_text(page) -> str:
+    """Page text with stamp / watermark / link lines removed."""
+    lines = [ln for ln in page.get_text().splitlines() if ln.strip() and not _STAMP_RE.search(ln)]
+    return "\n".join(lines).strip()
+
+
+def _image_coverage(page) -> float:
+    """Fraction of the page covered by pictures (0.0 - 1.0)."""
+    import fitz  # PyMuPDF
+    try:
+        page_area = abs(page.rect.width * page.rect.height) or 1.0
+        covered = 0.0
+        for info in page.get_image_info():
+            r = page.rect & fitz.Rect(info["bbox"])
+            covered += abs(r.width * r.height)
+        return min(covered / page_area, 1.0)
+    except Exception:
+        return 0.0
+
+
+def _page_is_scan(page, real_text: str) -> bool:
+    if len(real_text) < MIN_REAL_CHARS:
+        return True
+    return _image_coverage(page) >= SCAN_IMAGE_COVERAGE and len(real_text) < SCAN_MAX_TEXT
+
+
 def extract_from_text(content: bytes, encoding: str = "utf-8") -> str:
     return content.decode(encoding, errors="replace")
 
@@ -79,25 +115,24 @@ def extract_from_pdf(content: bytes) -> str:
     text_parts = []
 
     for page in doc:
-        page_text = page.get_text().strip()
+        page_text = _real_text(page)
 
-        if len(page_text) >= MIN_CHARS_PER_PAGE and _looks_legacy_encoded(page_text):
+        # Scanned page (possibly with a small stamp): read it with OCR
+        if _page_is_scan(page, page_text):
+            page_text = ""
+        elif _looks_legacy_encoded(page_text):
             # Non-Unicode Tamil font: convert, or OCR the page if conversion fails
             converted = _legacy_to_unicode(page_text)
             if converted:
                 text_parts.append(converted.strip())
                 continue
-            page_text = ""  # fall through to OCR below
+            page_text = ""
 
-        if len(page_text) >= MIN_CHARS_PER_PAGE:
+        if page_text:
             text_parts.append(page_text)
         else:
-            # 1. Use Matrix Zoom (compatible with all PyMuPDF versions) to scale up page image for high-quality OCR
-            zoom = 2  # 2x zoom factor
-            mat = fitz.Matrix(zoom, zoom)
-            pix = page.get_pixmap(matrix=mat)
-            
-            # 2. Convert to bytes and open with Pillow
+            zoom = 2  # 2x zoom for better OCR quality
+            pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom))
             img = Image.open(io.BytesIO(pix.tobytes("png")))
             ocr_text = pytesseract.image_to_string(img, lang="eng+tam+sin") if pytesseract else ""
             text_parts.append(ocr_text.strip())
@@ -117,8 +152,8 @@ def detect_pdf_type(content: bytes) -> str:
     image_page_count = 0
     
     for page in doc:
-        page_text = page.get_text().strip()
-        if len(page_text) >= MIN_CHARS_PER_PAGE:
+        page_text = _real_text(page)
+        if not _page_is_scan(page, page_text):
             text_page_count += 1
         else:
             image_page_count += 1
@@ -289,7 +324,7 @@ def _pdf_is_mostly_text(content: bytes, min_chars_per_page: int = 20, text_ratio
 
     text_pages = sum(
         1 for page in doc
-        if len(page.get_text().strip()) >= min_chars_per_page
+        if not _page_is_scan(page, _real_text(page))
     )
     doc.close()
     return (text_pages / total_pages) >= text_ratio_threshold
