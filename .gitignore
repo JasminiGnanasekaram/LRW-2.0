@@ -38,6 +38,9 @@ build/
 backend/gmail_credentials.json
 backend/gmail_token.pickle
 
+backend/gmail/
+*gmail_credentials*
+
 # Environment files
 .env
 *.env
