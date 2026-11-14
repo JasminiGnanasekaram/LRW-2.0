@@ -66,7 +66,7 @@ export async function logout() {
   try {
     await api.post("/auth/logout");
   } catch {
-
+    // Always clear the local session, including when the server is unavailable.
   }
   clearSession();
 }
@@ -109,6 +109,11 @@ export const getDocument = (id) => unwrap(api.get(`/documents/${id}`));
 export const deleteDocument = (id) => unwrap(api.delete(`/documents/${id}`));
 export const updateDocumentMetadata = (id, metadata) => unwrap(api.patch(`/documents/${id}/metadata`, metadata));
 export const updateDocumentNlp = (id, nlpUpdate) => unwrap(api.patch(`/documents/${id}/nlp`, nlpUpdate));
+
+// Save changes made by the user in the Cleaned Text tab.
+// payload: { cleaned_text: "...", reanalyze: false }
+export const updateDocumentCleanedText = (id, payload) =>
+  unwrap(api.patch(`/documents/${id}/cleaned-text`, payload));
 
 function saveBlob(blob, filename) {
   const objectUrl = URL.createObjectURL(blob);
@@ -162,3 +167,6 @@ export const crawlWebsite = (url, max_pages = 10, document_id = null) =>
 
 export const discoverPages = (url, document_id = null) =>
   unwrap(api.get("/crawl/discover", { params: { url, document_id } }));
+
+export const crawlSpecificPage = (payload) =>
+  unwrap(api.post("/crawl/specific", payload));

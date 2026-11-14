@@ -10,6 +10,20 @@ env_file_path = os.path.join(current_dir, ".env")
 if os.environ.get("GROQ_API_KEY") and ("..." in os.environ["GROQ_API_KEY"] or not os.environ["GROQ_API_KEY"].strip()):
     del os.environ["GROQ_API_KEY"]
 
+def _find_default_tesseract() -> str | None:
+    candidates = [
+        r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+        r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+        os.path.expandvars(r"%LOCALAPPDATA%\Programs\Tesseract-OCR\tesseract.exe"),
+        os.path.expandvars(r"%LOCALAPPDATA%\Tesseract-OCR\tesseract.exe"),
+    ]
+    for p in candidates:
+        if p and os.path.isfile(p):
+            return p
+    import shutil
+    return shutil.which("tesseract") or shutil.which("tesseract.exe")
+
+
 class Settings(BaseSettings):
     MONGO_URI: str = "mongodb://localhost:27017"
     DB_NAME: str = "lrw"
@@ -31,7 +45,7 @@ class Settings(BaseSettings):
     SMTP_FROM: str = "no-reply@lrw.local"
     APP_BASE_URL: str = "http://localhost:5173"
     GROQ_API_KEY: str | None = None
-    TESSERACT_CMD: str | None = None
+    TESSERACT_CMD: str | None = _find_default_tesseract()
 
     model_config = SettingsConfigDict(env_file=env_file_path, extra="ignore")
 

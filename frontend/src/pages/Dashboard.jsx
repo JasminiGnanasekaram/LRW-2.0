@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { listDocuments, exportAll, deleteDocument } from "../api";
+
 export default function Dashboard() {
   const [docs, setDocs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -9,7 +10,13 @@ export default function Dashboard() {
 
   useEffect(() => {
     listDocuments()
-      .then(setDocs)
+      .then((data) => {
+        // Filter out crawled subpages: only display root documents & main URLs on the Dashboard
+        const mainDocs = (data || []).filter(
+          (d) => !d.is_crawled_subpage && !d.parent_document_id
+        );
+        setDocs(mainDocs);
+      })
       .catch((e) => {
         let msg = "Failed to load documents.";
         const detail = e.response?.data?.detail;
