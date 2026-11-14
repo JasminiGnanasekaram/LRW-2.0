@@ -45,3 +45,4 @@ backend/gmail_token.pickle
 backend/.env
 frontend/.env
 Thumbs.db
+Tesseract-OCR/
