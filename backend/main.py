@@ -39,7 +39,11 @@ async def lifespan(app: FastAPI):
         if tess_path and os.path.isfile(tess_path):
             logger.info(f"[Tesseract Check] SUCCESS: Tesseract executable found at '{tess_path}'.")
         else:
-            logger.warning(f"[Tesseract Check] WARNING: Tesseract executable not found at '{tess_path}'. Scanned PDFs and image OCR will fail.")
+            logger.warning(
+                "[Tesseract Check] WARNING: Tesseract not found (checked TESSERACT_CMD, PATH, bundled "
+                "Tesseract-OCR/, and standard install folders). Scanned PDFs and image OCR will fail. "
+                "Install Tesseract, or set TESSERACT_CMD to the full path of tesseract.exe."
+            )
     except Exception as exc:
         logger.warning(f"[Tesseract Check] Check error: {exc}")
 

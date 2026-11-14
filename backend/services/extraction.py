@@ -33,26 +33,35 @@ _whisper_model = None
 
 
 def _resolve_tesseract_cmd() -> Optional[str]:
+    """Find Tesseract: TESSERACT_CMD env/.env -> system PATH (Linux/Render) ->
+    bundled copy in the repo -> common Windows install paths.
+    Returns None when nothing is found (no stale hardcoded path)."""
     import shutil
-    cmd = getattr(get_settings(), "TESSERACT_CMD", None)
+
+    cmd = (os.getenv("TESSERACT_CMD") or getattr(get_settings(), "TESSERACT_CMD", None) or "").strip().strip("\"'")
     if cmd and os.path.isfile(cmd):
         return cmd
-
-    candidates = [
-        r"C:\Program Files\Tesseract-OCR\tesseract.exe",
-        r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
-        os.path.expandvars(r"%LOCALAPPDATA%\Programs\Tesseract-OCR\tesseract.exe"),
-        os.path.expandvars(r"%LOCALAPPDATA%\Tesseract-OCR\tesseract.exe"),
-    ]
-    for c in candidates:
-        if c and os.path.isfile(c):
-            return c
 
     which_cmd = shutil.which("tesseract") or shutil.which("tesseract.exe")
     if which_cmd:
         return which_cmd
 
-    return cmd
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo_root = os.path.abspath(os.path.join(here, "..", ".."))
+    candidates = [
+        os.path.join(repo_root, "Tesseract-OCR", "tesseract.exe"),
+        r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+        r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+        os.path.expandvars(r"%LOCALAPPDATA%\Programs\Tesseract-OCR\tesseract.exe"),
+        os.path.expandvars(r"%LOCALAPPDATA%\Tesseract-OCR\tesseract.exe"),
+        "/usr/bin/tesseract",
+        "/usr/local/bin/tesseract",
+    ]
+    for c in candidates:
+        if c and os.path.isfile(c):
+            return c
+
+    return None
 
 
 def _ocr_image(image) -> str:
