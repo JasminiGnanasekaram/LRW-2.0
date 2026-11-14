@@ -49,6 +49,7 @@ def _resolve_tesseract_cmd() -> Optional[str]:
     here = os.path.dirname(os.path.abspath(__file__))
     repo_root = os.path.abspath(os.path.join(here, "..", ".."))
     candidates = [
+        os.path.abspath(os.path.join(here, "..", "Tesseract-OCR", "tesseract.exe")),
         os.path.join(repo_root, "Tesseract-OCR", "tesseract.exe"),
         r"C:\Program Files\Tesseract-OCR\tesseract.exe",
         r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
