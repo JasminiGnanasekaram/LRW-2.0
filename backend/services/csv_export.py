@@ -32,6 +32,7 @@ def document_to_csv(doc: dict) -> str:
     writer.writerow(["Paragraph Count", stats.get("paragraphs", "")])
     writer.writerow(["Source", meta.get("source", "")])
     writer.writerow(["Domain", meta.get("domain", "")])
+    writer.writerow(["Region", meta.get("region", "")])
     writer.writerow(["License", meta.get("license", "")])
     writer.writerow(["Author", meta.get("author", "")])
     writer.writerow(["Publication Date", meta.get("publication_date", "")])
@@ -129,6 +130,7 @@ def documents_summary_csv(docs: List[dict]) -> str:
         "Top Keywords",
         "Source",
         "Domain",
+        "Region",
         "License",
         "Author",
         "Publication Date",
@@ -153,6 +155,7 @@ def documents_summary_csv(docs: List[dict]) -> str:
             ", ".join(keywords[:5]) if keywords else "",
             meta.get("source", ""),
             meta.get("domain", ""),
+            meta.get("region", ""),
             meta.get("license", ""),
             meta.get("author", ""),
             meta.get("publication_date", ""),

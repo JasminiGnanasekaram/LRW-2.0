@@ -15,6 +15,10 @@ import {
   crawlSpecificPage,
 } from "../api";
 
+import TokensSection, { getWordCountRows } from "./TokensSection";
+import { COUNTRIES } from "../countries";
+
+
 const PIE_COLORS = ["#1a3a2a", "#4a7c59", "#8fb89a", "#d4e8d0", "#2d5a3d", "#6aaa80", "#b0d8b8", "#386641"];
 
 const NLP_SECTIONS = [
@@ -219,6 +223,7 @@ const COMMON_MORPH_FEATURES = [
 
 const METADATA_FIELDS = [
   { key: "source", label: ["Source", "மூலம் (Source)", "මූලාශ්‍රය (Source)"], required: true, placeholder: "e.g. Daily News, Wikipedia, Research Paper" },
+  { key: "region", label: ["Region / Country", "பகுதி / நாடு (Region / Country)", "කලාපය / රට (Region / Country)"], countryOptions: COUNTRIES },
   { key: "domain", label: ["Domain", "பிரிவு (Domain)", "ක්ෂේත්‍රය (Domain)"], required: true, placeholder: "e.g. General, News, Technology, Legal, Sports" },
   { key: "license", label: ["License", "உரிமம் (License)", "බලපත්‍රය (License)"], required: true, placeholder: "e.g. CC-BY-4.0, MIT, Public Domain, All Rights Reserved" },
   { key: "category", label: ["Category", "அணுகல் வகை (Category)", "ප්‍රවේශ කාණ්ඩය (Category)"], options: ["open", "research", "restricted"] },
@@ -361,20 +366,46 @@ const buildNlpSectionJson = (sectionKey, nlp, docId, lang) => {
   };
 
   switch (sectionKey) {
-    case "tokens":
-      return {
-        ...base,
-        count: details.length || (nlp.tokens || []).length,
-        data: details.length
-          ? byToken((tk, i) => ({ index: i + 1, token: tokenText(tk), sentence_id: tk.sentence_id ?? null }))
-          : (nlp.tokens || []).map((token, i) => ({ index: i + 1, token })),
-      };
-    case "sentences":
-      return {
-        ...base,
-        count: (nlp.sentences || []).length,
-        data: (nlp.sentences || []).map((sentence, i) => ({ index: i + 1, sentence })),
-      };
+    case "tokens": {
+      const rows = getWordCountRows(nlp);
+
+      if (rows === null) {
+        window.alert("Run NLP analysis again to generate word counts.");
+        return;
+      }
+
+      return downloadNlpCsv(
+        `${filename}.csv`,
+        ["Word", "Count"],
+        rows
+      );
+    }
+    case "sentences": {
+      const rows = [];
+
+      for (const sentence of nlp?.sentences ?? []) {
+        if (typeof sentence !== "string") continue;
+
+        // Turn line breaks, tabs, and repeated spaces into one space.
+        // Tamil letters, vowel signs, and punctuation stay together.
+        const text = sentence.replace(/\s+/gu, " ").trim();
+
+        if (text) {
+          rows.push([rows.length + 1, text]);
+        }
+      }
+
+      if (rows.length === 0) {
+        window.alert("No sentences are available to download.");
+        return;
+      }
+
+      return downloadNlpCsv(
+        `${filename}.csv`,
+        ["Sentence No.", "Sentence"],
+        rows
+      );
+    }
     case "pos":
       return {
         ...base,
@@ -439,7 +470,7 @@ const downloadNlpJson = (filename, payload) => {
   saveNlpDownload(filename, JSON.stringify(payload, null, 2), "application/json;charset=utf-8");
 };
 
-const downloadNlpSection = (sectionKey, nlp, docId, lang, format = "csv") => {
+const downloadNlpSection = (sectionKey, nlp, docId, lang, format = "csv", sourceText) => {
   const filename = `LRW_${String(docId || "document").replace(/[^a-zA-Z0-9_-]/g, "_")}_${sectionKey}`;
   if (format === "json") {
     return downloadNlpJson(`${filename}.json`, buildNlpSectionJson(sectionKey, nlp, docId, lang));
@@ -453,10 +484,14 @@ const downloadNlpSection = (sectionKey, nlp, docId, lang, format = "csv") => {
 
   switch (sectionKey) {
     case "tokens": {
-      const rows = details.length
-        ? rowsByToken((tk, i) => [i + 1, tokenText(tk), tk.sentence_id ?? ""])
-        : (nlp.tokens || []).map((word, i) => [i + 1, word, ""]);
-      return downloadNlpCsv(`${filename}.csv`, ["#", "Token", "Sentence ID"], rows);
+      const rows = getWordCountRows(sourceText);
+
+      if (rows === null) {
+        window.alert("Document text is unavailable for word counting.");
+        return;
+      }
+
+      return downloadNlpCsv(`${filename}.csv`, ["Word", "Count"], rows);
     }
     case "sentences":
       return downloadNlpCsv(`${filename}.csv`, ["#", "Sentence"],
@@ -515,9 +550,8 @@ function SectionDesc({ desc }) {
     <div style={{
       background: "var(--bg-lt)", border: "1px solid var(--border)", borderRadius: 8,
       padding: "12px 16px", marginBottom: 20, fontSize: 13, color: "var(--ink-lt)",
-      lineHeight: 1.6, display: "flex", alignItems: "flex-start", gap: 10,
+      lineHeight: 1.6,
     }}>
-      <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>ℹ️</span>
       {desc}
     </div>
   );
@@ -1053,37 +1087,7 @@ function EditTokenModal({
   );
 }
 
-function TokensSection({ nlp, tr, desc, onEditToken }) {
-  const [query, setQuery] = useState("");
-  const needle = query.trim().toLowerCase();
-  const allTokens = (nlp.token_details || []).map((tk, idx) => ({ ...tk, __index: idx }));
-  const filtered = allTokens.filter((tk) => !needle || tokenText(tk).toLowerCase().includes(needle));
 
-  return (
-    <div>
-      <SectionDesc desc={desc} />
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 10 }}>
-        <div style={{ fontSize: 13, color: "var(--ink-lt)" }}>
-          {tr("Showing", "காட்டப்படுகிறது", "පෙන්වන්නේ")}: <strong>{filtered.length}</strong> / {allTokens.length}
-        </div>
-        <input
-          type="text" value={query} onChange={(e) => setQuery(e.target.value)}
-          placeholder={tr("Search token...", "சொல்லைத் தேடுங்கள்...", "ටෝකනය සොයන්න...")}
-          style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid var(--border)", fontSize: 12, background: "var(--paper)", color: "var(--ink)", width: 200 }}
-        />
-      </div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-start", padding: 16, maxHeight: 350, overflowY: "auto", border: "1px solid var(--border)", borderRadius: 8, background: "var(--paper)" }}>
-        {filtered.map((tk) => (
-          <span
-            key={tk.__index}
-            style={{ display: "inline-flex", padding: "8px 14px", borderRadius: 8, background: "var(--bg-lt)", border: "1px solid var(--border)", color: "var(--forest)", fontSize: 14, fontWeight: 600, whiteSpace: "nowrap" }}
-          >{tokenText(tk)}</span>
-        ))}
-        {filtered.length === 0 && <div style={{ color: "var(--ink-lt)" }}>{tr("No tokens found.", "சொற்கள் எதுவும் இல்லை.", "ටෝකන හමු නොවීය.")}</div>}
-      </div>
-    </div>
-  );
-}
 
 function SentencesSection({ nlp, desc }) {
   return (
@@ -1754,7 +1758,7 @@ function ChartsSection({ nlp, lang, tr, desc }) {
 
 
 const SECTION_COMPONENTS = {
-  tokens: TokensSection,
+ tokens: TokensSection,
   sentences: SentencesSection,
   pos: PosSection,
   lemma: LemmaSection,
@@ -1763,7 +1767,7 @@ const SECTION_COMPONENTS = {
   charts: ChartsSection,
 };
 
-function NlpTab({ docId, nlp, lang, tr, onNlpUpdated }) {
+function NlpTab({ docId, nlp, sourceText, lang, tr, onNlpUpdated }) {
   const [sectionKey, setSectionKey] = useState("tokens");
   const [editingToken, setEditingToken] = useState(null);
   const [feedback, setFeedback] = useState(null);
@@ -1848,7 +1852,7 @@ function NlpTab({ docId, nlp, lang, tr, onNlpUpdated }) {
                 className="btn btn-primary"
                 onClick={() => {
                   try {
-                    downloadNlpSection(sectionKey, nlp, docId, lang, format);
+                   downloadNlpSection(sectionKey, nlp, docId, lang, format, sourceText);
                   } catch (error) {
                     window.alert(error?.message || "Could not download this NLP section.");
                   }
@@ -3271,7 +3275,7 @@ function OverviewTab({ doc, nlp, tr }) {
         borderRadius: 10, padding: "16px 20px", marginBottom: 20,
       }}>
         <div style={{ ...sectionTitleStyle, marginBottom: 8 }}>
-          📋 {tr("Document Summary", "ஆவண சுருக்கம்", "ලේඛන සාරාංශය")}
+          {tr("Document Summary", "ஆவண சுருக்கம்", "ලේඛන සාරාංශය")}
         </div>
         <p style={{ margin: 0, fontSize: 15, lineHeight: 1.7, color: "var(--ink)" }}>
           {doc.summary || "No summary available."}
@@ -3287,7 +3291,7 @@ function OverviewTab({ doc, nlp, tr }) {
       {nlp.top_keywords?.length > 0 && (
         <div>
           <div style={sectionTitleStyle}>
-            🔑 {tr("Top Keywords", "முக்கிய குறிச்சொற்கள்", "ප්‍රධාන මූල පද")}
+            {tr("Top Keywords", "முக்கிய குறிச்சொற்கள்", "ප්‍රධාන මූල පද")}
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             {nlp.top_keywords.map((kw, i) => (
@@ -3459,16 +3463,24 @@ function MetadataTab({ docId, metadata, tr, onSaved }) {
                 <label style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 6, color: "var(--ink)" }}>
                   {tr(...f.label)}{f.required ? " *" : ""}
                 </label>
-                {f.options ? (
+                {f.options || f.countryOptions ? (
                   <select
                     className="form-input"
                     style={inputStyle}
-                    value={form[f.key] || f.options[0]}
+                    value={form[f.key] || (f.options ? f.options[0] : "")}
                     onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
                   >
-                    {f.options.map((o) => (
-                      <option key={o} value={o}>{o.charAt(0).toUpperCase() + o.slice(1)}</option>
-                    ))}
+                    {f.countryOptions && <option value="">Select country...</option>}
+                    {f.countryOptions
+                      ? f.countryOptions.map(([value, label]) => (
+                        <option key={value} value={value}>{label}</option>
+                      ))
+                      : f.options.map((option) => (
+                        <option key={option} value={option}>{option.charAt(0).toUpperCase() + option.slice(1)}</option>
+                      ))}
+                    {f.countryOptions && form[f.key] && !f.countryOptions.some(([value]) => value === form[f.key]) && (
+                      <option value={form[f.key]}>{form[f.key]}</option>
+                    )}
                   </select>
                 ) : (
                   <input
@@ -3971,6 +3983,7 @@ export default function DocumentView() {
           <NlpTab
             docId={displayDoc.id || id}
             nlp={nlp}
+            sourceText={displayDoc.cleaned_text ?? displayDoc.raw_text}
             lang={lang}
             tr={tr}
             onNlpUpdated={(newNlp) => {

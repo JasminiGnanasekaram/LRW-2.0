@@ -1,345 +1,370 @@
-"""
-nlp_pipeline.py
-Multilingual NLP Pipeline: Language Detection, Sentence Boundary Detection,
-POS Tagging, Lemmatization, and Corpus Statistics for English, Tamil, and Sinhala.
-"""
+"""Multilingual NLP analysis for English, Tamil, and Sinhala."""
 
 import re
+import unicodedata
 from collections import Counter
 from functools import lru_cache
-from typing import Any, Dict, List, Tuple
+from itertools import groupby, islice
 
 try:
-    from lemmatizer import (
-        analyze_sinhala_word,
-        analyze_tamil_word,
-        lemmatize_english,
-        refine_english_lemma,
-    )
-except ImportError:
     from .lemmatizer import (
         analyze_sinhala_word,
         analyze_tamil_word,
         lemmatize_english,
         refine_english_lemma,
     )
+except ImportError:
+    from lemmatizer import (
+        analyze_sinhala_word,
+        analyze_tamil_word,
+        lemmatize_english,
+        refine_english_lemma,
+    )
 
-NLP_RULES_VERSION = "2.0"
 
-# Precompiled Regexes
-_RE_URL_OR_EMAIL = re.compile(r"(https?://\S+|www\.\S+|\S+@\S+\.\S+)")
-_RE_DECIMAL = re.compile(r"(\d+)\.(\d+)")
-_RE_INITIALS_1 = re.compile(r"(?<=\b[A-Za-z])\.(?=\s+[A-Za-z]\b)")
-_RE_INITIALS_2 = re.compile(r"(?<=\b[A-Za-z])\.(?=\s+[A-Z][a-z])")
-_RE_TITLE_ABBR = re.compile(
-    r"\b(Dr|Mr|Mrs|Ms|Prof|Rev|Hon|Capt|Col|Gen|Gov|Sgt|St|Jr|Sr|Ltd|Plc|Pvt|Co|Corp|Inc|"
-    r"Dept|approx|est|fig|No|Nos|vs|vol|vols|e\.g|i\.e|etc|al|Rs|LKR|min|sec|hr|km|cm|mm|kg)\.(?=\s+)",
+NLP_RULES_VERSION = "3.2"
+ENGLISH_BATCH_SIZE = 512
+
+LANGUAGE_CODES = {
+    "English": "en",
+    "Tamil": "ta",
+    "Sinhala": "si",
+}
+
+# Sentence-ending punctuation may be followed by closing quotes or brackets.
+SENTENCE_BOUNDARY = re.compile(
+    r"([.!?।॥]+[\"'’”»)\]}]*)(?=\s|$|\w)"
+)
+PARAGRAPH_BOUNDARY = re.compile(r"\n[ \t]*\n+")
+ABBREVIATION_END = re.compile(
+    r"\b(?:Dr|Mr|Mrs|Ms|Prof|Rev|Hon|Capt|Col|Gen|Gov|Sgt|St|Jr|Sr|"
+    r"Ltd|Plc|Pvt|Co|Corp|Inc|Dept|No|Nos|Rs|LKR|vs|approx|fig|vol|etc)\.$"
+    r"|\b(?:[A-Za-z]\.)+[A-Za-z]\.$",
     re.IGNORECASE,
 )
-_RE_SENT_SPLIT = re.compile(r"(?<=[.!?|।॥\n])\s+")
-
-_RE_TA_TOKENS = re.compile(r"[\u0B80-\u0BFF\u200C\u200D]+|[a-zA-Z0-9]+|[^\w\s]")
-_RE_SI_TOKENS = re.compile(r"[\u0D80-\u0DFF\u200C\u200D]+|[a-zA-Z0-9]+|[^\w\s]")
-_RE_EN_FALLBACK_TOKENS = re.compile(r"[A-Za-z0-9]+(?:'[A-Za-z]+)?|[^\w\s]")
-_PUNCT_CHARS = frozenset(".,!?;:|।॥'\"()[]{}<>-–—/\\@#$%&*+=_~^`")
-
-
-def _count_scripts(text: str) -> Tuple[int, int, int]:
-    """Return character counts for (Sinhala, Tamil, English)."""
-    si = sum(1 for ch in text if "\u0d80" <= ch <= "\u0dff")
-    ta = sum(1 for ch in text if "\u0b80" <= ch <= "\u0bff")
-    en = sum(1 for ch in text if "a" <= ch <= "z" or "A" <= ch <= "Z")
-    return si, ta, en
+TITLE_ABBREVIATION_END = re.compile(
+    r"\b(?:Dr|Mr|Mrs|Ms|Prof|Rev|Hon|Capt|Col|Gen|Gov|Sgt|St)\.$",
+    re.IGNORECASE,
+)
+INITIAL_END = re.compile(r"\b[A-Z]\.$")
+TRAILING_CLOSERS = str.maketrans("", "", "\"'’”»)]}")
 
 
-def detect_languages(text: str) -> Dict[str, Any]:
-    """Detect language distribution by character scripts."""
-    default_resp = {
-        "primary_language": "English",
-        "primary_code": "en",
-        "is_multilingual": False,
-        "languages_detected": [{"language": "English", "code": "en", "percentage": 100.0}],
-        "script_counts": {"English": 0, "Tamil": 0, "Sinhala": 0},
-    }
-    if not text or not text.strip():
-        return default_resp
+def iter_word_tokens(text):
+    """Yield each word, preserving its original spelling and order."""
+    start = None
 
-    sample = text[:10000000]
-    si_count, ta_count, en_count = _count_scripts(sample)
-    total_alpha = si_count + ta_count + en_count
+    for index, char in enumerate(text):
+        if char.isalnum():
+            if start is None:
+                start = index
+            continue
 
-    if total_alpha == 0:
-        return default_resp
+        # Keep dependent vowel signs and other combining marks attached.
+        # Tamil and Sinhala words can also contain Unicode joiners.
+        if start is not None and (
+            unicodedata.category(char).startswith("M")
+            or char in ("\u200c", "\u200d")
+        ):
+            continue
 
-    breakdown = []
-    for lang, code, cnt in (("Tamil", "ta", ta_count), ("Sinhala", "si", si_count), ("English", "en", en_count)):
-        pct = round(cnt / total_alpha * 100, 1)
-        if pct > 0:
-            breakdown.append({"language": lang, "code": code, "percentage": pct})
+        if start is not None:
+            yield text[start:index]
+            start = None
 
-    breakdown.sort(key=lambda x: x["percentage"], reverse=True)
-    primary = breakdown[0]["language"] if breakdown else "English"
-    primary_code = breakdown[0]["code"] if breakdown else "en"
-    is_multi = len([b for b in breakdown if b["percentage"] >= 5.0]) > 1
+    if start is not None:
+        yield text[start:]
+
+
+def normalize_word(word):
+    """Group case variants and equivalent Unicode spellings together."""
+    return unicodedata.normalize("NFC", word.casefold())
+
+
+def _count_scripts(text):
+    counts = {"English": 0, "Tamil": 0, "Sinhala": 0}
+
+    for char in text:
+        if "\u0b80" <= char <= "\u0bff":
+            counts["Tamil"] += 1
+        elif "\u0d80" <= char <= "\u0dff":
+            counts["Sinhala"] += 1
+        elif "A" <= char <= "Z" or "a" <= char <= "z":
+            counts["English"] += 1
+
+    return counts
+
+
+def detect_languages(text):
+    counts = _count_scripts(text or "")
+    total = sum(counts.values())
+
+    if total == 0:
+        breakdown = [
+            {"language": "English", "code": "en", "percentage": 100.0}
+        ]
+    else:
+        breakdown = [
+            {
+                "language": language,
+                "code": LANGUAGE_CODES[language],
+                "percentage": round(count * 100 / total, 1),
+            }
+            for language, count in counts.items()
+            if count > 0
+        ]
+        breakdown.sort(
+            key=lambda item: counts[item["language"]],
+            reverse=True,
+        )
+
+    primary = breakdown[0]
 
     return {
-        "primary_language": primary,
-        "primary_code": primary_code,
-        "is_multilingual": is_multi,
+        "primary_language": primary["language"],
+        "primary_code": primary["code"],
+        "is_multilingual": sum(
+            item["percentage"] >= 5 for item in breakdown
+        ) > 1,
         "languages_detected": breakdown,
-        "script_counts": {"English": en_count, "Tamil": ta_count, "Sinhala": si_count},
+        "script_counts": counts,
     }
 
 
-def detect_sentence_language(sentence: str) -> str:
-    """Classify the dominant script of a single sentence."""
-    if not sentence or not sentence.strip():
-        return "English"
-    si, ta, en = _count_scripts(sentence)
-    if si >= ta and si >= en and si > 0:
-        return "Sinhala"
-    if ta >= si and ta >= en and ta > 0:
-        return "Tamil"
+def detect_language(text):
+    return detect_languages(text)["primary_language"]
+
+
+def detect_sentence_language(sentence):
+    counts = _count_scripts(sentence or "")
+    return max(counts, key=counts.get)
+
+
+def _word_language(word):
+    for char in word:
+        if "\u0b80" <= char <= "\u0bff":
+            return "Tamil"
+        if "\u0d80" <= char <= "\u0dff":
+            return "Sinhala"
+
     return "English"
 
 
-def segment_sentences(text: str) -> List[str]:
-    """Segment document into sentences without splitting on decimals, initials, or abbreviations."""
+def segment_sentences(text):
     if not text or not text.strip():
         return []
 
-    protected = text.replace("\r\n", "\n").replace("\r", "\n")
-    protected = _RE_DECIMAL.sub(r"\1<DECIMAL_DOT>\2", protected)
-    protected = _RE_URL_OR_EMAIL.sub(lambda m: m.group(0).replace(".", "<URL_DOT>"), protected)
-    protected = _RE_INITIALS_1.sub("<INITIAL_DOT>", protected)
-    protected = _RE_INITIALS_2.sub("<INITIAL_DOT>", protected)
-    protected = _RE_TITLE_ABBR.sub(r"\1<ABBR_DOT>", protected)
+    sentences = []
+    normalized = text.replace("\r\n", "\n").replace("\r", "\n")
 
-    raw_sents = _RE_SENT_SPLIT.split(protected)
-    cleaned = []
-    for s in raw_sents:
-        s = (
-            s.replace("<DECIMAL_DOT>", ".")
-            .replace("<URL_DOT>", ".")
-            .replace("<INITIAL_DOT>", ".")
-            .replace("<ABBR_DOT>", ".")
-            .strip()
-        )
-        if len(s) > 1:
-            cleaned.append(s)
+    for paragraph in PARAGRAPH_BOUNDARY.split(normalized):
+        paragraph = re.sub(r"\s+", " ", paragraph).strip()
+        if not paragraph:
+            continue
 
-    return cleaned or [text.strip()]
+        start = 0
+        for match in SENTENCE_BOUNDARY.finditer(paragraph):
+            ending = match.group(1).translate(TRAILING_CLOSERS)
+            if ending.endswith("."):
+                next_char = paragraph[match.end():match.end() + 1]
+                previous_char = paragraph[match.start() - 1:match.start()]
+                if previous_char.isdigit() and next_char.isdigit():
+                    continue
+
+                context = paragraph[max(start, match.start() - 32):match.start(1)] + ending
+                next_text = paragraph[match.end():].lstrip()
+                next_word = re.match(r"\S+", next_text)
+                next_word = next_word.group(0) if next_word else ""
+                is_abbreviation = ABBREVIATION_END.search(context) or INITIAL_END.search(context)
+                if is_abbreviation:
+                    if TITLE_ABBREVIATION_END.search(context):
+                        continue
+                    if INITIAL_END.search(context) and next_word and next_word[0].isupper():
+                        continue
+                    if next_word and (next_word[0].islower() or next_word[0].isdigit()):
+                        continue
+
+            sentence = paragraph[start:match.end()].strip()
+            if sentence:
+                sentences.append(sentence)
+            start = match.end()
+
+        last_sentence = paragraph[start:].strip()
+        if last_sentence:
+            sentences.append(last_sentence)
+
+    return sentences
 
 
 @lru_cache(maxsize=1)
 def _get_english_nlp():
-    """Load spaCy model with safety download fallback."""
+    """Use the installed English spaCy model when available."""
     try:
         import spacy
+    except ImportError:
+        return None
+
+    try:
         return spacy.load("en_core_web_sm")
-    except Exception:
-        try:
-            import spacy
-            from spacy.cli import download
-            download("en_core_web_sm")
-            return spacy.load("en_core_web_sm")
-        except Exception:
-            return None
+    except OSError:
+        return None
 
 
-def _record_token(
-    tok: str,
-    pos: str,
-    tag: str,
-    lemma: str,
-    morph: str,
-    lang: str,
-    sent_id: int,
-    is_punct: bool,
-    token_texts: List[str],
-    word_freq: Counter,
-    pos_counter: Counter,
-    lemmas: List[str],
-    token_details: List[Dict[str, Any]],
-    is_stop: bool = False,
-):
-    """Helper to maintain uniform token bookkeeping."""
-    if not is_punct:
-        token_texts.append(tok)
-        word_freq[tok.lower()] += 1
+def _annotate_batch(words, language):
+    """Return one annotation for each word in the supplied batch."""
+    if language in ("Tamil", "Sinhala"):
+        analyzer = (
+            analyze_tamil_word
+            if language == "Tamil"
+            else analyze_sinhala_word
+        )
 
-    pos_counter[pos] += 1
-    lemmas.append(lemma)
-    token_details.append({
-        "token": tok,
-        "text": tok,
-        "normalized": tok.lower(),
-        "lemma": lemma,
-        "pos": pos,
-        "tag": tag,
-        "morph": morph,
-        "language": lang,
-        "sentence_id": sent_id,
-        "is_stop": is_stop,
-    })
+        for word in words:
+            pos, tag, lemma, morph = analyzer(word)
+            yield pos, tag, lemma, morph, False
+
+        return
+
+    nlp = _get_english_nlp()
+
+    if nlp is None:
+        for word in words:
+            pos = "NUM" if word.isdigit() else "NOUN"
+            yield pos, pos, lemmatize_english(word, pos), "", False
+
+        return
+
+    from spacy.tokens import Doc
+
+    # Give spaCy the exact words produced by our tokenizer. This keeps
+    # the POS rows, lemma rows, and Word / Count table aligned.
+    doc = nlp(Doc(nlp.vocab, words=words))
+
+    for token in doc:
+        pos = token.pos_ or "X"
+        lemma = refine_english_lemma(token.text, token.lemma_, pos)
+
+        yield (
+            pos,
+            token.tag_ or pos,
+            lemma,
+            str(token.morph),
+            bool(token.is_stop),
+        )
 
 
-def tokenize_and_tag(text: str) -> Dict[str, Any]:
-    """Tokenize, tag POS, and lemmatize sentences based on detected language."""
+def tokenize_and_tag(text):
     sentences = segment_sentences(text)
-    token_details: List[Dict[str, Any]] = []
-    token_texts: List[str] = []
-    lemmas: List[str] = []
-    pos_counter: Counter = Counter()
-    word_freq: Counter = Counter()
-    en_nlp = _get_english_nlp()
+    tokens = []
+    lemmas = []
+    token_details = []
+    frequencies = Counter()
+    pos_counts = Counter()
 
-    for sent_id, sent in enumerate(sentences, 1):
-        sent_lang = detect_sentence_language(sent)
+    for sentence_id, sentence in enumerate(sentences, start=1):
+        words = iter_word_tokens(sentence)
 
-        if sent_lang == "English" and en_nlp is not None:
-            doc = en_nlp(sent)
-            for token in doc:
-                text_clean = token.text.strip()
-                if not text_clean:
-                    continue
-                pos = token.pos_ or "X"
-                lemma = refine_english_lemma(text_clean, token.lemma_, pos)
-                _record_token(
-                    tok=text_clean,
-                    pos=pos,
-                    tag=token.tag_ or pos,
-                    lemma=lemma,
-                    morph=str(token.morph) if token.morph else "",
-                    lang="en",
-                    sent_id=sent_id,
-                    is_punct=token.is_punct or token.is_space,
-                    token_texts=token_texts,
-                    word_freq=word_freq,
-                    pos_counter=pos_counter,
-                    lemmas=lemmas,
-                    token_details=token_details,
-                    is_stop=bool(token.is_stop),
-                )
-        else:
-            # Route to respective analyzer
-            if sent_lang == "Tamil":
-                raw_tokens = _RE_TA_TOKENS.findall(sent)
-                analyzer = analyze_tamil_word
-                lang_code = "ta"
-            elif sent_lang == "Sinhala":
-                raw_tokens = _RE_SI_TOKENS.findall(sent)
-                analyzer = analyze_sinhala_word
-                lang_code = "si"
-            else:
-                raw_tokens = _RE_EN_FALLBACK_TOKENS.findall(sent)
-                analyzer = None
-                lang_code = "en"
+        # A single sentence may contain English, Tamil, and Sinhala.
+        for language, group in groupby(words, key=_word_language):
+            code = LANGUAGE_CODES[language]
 
-            for raw_tok in raw_tokens:
-                tok = raw_tok.strip()
-                if not tok:
-                    continue
+            while True:
+                batch = list(islice(group, ENGLISH_BATCH_SIZE))
+                if not batch:
+                    break
 
-                if analyzer:
-                    pos, tag, lemma, morph = analyzer(tok)
-                    is_punct = (pos == "PUNCT")
-                else:
-                    is_punct = all(c in _PUNCT_CHARS for c in tok)
-                    pos = "PUNCT" if is_punct else "NUM" if tok.isdigit() else "NOUN"
-                    tag = pos
-                    lemma = tok if is_punct else lemmatize_english(tok, pos)
-                    morph = ""
+                annotations = _annotate_batch(batch, language)
 
-                _record_token(
-                    tok=tok,
-                    pos=pos,
-                    tag=tag,
-                    lemma=lemma,
-                    morph=morph,
-                    lang=lang_code,
-                    sent_id=sent_id,
-                    is_punct=is_punct,
-                    token_texts=token_texts,
-                    word_freq=word_freq,
-                    pos_counter=pos_counter,
-                    lemmas=lemmas,
-                    token_details=token_details,
-                )
+                for word, annotation in zip(batch, annotations):
+                    pos, tag, lemma, morph, is_stop = annotation
+                    normalized = normalize_word(word)
 
-    top_words = [[w, count] for w, count in word_freq.most_common(50)]
+                    # Count every occurrence, including words like "the".
+                    frequencies[normalized] += 1
+                    pos_counts[pos] += 1
+
+                    tokens.append(word)
+                    lemmas.append(lemma)
+                    token_details.append({
+                        "token": word,
+                        "text": word,
+                        "normalized": normalized,
+                        "lemma": lemma,
+                        "pos": pos,
+                        "tag": tag,
+                        "morph": morph,
+                        "language": code,
+                        "sentence_id": sentence_id,
+                        "is_stop": is_stop,
+                    })
+
     return {
-        "tokens": token_texts,
-        "token_count": len(token_texts),
-        "unique_tokens": len(word_freq),
+        "tokens": tokens,
+        "token_count": len(tokens),
+        "unique_tokens": len(frequencies),
         "lemmas": lemmas,
         "token_details": token_details,
-        "pos_distribution": dict(pos_counter),
-        "top_words": top_words,
-        "top_keywords": [w for w, _ in top_words[:5]],
+        "pos_distribution": dict(pos_counts),
+
+        # All distinct words, in the order they first occur.
+        "word_counts": list(frequencies.items()),
+
+        # These shorter lists are for the existing summary charts.
+        "top_words": frequencies.most_common(50),
+        "top_keywords": [
+            word for word, _ in frequencies.most_common(5)
+        ],
         "sentences": sentences,
         "sentence_count": len(sentences),
     }
 
 
-def compute_statistics(text: str, token_data: Dict[str, Any], lang_data: Dict[str, Any] = None) -> Dict[str, Any]:
-    """Compute high-level corpus & document statistics."""
-    chars = len(text)
-    chars_no_spaces = len(re.sub(r"\s+", "", text))
-    paragraphs = [p for p in text.split("\n\n") if p.strip()]
+def compute_statistics(text, token_data, lang_data=None):
     if lang_data is None:
-        lang_data = detect_languages(text[:10000000])
-    lang_dist = {b["language"]: b["percentage"] for b in lang_data.get("languages_detected", [])}
+        lang_data = detect_languages(text)
+
+    paragraphs = [
+        paragraph
+        for paragraph in re.split(r"\r?\n[ \t]*\r?\n", text)
+        if paragraph.strip()
+    ]
 
     return {
-        "characters": chars,
-        "characters_without_spaces": chars_no_spaces,
-        "tokens": token_data.get("token_count", 0),
-        "unique_tokens": token_data.get("unique_tokens", 0),
-        "sentences": token_data.get("sentence_count", 0),
-        "paragraphs": max(len(paragraphs), 1),
-        "language_distribution": lang_dist,
-        "pos_distribution": token_data.get("pos_distribution", {}),
+        "characters": len(text),
+        "characters_without_spaces": sum(
+            not char.isspace() for char in text
+        ),
+        "tokens": token_data["token_count"],
+        "unique_tokens": token_data["unique_tokens"],
+        "sentences": token_data["sentence_count"],
+        "paragraphs": len(paragraphs),
+        "language_distribution": {
+            item["language"]: item["percentage"]
+            for item in lang_data["languages_detected"]
+        },
+        "pos_distribution": token_data["pos_distribution"],
     }
 
 
-def analyze(text: str, max_chars: int = 10000000) -> Dict[str, Any]:
-    """
-    Main entry point for NLP processing pipeline:
-    1. Detects languages
-    2. Segments sentences
-    3. Analyzes POS, morphology, and lemmas
-    4. Computes statistics
-    """
-    sample = (text or "")[:max_chars]
-    lang_data = detect_languages(sample)
-    primary_lang = lang_data["primary_language"]
-    token_results = tokenize_and_tag(sample)
-    stats = compute_statistics(sample, token_data=token_results, lang_data=lang_data)
+def analyze(text: str, max_chars=None):
+    """Analyze the full text. Accept max_chars for older project callers."""
+    text = text or ""
+    lang_data = detect_languages(text)
+    result = tokenize_and_tag(text)
+    primary = lang_data["primary_language"]
 
-    if lang_data.get("is_multilingual"):
-        display_parts = [f"{b['language']} ({b['percentage']}%)" for b in lang_data.get("languages_detected", [])]
-        lang_display = "Multilingual: " + ", ".join(display_parts)
+    if lang_data["is_multilingual"]:
+        parts = [
+            f"{item['language']} ({item['percentage']}%)"
+            for item in lang_data["languages_detected"]
+        ]
+        display = "Multilingual: " + ", ".join(parts)
     else:
-        lang_display = primary_lang
+        display = primary
 
     return {
-        "language": primary_lang,
-        "language_display": lang_display,
-        "tokens": token_results.get("tokens", []),
-        "token_count": token_results.get("token_count", 0),
-        "unique_tokens": token_results.get("unique_tokens", 0),
-        "lemmas": token_results.get("lemmas", []),
-        "top_keywords": token_results.get("top_keywords", []),
-        "token_details": token_results.get("token_details", []),
-        "pos_distribution": token_results.get("pos_distribution", {}),
-        "top_words": token_results.get("top_words", []),
-        "sentences": token_results.get("sentences", []),
-        "sentence_count": token_results.get("sentence_count", 0),
-        "statistics": stats,
+        **result,
+        "language": primary,
+        "language_display": display,
+        "statistics": compute_statistics(text, result, lang_data),
     }
-
-
-def detect_language(text: str) -> str:
-    """Helper returning only the primary language name."""
-    return detect_languages(text).get("primary_language", "English")

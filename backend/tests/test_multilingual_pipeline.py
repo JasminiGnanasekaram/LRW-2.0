@@ -26,6 +26,40 @@ class TestCleaning(unittest.TestCase):
         self.assertIn("Dr.", cleaned)
         self.assertIn("\n\n", cleaned)
 
+    def test_removes_page_numbers_watermarks_and_repeated_headers_footers(self):
+        cleaned = cleaning.clean(
+            "Page 1 of 2\nAnnual Report\nCONFIDENTIAL\n"
+            "The first page contains useful information.\n"
+            "Annual Report\n2\nDRAFT\n"
+            "The second page contains more useful information."
+        )
+        self.assertNotIn("Page 1", cleaned)
+        self.assertNotIn("Annual Report", cleaned)
+        self.assertNotIn("CONFIDENTIAL", cleaned)
+        self.assertNotIn("DRAFT", cleaned)
+        self.assertNotIn("\n2\n", f"\n{cleaned}\n")
+        self.assertIn("The first page contains useful information.", cleaned)
+        self.assertIn("The second page contains more useful information.", cleaned)
+
+    def test_removes_noolaham_scan_footer_and_page_number(self):
+        cleaned = cleaning.clean(
+            "தமிழ் உரை.\n\nDigitized by Noolaham Foundation.\n"
+            "noolaham.org | aavanaham.org\nin Foundation.\nnal\n"
+            "- 12 -\n\nஅடுத்த பக்க உரை."
+        )
+        self.assertNotIn("Digitized by Noolaham", cleaned)
+        self.assertNotIn("Foundation", cleaned)
+        self.assertNotIn("\nnal\n", f"\n{cleaned}\n")
+        self.assertNotIn("noolaham.org", cleaned)
+        self.assertNotIn("aavanaham.org", cleaned)
+        self.assertNotIn("12", cleaned)
+        self.assertIn("தமிழ் உரை.", cleaned)
+        self.assertIn("அடுத்த பக்க உரை.", cleaned)
+
+    def test_preserves_repeated_body_sentences(self):
+        sentence = "This is repeated body content."
+        self.assertEqual(cleaning.clean(f"{sentence}\n{sentence}"), f"{sentence}\n{sentence}")
+
 
 class TestLanguageDetection(unittest.TestCase):
     def test_single_language_documents(self):
@@ -74,6 +108,40 @@ class TestSentenceSegmentation(unittest.TestCase):
         sentences = nlp.segment_sentences("The rate is 3.5 percent. It rose again.")
         self.assertEqual(len(sentences), 2)
         self.assertIn("3.5", sentences[0])
+
+    def test_splits_on_sentence_punctuation_without_following_spaces(self):
+        sentences = nlp.segment_sentences(
+            "First sentence.Second sentence!Third sentence?நான்காவது வாக்கியம்."
+        )
+        self.assertEqual(sentences, [
+            "First sentence.",
+            "Second sentence!",
+            "Third sentence?",
+            "நான்காவது வாக்கியம்.",
+        ])
+
+    def test_joins_wrapped_lines_and_splits_paragraphs_and_quoted_sentences(self):
+        sentences = nlp.segment_sentences(
+            'The first sentence wraps\nonto another line. She said, "Stop now."\n'
+            "The next sentence starts here.\n\nA new paragraph begins."
+        )
+        self.assertEqual(sentences, [
+            "The first sentence wraps onto another line.",
+            'She said, "Stop now."',
+            "The next sentence starts here.",
+            "A new paragraph begins.",
+        ])
+
+    def test_abbreviations_only_suppress_internal_sentence_boundaries(self):
+        sentences = nlp.segment_sentences(
+            "Dr. Silva visited the U.S. embassy. They reviewed the report, etc. "
+            "It was approved."
+        )
+        self.assertEqual(sentences, [
+            "Dr. Silva visited the U.S. embassy.",
+            "They reviewed the report, etc.",
+            "It was approved.",
+        ])
 
     def test_empty_input_returns_no_sentences(self):
         self.assertEqual(nlp.segment_sentences(""), [])

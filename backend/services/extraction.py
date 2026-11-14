@@ -55,7 +55,7 @@ def _resolve_tesseract_cmd() -> Optional[str]:
     return cmd
 
 
-def _ocr_image(image) -> str:
+def _ocr_image(image, required_languages=()) -> str:
     if pytesseract is None:
         raise RuntimeError(
             "OCR requires pytesseract and the Tesseract executable. "
@@ -73,19 +73,15 @@ def _ocr_image(image) -> str:
 
 
     try:
-        return _clean_ocr(pytesseract.image_to_string(image, lang=OCR_LANGUAGES))
+        return _clean_ocr(
+            pytesseract.image_to_string(image, lang=_get_ocr_languages(required_languages))
+        )
     except pytesseract.pytesseract.TesseractNotFoundError as exc:
         raise RuntimeError(
             "Tesseract executable not found. Install it at the configured absolute path, "
             "or set TESSERACT_CMD in backend/.env to the full executable path."
         ) from exc
     except Exception as exc:
-        err_str = str(exc).lower()
-        if "data" in err_str or "language" in err_str or "tam" in err_str or "sin" in err_str:
-            try:
-                return _clean_ocr(pytesseract.image_to_string(image, lang="eng"))
-            except Exception:
-                pass
         raise RuntimeError(f"OCR extraction failed: {exc}") from exc
 
 
@@ -97,21 +93,159 @@ LEGACY_TAMIL_FONT_MARKERS = (
     "amudham", "kavipriya", "lt-tm", "ltamil", "mylai", "nakkeeran", "indoweb", "tace",
     "senthamil", "thendral",
 )
+LEGACY_SINHALA_FONT_MARKERS = (
+    "fmabhaya", "fmbindumathi", "dl-man", "dlmanel", "dl-araliya", "kaputa",
+    "malithi", "dinamina", "sarasavi", "thibus",
+)
+STANDARD_UNICODE_FONT_MARKERS = (
+    "arial", "calibri", "aptos", "cambria", "helvetica", "times", "courier",
+    "verdana", "georgia", "tahoma", "segoe", "liberation", "dejavu", "noto",
+    "carlito", "consolas", "roboto",
+)
 
 
-def _page_has_legacy_tamil_font(page) -> bool:
+def _has_readable_pdf_text(text: str) -> bool:
+    """Reject empty or symbol-heavy PDF text layers that should be OCRed instead."""
+    stripped = text.strip()
+    if len(stripped) < PDF_MIN_CHARS:
+        return False
+    content_chars = sum(char.isalnum() for char in stripped)
+    return content_chars / len(stripped) >= 0.5
+
+
+def _get_ocr_languages(required_languages=()) -> str:
+    """Use installed supported Tesseract languages instead of failing on missing data."""
+    if pytesseract is None:
+        if required_languages:
+            raise RuntimeError("OCR requires pytesseract and the Tesseract executable.")
+        return OCR_LANGUAGES
+    try:
+        available = set(pytesseract.get_languages(config=""))
+    except Exception:
+        return OCR_LANGUAGES
+    missing = set(required_languages) - available
+    if missing:
+        missing_list = ", ".join(sorted(missing))
+        raise RuntimeError(
+            f"This legacy-font PDF requires Tesseract language data for {missing_list}. "
+            "Install the corresponding traineddata file and try again."
+        )
+    languages = [lang for lang in OCR_LANGUAGES.split("+") if lang in available]
+    languages.extend(lang for lang in required_languages if lang not in languages)
+    return "+".join(languages) if languages else OCR_LANGUAGES
+
+
+def _page_legacy_language(page):
     for font in page.get_fonts():
         name = str(font[3]).lower().split("+")[-1]
         if any(marker in name for marker in LEGACY_TAMIL_FONT_MARKERS):
-            return True
-    return False
+            return "tam"
+        if any(marker in name for marker in LEGACY_SINHALA_FONT_MARKERS):
+            return "sin"
+    return None
+
+
+def _page_may_have_legacy_encoding(page, text: str) -> bool:
+    """Detect likely legacy script text when its PDF font lacks a known legacy name."""
+    if _page_legacy_language(page):
+        return True
+
+    letters = [char for char in text if char.isalpha()]
+    if len(letters) < PDF_MIN_CHARS:
+        return False
+    latin_letters = sum(char.isascii() for char in letters)
+    has_tamil_or_sinhala = _script_character_count(text) > 0
+
+    font_names = [
+        str(font[3]).lower().split("+")[-1]
+        for font in page.get_fonts()
+        if len(font) > 3
+    ]
+    nonstandard_font = not font_names or not any(
+        marker in name
+        for name in font_names
+        for marker in STANDARD_UNICODE_FONT_MARKERS
+    )
+    if not nonstandard_font:
+        return False
+    if not font_names:
+        return latin_letters / len(letters) >= 0.75
+    return latin_letters / len(letters) >= 0.30 or has_tamil_or_sinhala
+
+
+def _ocr_has_better_script_text(ocr_text: str, extracted_text: str) -> bool:
+    """Prefer OCR only when it recovers substantially more Tamil/Sinhala characters."""
+    extracted_count = _script_character_count(extracted_text)
+    ocr_count = _script_character_count(ocr_text)
+    return ocr_count > extracted_count + max(5, int(extracted_count * 0.1))
+
+
+def _script_character_count(text: str) -> int:
+    return sum(
+        "\u0b80" <= char <= "\u0bff" or "\u0d80" <= char <= "\u0dff"
+        for char in text
+    )
+
+
+def _page_image_coverage(page) -> float:
+    """Return the fraction of a page covered by embedded raster images."""
+    page_rect = page.rect
+    page_area = page_rect.width * page_rect.height
+    if page_area <= 0:
+        return 0.0
+
+    image_rects = []
+    for image in page.get_image_info(xrefs=True):
+        x0, y0, x1, y1 = image["bbox"]
+        x0, x1 = max(page_rect.x0, x0), min(page_rect.x1, x1)
+        y0, y1 = max(page_rect.y0, y0), min(page_rect.y1, y1)
+        if x1 > x0 and y1 > y0:
+            image_rects.append((x0, y0, x1, y1))
+    if not image_rects:
+        return 0.0
+
+    x_edges = sorted({edge for rect in image_rects for edge in (rect[0], rect[2])})
+    covered_area = 0.0
+    for left, right in zip(x_edges, x_edges[1:]):
+        midpoint = (left + right) / 2
+        intervals = sorted(
+            (rect[1], rect[3])
+            for rect in image_rects
+            if rect[0] < midpoint < rect[2]
+        )
+        covered_height = 0.0
+        if intervals:
+            start, end = intervals[0]
+            for next_start, next_end in intervals[1:]:
+                if next_start > end:
+                    covered_height += end - start
+                    start, end = next_start, next_end
+                else:
+                    end = max(end, next_end)
+            covered_height += end - start
+        covered_area += (right - left) * covered_height
+    return min(covered_area / page_area, 1.0)
+
+
+def _page_requires_ocr(page, text: str) -> bool:
+    """Recognize scans whose only searchable text is a small stamp or watermark."""
+    if _page_may_have_legacy_encoding(page, text):
+        return True
+    if _script_character_count(text) or len(text.strip()) > 300:
+        return False
+    return _page_image_coverage(page) >= 0.6
+
+
+def _page_has_legacy_font(page) -> bool:
+    return _page_legacy_language(page) is not None
 
 
 def _page_has_usable_text(page) -> bool:
     """True when the page has a real, correctly encoded Unicode text layer."""
-    if len(page.get_text().strip()) < PDF_MIN_CHARS:
+    text = page.get_text()
+    if not _has_readable_pdf_text(text):
         return False
-    return not _page_has_legacy_tamil_font(page)
+    return not _page_requires_ocr(page, text)
 
 
 def _clean_ocr(text: str) -> str:
@@ -124,44 +258,51 @@ def extract_from_text(content: bytes, encoding: str = "utf-8") -> str:
 
 def extract_from_pdf(content: bytes) -> str:
     """Read PDF text layers and OCR pages without enough extractable text."""
-    import pymupdf as fitz
+    if fitz is None:
+        raise RuntimeError("PDF extraction requires PyMuPDF. Install the backend dependencies.")
     from PIL import Image
 
     document = fitz.open(stream=content, filetype="pdf")
     try:
         parts = []
-        for page in document:
+        for page_number, page in enumerate(document, start=1):
             page_text = page.get_text().strip()
-            if _page_has_legacy_tamil_font(page):
-                page_text = ""  # legacy-font text layer is gibberish; OCR the page instead
-            if len(page_text) >= PDF_MIN_CHARS:
+            legacy_language = _page_legacy_language(page)
+            requires_ocr = _page_requires_ocr(page, page_text)
+            if not requires_ocr and _has_readable_pdf_text(page_text):
                 parts.append(page_text)
                 continue
 
             try:
                 pixmap = page.get_pixmap(matrix=fitz.Matrix(2, 2))
                 with Image.open(io.BytesIO(pixmap.tobytes("png"))) as image:
-    
-                    ocr_res = _ocr_image(image)
-                    if ocr_res:
+                    ocr_res = _ocr_image(
+                        image,
+                        required_languages=(legacy_language,) if legacy_language else (),
+                    )
+                    if ocr_res and (
+                        requires_ocr
+                        or not _has_readable_pdf_text(page_text)
+                        or _ocr_has_better_script_text(ocr_res, page_text)
+                    ):
                         parts.append(ocr_res)
-                    elif page_text:
+                    elif _has_readable_pdf_text(page_text):
                         parts.append(page_text)
+                    else:
+                        raise ValueError("OCR did not recognize readable text on this page.")
             except Exception as ocr_err:
-                if page_text:
+                if _has_readable_pdf_text(page_text):
                     parts.append(page_text)
-                elif len(document) == 1:
-                    raise ocr_err
-
-
-
-
+                else:
+                    raise RuntimeError(f"Could not read PDF page {page_number}: {ocr_err}") from ocr_err
 
         full_text = "\n\n".join(p for p in parts if p and p.strip())
         if not full_text.strip():
-            fallback_text = "\n\n".join(page.get_text().strip() for page in document)
-            if fallback_text.strip():
-                return fallback_text.strip()
+            raise ValueError(
+                "No readable text could be extracted from this PDF. "
+                "For legacy-font or scanned documents, verify Tesseract and the required "
+                "English, Tamil, or Sinhala language data are installed."
+            )
         return full_text
     finally:
         document.close()
@@ -169,7 +310,8 @@ def extract_from_pdf(content: bytes) -> str:
 
 def detect_pdf_type(content: bytes) -> str:
     """Return text_only, text_image, or image_only."""
-    import pymupdf as fitz
+    if fitz is None:
+        raise RuntimeError("PDF extraction requires PyMuPDF. Install the backend dependencies.")
 
     document = fitz.open(stream=content, filetype="pdf")
     try:
@@ -311,6 +453,11 @@ def extract_from_audio(
             pass
 
 
+def is_pdf_content(content: bytes) -> bool:
+    """Detect PDF uploads by their header, including files with a non-PDF extension."""
+    return b"%PDF-" in content[:1024]
+
+
 def _pdf_is_mostly_text(
     content: bytes,
     min_chars_per_page: int = PDF_MIN_CHARS,
@@ -352,13 +499,9 @@ def extract(
     if content is None:
         raise ValueError("File content is required.")
 
-    if kind == "image" and filename and filename.lower().endswith(".pdf"):
-        kind = "pdf"
-        if False and _pdf_is_mostly_text(content):
-            raise ValueError(
-                "This PDF contains extractable text. "
-                "Please upload it using the PDF tab instead."
-            )
+    if kind == "image" and (
+        (filename and filename.lower().endswith(".pdf")) or is_pdf_content(content)
+    ):
         kind = "pdf"
 
     if kind == "text":

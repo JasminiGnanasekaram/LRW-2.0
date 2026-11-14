@@ -30,6 +30,7 @@ class MetadataIn(BaseModel):
     domain: Optional[str] = "general"
 
     # Optional
+    region: str | None = None
     publication_date: str | None = None
     author: str | None = None
     category: str | None = None # open | research | restricted

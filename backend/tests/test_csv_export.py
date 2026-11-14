@@ -7,7 +7,8 @@ from collections import Counter
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from routes.documents import router, list_documents
-from services.csv_export import document_to_csv
+from models import MetadataIn
+from services.csv_export import document_to_csv, documents_summary_csv
 
 
 class CsvExportTests(unittest.TestCase):
@@ -15,6 +16,7 @@ class CsvExportTests(unittest.TestCase):
         doc = {
             "filename": "sample.pdf",
             "file_type": "pdf",
+            "metadata": {"region": "Northern Province"},
             "nlp": {
                 "language_display": "English",
                 "token_details": [
@@ -32,10 +34,22 @@ class CsvExportTests(unittest.TestCase):
         self.assertIn("token", csv_lower)
         self.assertIn("hello", csv_lower)
         self.assertIn("world", csv_lower)
+        self.assertIn("northern province", csv_lower)
         self.assertNotIn("language breakdown", csv_lower)
         self.assertNotIn("named entities", csv_lower)
         self.assertNotIn("sentiment", csv_lower)
         self.assertNotIn("classification", csv_lower)
+
+    def test_region_is_preserved_in_metadata_and_bulk_csv(self):
+        metadata = MetadataIn(source="Archive", license="Public Domain", region="South Asia")
+        self.assertEqual(metadata.model_dump()["region"], "South Asia")
+
+        csv_text = documents_summary_csv([{
+            "filename": "sample.pdf",
+            "metadata": {"region": "South Asia"},
+        }])
+        self.assertIn("Region", csv_text)
+        self.assertIn("South Asia", csv_text)
 
     def test_document_routes_are_not_duplicated_and_list_supports_limit(self):
         export_paths = [route.path for route in router.routes if route.path and "export" in route.path]

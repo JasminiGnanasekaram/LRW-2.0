@@ -1,10 +1,8 @@
 import secrets
-import sys
 import pickle
 import base64
 import os
-import ssl
-import smtplib
+from email.utils import formataddr
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
@@ -14,9 +12,8 @@ from config import get_settings
 settings = get_settings()
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
-GMAIL_DIR = os.path.join(os.path.dirname(__file__), "..", "gmail")
+GMAIL_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "gmail"))
 TOKEN_FILE = os.path.join(GMAIL_DIR, "gmail_token.pickle")
-CREDS_FILE = os.path.join(GMAIL_DIR, "gmail_credentials.json")
 
 
 def generate_token(nbytes: int = 32) -> str:
@@ -27,47 +24,53 @@ def expiry(minutes: int = 60) -> datetime:
     return datetime.utcnow() + timedelta(minutes=minutes)
 
 
-def _get_gmail_service(Request, build):
-    creds = None
-    if os.path.exists(TOKEN_FILE):
-        with open(TOKEN_FILE, "rb") as f:
-            creds = pickle.load(f)
+def _get_gmail_service():
+    try:
+        from google.auth.transport.requests import Request
+        from googleapiclient.discovery import build
+    except ImportError as exc:
+        raise RuntimeError(
+            "Gmail delivery dependencies are missing. Install backend requirements."
+        ) from exc
+
+    if not os.path.isfile(TOKEN_FILE):
+        raise RuntimeError(
+            "Gmail OAuth is not configured. Add Gmail OAuth credentials and run "
+            "backend/generate_gmail_token.py."
+        )
+
+    with open(TOKEN_FILE, "rb") as f:
+        creds = pickle.load(f)
     if creds and creds.expired and creds.refresh_token:
         creds.refresh(Request())
         with open(TOKEN_FILE, "wb") as f:
             pickle.dump(creds, f)
     if not creds or not creds.valid:
-        raise Exception("Gmail token missing. Run generate_gmail_token.py first.")
-    return build("gmail", "v1", credentials=creds)
+        raise RuntimeError(
+            "Gmail OAuth token is invalid. Run backend/generate_gmail_token.py again."
+        )
+    return build("gmail", "v1", credentials=creds, cache_discovery=False)
 
 
-def _send_via_smtp(to: str, msg: MIMEMultipart) -> None:
-    smtp_host = settings.SMTP_HOST.strip()
-    smtp_port = settings.SMTP_PORT
-    smtp_user = settings.SMTP_USER.strip()
-    smtp_password = settings.SMTP_PASSWORD
-    from_addr = settings.SMTP_FROM or smtp_user or "no-reply@lrw.local"
+def _gmail_address(service) -> str:
+    profile = service.users().getProfile(userId="me").execute()
+    address = profile.get("emailAddress")
+    if not address:
+        raise RuntimeError("Could not determine the Gmail account for the OAuth token.")
+    return address
 
-    msg["From"] = f"Language Resource Workbench <{from_addr}>"
+
+def _send_via_gmail(to: str, msg: MIMEMultipart, service=None, sender=None) -> None:
+    service = service or _get_gmail_service()
+    sender = sender or _gmail_address(service)
+    msg["From"] = formataddr(("Language Resource Workbench", sender))
     msg["To"] = to
-
-    context = ssl.create_default_context()
-    if smtp_port == 465:
-        with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context, timeout=10) as server:
-            if smtp_user and smtp_password:
-                server.login(smtp_user, smtp_password)
-            server.sendmail(from_addr, [to], msg.as_string())
-    else:
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
-            server.ehlo()
-            if smtp_port == 587:
-                server.starttls(context=context)
-                server.ehlo()
-            if smtp_user and smtp_password:
-                server.login(smtp_user, smtp_password)
-            server.sendmail(from_addr, [to], msg.as_string())
-
-    print(f"[email] ✅ Sent via SMTP to {to}", flush=True)
+    raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+    service.users().messages().send(
+        userId="me",
+        body={"raw": raw},
+    ).execute()
+    print(f"[email] Sent via Gmail API to {to}", flush=True)
 
 
 def send_email(to: str, subject: str, body: str) -> None:
@@ -97,41 +100,7 @@ def send_email(to: str, subject: str, body: str) -> None:
     msg.attach(MIMEText(body, "plain"))
     msg.attach(MIMEText(html_body, "html"))
 
-    if settings.SMTP_HOST:
-        try:
-            _send_via_smtp(to, msg)
-            return
-        except Exception as e:
-            print(f"[email SMTP ERROR] ❌ {e}", flush=True)
-
-    if os.path.exists(TOKEN_FILE):
-        try:
-            from google.auth.transport.requests import Request
-            from googleapiclient.discovery import build
-
-            msg["From"] = f"Language Resource Workbench <{settings.SMTP_FROM}>"
-            msg["To"] = to
-            msg["Subject"] = subject
-            raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
-            service = _get_gmail_service(Request, build)
-            service.users().messages().send(
-                userId="me",
-                body={"raw": raw}
-            ).execute()
-            print(f"[email] ✅ Sent '{subject}' to {to}", flush=True)
-            return
-        except Exception as e:
-            print(f"[email GMAIL ERROR] ❌ {e}", flush=True)
-
-    print("\n" + "="*50, flush=True)
-    print("📧  DEV EMAIL — copy the link below", flush=True)
-    print("="*50, flush=True)
-    print(f"To:      {to}", flush=True)
-    print(f"Subject: {subject}", flush=True)
-    print("-"*50, flush=True)
-    print(body, flush=True)
-    print("="*50 + "\n", flush=True)
-    sys.stdout.flush()
+    _send_via_gmail(to, msg)
 
 
 def send_verification_email(to: str, token: str, base_url: str = None) -> None:

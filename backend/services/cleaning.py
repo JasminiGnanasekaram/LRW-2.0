@@ -12,6 +12,20 @@ SAFE_SYMBOLS = frozenset(".,!?:;\"'()[]{}<>-–—/\\@#%&*+=_~^`|।॥\u0DF4") 
 
 HTML_TAG_RE = re.compile(r"<!--.*?-->|</?[A-Za-z!][^>]*>", re.DOTALL)
 EMOJI_RE = re.compile("[\U0001F300-\U0001F6FF\U0001F900-\U0001F9FF\U0001FA70-\U0001FAFF\u2700-\u27BF\ufe0f]")
+PAGE_NUMBER_RE = re.compile(
+    r"^(?:page\s*)?(?:\d{1,4}|[ivxlcdm]{1,8})(?:\s*(?:of|/)\s*\d{1,4})?$|^[-–—]?\s*\d{1,4}\s*[-–—]?$",
+    re.IGNORECASE,
+)
+WATERMARK_RE = re.compile(
+    r"^[\W_]*(?:CONFIDENTIAL|DRAFT|SAMPLE|DO\s+NOT\s+(?:COPY|DISTRIBUTE)|"
+    r"FOR\s+INTERNAL\s+USE(?:\s+ONLY)?|PROPRIETARY|TOP\s+SECRET|UNCLASSIFIED|"
+    r"CLASSIFIED|WATERMARK)[\W_]*$",
+    re.IGNORECASE,
+)
+FOOTER_WATERMARK_RE = re.compile(
+    r"(?:digitized\s+by|noolaham(?:\.org)?|aavanaham(?:\.org)?|foundation)",
+    re.IGNORECASE,
+)
 HYPHEN_BREAK_RE = re.compile(r"(?<=[\w\u0B80-\u0BFF\u0D80-\u0DFF])-[ \t]*\n[ \t]*(?=\w)")
 
 DOUBLE_QUOTES_RE = re.compile(r"[“”«»„‟˝`´]+")
@@ -86,6 +100,49 @@ def remove_urls(text: str) -> str:
     return re.sub(r"https?://\S+|www\.\S+", "", text)
 
 
+def remove_page_artifacts(text: str) -> str:
+    """Remove standalone page numbers, known watermark lines, and repeated headers/footers."""
+    lines = text.splitlines()
+    counts = {}
+
+    for line in lines:
+        candidate = line.strip()
+        if candidate and len(candidate) <= 100 and not re.search(r"[.!?。！？]$", candidate):
+            counts[candidate.casefold()] = counts.get(candidate.casefold(), 0) + 1
+
+    cleaned = []
+    skip_split_watermark_fragment = False
+    for line in lines:
+        candidate = line.strip()
+        if not candidate:
+            cleaned.append("")
+            skip_split_watermark_fragment = False
+            continue
+        if skip_split_watermark_fragment:
+            skip_split_watermark_fragment = False
+            if re.fullmatch(r"[A-Za-z]{1,4}", candidate):
+                continue
+        if (
+            PAGE_NUMBER_RE.fullmatch(candidate)
+            or WATERMARK_RE.fullmatch(candidate)
+            or FOOTER_WATERMARK_RE.search(candidate)
+        ):
+            if "foundation" in candidate.casefold():
+                skip_split_watermark_fragment = True
+            continue
+
+        # Repeated short, non-sentence lines are commonly page headers or footers.
+        if (
+            len(candidate) <= 100
+            and counts.get(candidate.casefold(), 0) > 1
+            and not re.search(r"[.!?。！？]$", candidate)
+        ):
+            continue
+        cleaned.append(line)
+
+    return "\n".join(cleaned)
+
+
 def collapse_whitespace(text: str) -> str:
     """Collapse spaces and limit paragraph breaks to a single blank line."""
     text = text.replace("\r\n", "\n").replace("\r", "\n")
@@ -102,6 +159,7 @@ PIPELINE = (
     remove_hyphenated_line_breaks,
     normalize_punctuation,
     remove_unwanted_chars,
+    remove_page_artifacts,
     collapse_whitespace,
 )
 
