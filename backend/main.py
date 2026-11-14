@@ -62,14 +62,14 @@ app = FastAPI(
 # (settings reads the real environment variable first, then backend/.env)
 origins = [
     o.strip().rstrip("/")
-    for o in (settings.CORS_ORIGINS or "http://localhost:5173").split(",")
+    for o in os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
     if o.strip()
 ]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_credentials=False,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
