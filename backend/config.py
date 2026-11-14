@@ -43,6 +43,8 @@ class Settings(BaseSettings):
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
     SMTP_FROM: str = "no-reply@lrw.local"
+    BREVO_API_KEY: str = "LRW-Backend"
+    EMAIL_FROM: str = " languageresourceworkbench@gmail.com"
     APP_BASE_URL: str = "http://localhost:5173"
     GROQ_API_KEY: str | None = None
     TESSERACT_CMD: str | None = _find_default_tesseract()

@@ -3,8 +3,7 @@ import sys
 import pickle
 import base64
 import os
-import ssl
-import smtplib
+import requests
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
@@ -41,33 +40,26 @@ def _get_gmail_service(Request, build):
     return build("gmail", "v1", credentials=creds)
 
 
-def _send_via_smtp(to: str, msg: MIMEMultipart) -> None:
-    smtp_host = settings.SMTP_HOST.strip()
-    smtp_port = settings.SMTP_PORT
-    smtp_user = settings.SMTP_USER.strip()
-    smtp_password = settings.SMTP_PASSWORD
-    from_addr = settings.SMTP_FROM or smtp_user or "no-reply@lrw.local"
-
-    msg["From"] = f"Language Resource Workbench <{from_addr}>"
-    msg["To"] = to
-
-    context = ssl.create_default_context()
-    if smtp_port == 465:
-        with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context, timeout=10) as server:
-            if smtp_user and smtp_password:
-                server.login(smtp_user, smtp_password)
-            server.sendmail(from_addr, [to], msg.as_string())
-    else:
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
-            server.ehlo()
-            if smtp_port == 587:
-                server.starttls(context=context)
-                server.ehlo()
-            if smtp_user and smtp_password:
-                server.login(smtp_user, smtp_password)
-            server.sendmail(from_addr, [to], msg.as_string())
-
-    print(f"[email] ✅ Sent via SMTP to {to}", flush=True)
+def _send_via_brevo(to: str, subject: str, html_content: str) -> dict:
+    """Send through Brevo's HTTPS API (works where SMTP ports are blocked, e.g. Render free)."""
+    response = requests.post(
+        "https://api.brevo.com/v3/smtp/email",
+        headers={
+            "api-key": settings.BREVO_API_KEY,
+            "Content-Type": "application/json",
+            "accept": "application/json",
+        },
+        json={
+            "sender": {"name": "LRW 2.0", "email": settings.EMAIL_FROM},
+            "to": [{"email": to}],
+            "subject": subject,
+            "htmlContent": html_content,
+        },
+        timeout=20,
+    )
+    response.raise_for_status()
+    print(f"[email] ✅ Sent via Brevo to {to}", flush=True)
+    return response.json()
 
 
 def send_email(to: str, subject: str, body: str) -> None:
@@ -97,12 +89,13 @@ def send_email(to: str, subject: str, body: str) -> None:
     msg.attach(MIMEText(body, "plain"))
     msg.attach(MIMEText(html_body, "html"))
 
-    if settings.SMTP_HOST:
+    if settings.BREVO_API_KEY and settings.EMAIL_FROM:
         try:
-            _send_via_smtp(to, msg)
+            _send_via_brevo(to, subject, html_body)
             return
         except Exception as e:
-            print(f"[email SMTP ERROR] ❌ {e}", flush=True)
+            detail = getattr(getattr(e, "response", None), "text", "")
+            print(f"[email BREVO ERROR] ❌ {e} {detail}", flush=True)
 
     if os.path.exists(TOKEN_FILE):
         try:
