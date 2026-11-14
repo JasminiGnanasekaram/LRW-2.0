@@ -73,7 +73,7 @@ def _ocr_image(image) -> str:
 
 
     try:
-        return pytesseract.image_to_string(image, lang=OCR_LANGUAGES).strip()
+        return _clean_ocr(pytesseract.image_to_string(image, lang=OCR_LANGUAGES))
     except pytesseract.pytesseract.TesseractNotFoundError as exc:
         raise RuntimeError(
             "Tesseract executable not found. Install it at the configured absolute path, "
@@ -83,13 +83,41 @@ def _ocr_image(image) -> str:
         err_str = str(exc).lower()
         if "data" in err_str or "language" in err_str or "tam" in err_str or "sin" in err_str:
             try:
-                return pytesseract.image_to_string(image, lang="eng").strip()
+                return _clean_ocr(pytesseract.image_to_string(image, lang="eng"))
             except Exception:
                 pass
         raise RuntimeError(f"OCR extraction failed: {exc}") from exc
 
 
      
+# Legacy (non-Unicode) Tamil fonts store glyphs under Latin codes, so the PDF text
+# layer is gibberish (e.g. "ngNyhg;gplhR" instead of Tamil). Such pages must be OCR'd.
+LEGACY_TAMIL_FONT_MARKERS = (
+    "bamini", "baamini", "tscii", "tab-", "tam-", "vaigai", "shree", "shrilipi",
+    "amudham", "kavipriya", "lt-tm", "ltamil", "mylai", "nakkeeran", "indoweb", "tace",
+    "senthamil", "thendral",
+)
+
+
+def _page_has_legacy_tamil_font(page) -> bool:
+    for font in page.get_fonts():
+        name = str(font[3]).lower().split("+")[-1]
+        if any(marker in name for marker in LEGACY_TAMIL_FONT_MARKERS):
+            return True
+    return False
+
+
+def _page_has_usable_text(page) -> bool:
+    """True when the page has a real, correctly encoded Unicode text layer."""
+    if len(page.get_text().strip()) < PDF_MIN_CHARS:
+        return False
+    return not _page_has_legacy_tamil_font(page)
+
+
+def _clean_ocr(text: str) -> str:
+    # Tesseract emits invisible zero-width (non-)joiners after Tamil words; they break tokenization.
+    return text.replace("\u200c", "").replace("\u200d", "").strip()
+
 def extract_from_text(content: bytes, encoding: str = "utf-8") -> str:
     return content.decode(encoding, errors="replace")
 
@@ -104,6 +132,8 @@ def extract_from_pdf(content: bytes) -> str:
         parts = []
         for page in document:
             page_text = page.get_text().strip()
+            if _page_has_legacy_tamil_font(page):
+                page_text = ""  # legacy-font text layer is gibberish; OCR the page instead
             if len(page_text) >= PDF_MIN_CHARS:
                 parts.append(page_text)
                 continue
@@ -148,7 +178,7 @@ def detect_pdf_type(content: bytes) -> str:
         embedded_images = False
 
         for page in document:
-            if len(page.get_text().strip()) >= PDF_MIN_CHARS:
+            if _page_has_usable_text(page):
                 text_pages += 1
                 if page.get_images(full=True):
                     embedded_images = True
@@ -295,7 +325,7 @@ def _pdf_is_mostly_text(
             return False
 
         text_pages = sum(
-            len(page.get_text().strip()) >= min_chars_per_page
+            _page_has_usable_text(page)
             for page in document
         )
         return text_pages / total_pages >= text_ratio_threshold
