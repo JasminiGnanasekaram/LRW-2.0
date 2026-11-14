@@ -46,7 +46,14 @@ export default function Register() {
       await register(name, email, password, role);
       setDone(true);
     } catch (err) {
-      setError(err.response?.data?.detail || "Registration failed. Please try again.");
+      const detail = err.response?.data?.detail;
+      if (detail) {
+        setError(typeof detail === "string" ? detail : "Please check your details and try again.");
+      } else if (!err.response) {
+        setError("Cannot reach the server (network/CORS error). Check that the backend is running and VITE_API_URL / CORS_ORIGINS are set.");
+      } else {
+        setError(`Registration failed (HTTP ${err.response.status}). Please try again.`);
+      }
     }finally {
       setLoading(false);
     }
