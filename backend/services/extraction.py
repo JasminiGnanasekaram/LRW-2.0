@@ -66,7 +66,7 @@ def _ocr_image(image) -> str:
     if cmd and os.path.isfile(cmd):
         pytesseract.pytesseract.tesseract_cmd = cmd
         tessdata = os.path.join(os.path.dirname(cmd), "tessdata")
-        if os.path.isdir(tessdata) and "TESSDATA_PREFIX" not in os.environ:
+        if os.path.isdir(tessdata):
             os.environ["TESSDATA_PREFIX"] = tessdata
 
 
@@ -124,7 +124,7 @@ def extract_from_text(content: bytes, encoding: str = "utf-8") -> str:
 
 def extract_from_pdf(content: bytes) -> str:
     """Read PDF text layers and OCR pages without enough extractable text."""
-    import fitz
+    import pymupdf as fitz
     from PIL import Image
 
     document = fitz.open(stream=content, filetype="pdf")
@@ -169,7 +169,7 @@ def extract_from_pdf(content: bytes) -> str:
 
 def detect_pdf_type(content: bytes) -> str:
     """Return text_only, text_image, or image_only."""
-    import fitz
+    import pymupdf as fitz
 
     document = fitz.open(stream=content, filetype="pdf")
     try:
@@ -316,7 +316,7 @@ def _pdf_is_mostly_text(
     min_chars_per_page: int = PDF_MIN_CHARS,
     text_ratio_threshold: float = 0.5,
 ) -> bool:
-    import fitz
+    import pymupdf as fitz
 
     document = fitz.open(stream=content, filetype="pdf")
     try:
