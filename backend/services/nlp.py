@@ -64,7 +64,7 @@ def detect_languages(text: str) -> Dict[str, Any]:
     if not text or not text.strip():
         return default_resp
 
-    sample = text[:50000]
+    sample = text[:10000000]
     si_count, ta_count, en_count = _count_scripts(sample)
     total_alpha = si_count + ta_count + en_count
 
@@ -273,7 +273,7 @@ def tokenize_and_tag(text: str) -> Dict[str, Any]:
         "token_count": len(token_texts),
         "unique_tokens": len(word_freq),
         "lemmas": lemmas,
-        "token_details": token_details[:5000],
+        "token_details": token_details,
         "pos_distribution": dict(pos_counter),
         "top_words": top_words,
         "top_keywords": [w for w, _ in top_words[:5]],
@@ -288,7 +288,7 @@ def compute_statistics(text: str, token_data: Dict[str, Any], lang_data: Dict[st
     chars_no_spaces = len(re.sub(r"\s+", "", text))
     paragraphs = [p for p in text.split("\n\n") if p.strip()]
     if lang_data is None:
-        lang_data = detect_languages(text[:50000])
+        lang_data = detect_languages(text[:10000000])
     lang_dist = {b["language"]: b["percentage"] for b in lang_data.get("languages_detected", [])}
 
     return {
@@ -303,7 +303,7 @@ def compute_statistics(text: str, token_data: Dict[str, Any], lang_data: Dict[st
     }
 
 
-def analyze(text: str, max_chars: int = 100000) -> Dict[str, Any]:
+def analyze(text: str, max_chars: int = 10000000) -> Dict[str, Any]:
     """
     Main entry point for NLP processing pipeline:
     1. Detects languages
