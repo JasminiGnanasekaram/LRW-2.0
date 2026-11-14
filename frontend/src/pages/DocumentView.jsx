@@ -1970,7 +1970,7 @@ function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDo
     if (!url) return;
 
     // Always fetch fresh discovery to ensure accurate count
-    if (doc?.total_available_pages && doc?.discovered_items?.length && url === targetUrl) {
+    if (false && doc?.total_available_pages && doc?.discovered_items?.length && url === targetUrl) {
       setTotalAvailablePages(doc.discovered_items.length);
       setDiscoveredItems(doc.discovered_items);
       return;
@@ -3196,6 +3196,15 @@ function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDo
                   }}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <span className="badge" style={{ background: "var(--mint)", color: "var(--forest)", fontWeight: 700, fontSize: 12, padding: "2px 8px" }}>
+                        #{page.page_number || (idx + 1)}
+                      </span>
+                      {page.title && page.title !== page.url && (
+                        <span style={{ fontSize: 14, fontWeight: 700, color: "var(--ink)" }}>
+                          {page.title}
+                        </span>
+                      )}
                     <a
                       href={page.url}
                       target="_blank"
@@ -3204,6 +3213,7 @@ function WebCrawlerTab({ doc, tr, currentTab, onOpenOverview, onSelectPage, onDo
                     >
                       {page.url}
                     </a>
+                    </div>
                     {isCurrentDoc && (
                       <span className="badge" style={{ background: "var(--mint)", color: "var(--forest)", fontSize: 11 }}>
                         {tr("Current Document", "தற்போதைய ஆவணம்", "වත්මන් ලේඛනය")}
