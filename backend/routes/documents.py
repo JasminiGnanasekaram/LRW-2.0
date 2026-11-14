@@ -85,6 +85,7 @@ async def _doc_out(raw, cleaned=None, meta=None, analysis=None):
         "is_crawled_subpage": bool(raw.get("is_crawled_subpage", False)),
         "parent_document_id": str(raw.get("parent_document_id")) if raw.get("parent_document_id") else None,
         "title":                 raw.get("title") or (meta.get("data", {}).get("title") if meta else None),
+        "page_number":           raw.get("page_number") or (meta.get("data", {}).get("page_number") if meta else None),
         "total_available_pages": (
             len(raw.get("discovered_items", []))
             if raw.get("discovered_items")

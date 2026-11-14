@@ -11,11 +11,13 @@ import re
 import time
 import urllib3
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin, urlparse, unquote, parse_qsl, urlencode
 from urllib.robotparser import RobotFileParser
 
 import requests
 from bs4 import BeautifulSoup
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 try:
     import trafilatura
@@ -26,9 +28,6 @@ except ImportError:
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 logger = logging.getLogger("uvicorn.error")
-
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 
 _HEADERS = {
     "User-Agent": (
@@ -93,6 +92,43 @@ def _is_same_domain(base_url: str, target_url: str) -> bool:
     if d1.endswith("." + d2) or d2.endswith("." + d1):
         return True
     return False
+
+def _normalize_page_url(raw_url: str, base_url: str = "") -> str:
+    """Normalize URL by stripping hash, tracking query parameters, trailing slashes, and matching schemes."""
+    if not raw_url:
+        return ""
+    u = str(raw_url).strip().split("#")[0].strip()
+    if not u.startswith(("http://", "https://")):
+        u = "https://" + u
+    try:
+        parsed = urlparse(u)
+        base_parsed = urlparse(base_url if base_url.startswith(("http://", "https://")) else f"https://{base_url}") if base_url else parsed
+
+        scheme = base_parsed.scheme or "https"
+        netloc = parsed.netloc.lower()
+        clean_base = _clean_domain(base_parsed.netloc)
+        clean_target = _clean_domain(netloc)
+        if clean_base and clean_base == clean_target:
+            netloc = base_parsed.netloc.lower()
+
+        path = parsed.path
+        if len(path) > 1:
+            path = path.rstrip("/")
+        if not path:
+            path = "/"
+
+        # Strip tracking query params
+        if parsed.query:
+            q_pairs = parse_qsl(parsed.query, keep_blank_values=True)
+            filtered_q = [(k, v) for k, v in q_pairs if not k.lower().startswith(("utm_", "fbclid", "gclid", "ref", "source"))]
+            query = f"?{urlencode(filtered_q)}" if filtered_q else ""
+        else:
+            query = ""
+
+        normalized = f"{scheme}://{netloc}{path}{query}"
+        return normalized.rstrip("/") if len(path) > 1 or query else normalized
+    except Exception:
+        return u.split("#")[0].rstrip("/")
 
 def _is_valid_page_url(url: str, base_url: str) -> bool:
     """Verify that url is http/https, on same domain, and not an image/asset/feed."""
@@ -209,7 +245,6 @@ def extract_page_title(html: str, fallback_url: str = "") -> str:
 def derive_title_from_url(url: str) -> str:
     """Generate a clean, readable title from URL slug or path, decoding unicode characters."""
     try:
-        from urllib.parse import unquote
         parsed = urlparse(url)
         decoded_path = unquote(parsed.path).strip("/")
         if not decoded_path:
@@ -242,43 +277,65 @@ def derive_title_from_url(url: str) -> str:
 
 # ── Discover links ────────────────────────────────────────────────────
 def _extract_links(html: str, base_url: str) -> list[str]:
-    """Return all clean, same-domain page URLs found in <a href> tags."""
+    """Return all clean, same-domain page URLs found in <a href> tags, strictly preserving document order."""
+    if not html:
+        return []
     soup = BeautifulSoup(html, "html.parser")
-    links: set[str] = set()
+    seen: set[str] = set()
+    ordered_links: list[str] = []
+    clean_base = _normalize_page_url(base_url, base_url)
+    if clean_base:
+        seen.add(clean_base)
+
     for tag in soup.find_all("a", href=True):
-        absolute = urljoin(base_url, tag["href"])
-        clean = absolute.split("#")[0].split("?")[0].rstrip("/")
-        if clean.startswith("http") and _is_valid_page_url(clean, base_url):
-            links.add(clean)
-    return list(links)
+        raw_href = tag.get("href", "").strip()
+        if not raw_href or raw_href.startswith(("javascript:", "mailto:", "tel:", "#")):
+            continue
+        absolute = urljoin(base_url, raw_href)
+        clean = _normalize_page_url(absolute, base_url)
+        if not clean or clean in seen:
+            continue
+        if _is_same_domain(base_url, clean) and _is_valid_page_url(clean, base_url):
+            seen.add(clean)
+            ordered_links.append(clean)
+    return ordered_links
+
 
 # ── Public BFS crawler ────────────────────────────────────────────────
 def crawl_site(start_url: str, max_pages: int = 10, seed_urls: list[str] | None = None) -> list[dict]:
     """
-    BFS crawl starting from *start_url*.
-    Crawls exactly up to *max_pages* pages (or until queue exhausted).
-    Uses discoverable links and seed URLs to ensure full page targets are reached.
+    BFS crawl starting from *start_url* strictly maintaining original link order.
+    - Page 1 is always start_url.
+    - Follows the exact document order of links on the main URL and discovered pages.
+    - If seed_urls is provided, crawls pages strictly following their sequential page numbers.
+    - Crawls exactly up to *max_pages* pages.
     """
     start_url = start_url.strip()
     if not start_url.startswith(("http://", "https://")):
         start_url = "https://" + start_url
 
-    clean_start = start_url.split("#")[0].rstrip("/")
+    clean_start = _normalize_page_url(start_url, start_url)
     domain = _clean_domain(start_url)
     visited: set[str] = set()
-    queue: list[str] = [clean_start]
 
-    # Pre-seed candidate pages so crawling can reach requested page limits
-    if seed_urls:
-        for s in seed_urls:
-            clean_s = s.split("#")[0].rstrip("/")
-            if clean_s != clean_start and clean_s not in queue:
+    # Build queue strictly preserving exact sequential order
+    queue: list[str] = []
+    seen_in_queue: set[str] = set()
+
+    candidate_list = seed_urls or (_DISCOVERY_CACHE.get(domain, {}).get("discovered_pages") if domain in _DISCOVERY_CACHE else None)
+    if candidate_list:
+        for s in candidate_list:
+            clean_s = _normalize_page_url(s, start_url)
+            if clean_s and clean_s not in seen_in_queue and _is_same_domain(start_url, clean_s) and _is_valid_page_url(clean_s, start_url):
+                seen_in_queue.add(clean_s)
                 queue.append(clean_s)
-    elif domain in _DISCOVERY_CACHE:
-        for p in _DISCOVERY_CACHE[domain].get("discovered_pages", []):
-            clean_p = p.split("#")[0].rstrip("/")
-            if clean_p != clean_start and clean_p not in queue:
-                queue.append(clean_p)
+
+    if clean_start not in seen_in_queue:
+        queue.insert(0, clean_start)
+        seen_in_queue.add(clean_start)
+    elif queue and queue[0] != clean_start:
+        queue.remove(clean_start)
+        queue.insert(0, clean_start)
 
     results: list[dict] = []
 
@@ -302,17 +359,32 @@ def crawl_site(start_url: str, max_pages: int = 10, seed_urls: list[str] | None 
             continue
 
         title = extract_page_title(html, fallback_url=url)
+
+        page_num = len(results) + 1
+        if candidate_list:
+            clean_target = _normalize_page_url(url, start_url)
+            for s_idx, s_url in enumerate(candidate_list):
+                if _normalize_page_url(s_url, start_url) == clean_target:
+                    page_num = s_idx + 1
+                    break
+
+        results.append({
+            "url": url,
+            "text": text,
+            "title": title,
+            "page_number": page_num,
+        })
+        logger.info(f"[Crawler] (Page #{page_num} -> {len(results)}/{max_pages}) Crawled: {url}")
+
         links = _extract_links(html, url)
-
-        results.append({"url": url, "text": text, "title": title})
-        logger.info(f"[Crawler] ({len(results)}/{max_pages}) Crawled: {url}")
-
         for link in links:
-            if link not in visited and link not in queue and _is_same_domain(start_url, link) and _is_valid_page_url(link, start_url):
+            if link not in visited and link not in seen_in_queue and _is_same_domain(start_url, link) and _is_valid_page_url(link, start_url):
+                seen_in_queue.add(link)
                 queue.append(link)
 
     logger.info(f"[Crawler] Finished. Total pages crawled: {len(results)}")
     return results
+
 
 # ── Sitemap helper ────────────────────────────────────────────────────
 def _extract_sitemap_locs(text: str) -> list[str]:
@@ -349,61 +421,26 @@ def _fetch_sitemap_text(url: str, timeout: int = 15) -> str | None:
                 logger.debug(f"[Crawler] Sitemap fetch failed for {url}: {exc}")
     return None
 
-def _normalize_page_url(raw_url: str, base_url: str = "") -> str:
-    """Normalize URL by stripping hash, tracking query parameters, trailing slashes, and matching schemes."""
-    if not raw_url:
-        return ""
-    u = str(raw_url).strip().split("#")[0].strip()
-    if not u.startswith(("http://", "https://")):
-        u = "https://" + u
-    try:
-        parsed = urlparse(u)
-        base_parsed = urlparse(base_url if base_url.startswith(("http://", "https://")) else f"https://{base_url}") if base_url else parsed
-
-        scheme = base_parsed.scheme or "https"
-        netloc = parsed.netloc.lower()
-        clean_base = _clean_domain(base_parsed.netloc)
-        clean_target = _clean_domain(netloc)
-        if clean_base and clean_base == clean_target:
-            netloc = base_parsed.netloc.lower()
-
-        path = parsed.path
-        if len(path) > 1:
-            path = path.rstrip("/")
-        if not path:
-            path = "/"
-
-        # Strip tracking query params
-        if parsed.query:
-            from urllib.parse import parse_qsl, urlencode
-            q_pairs = parse_qsl(parsed.query, keep_blank_values=True)
-            filtered_q = [(k, v) for k, v in q_pairs if not k.lower().startswith(("utm_", "fbclid", "gclid", "ref", "source"))]
-            query = f"?{urlencode(filtered_q)}" if filtered_q else ""
-        else:
-            query = ""
-
-        normalized = f"{scheme}://{netloc}{path}{query}"
-        return normalized.rstrip("/") if len(path) > 1 or query else normalized
-    except Exception:
-        return u.split("#")[0].rstrip("/")
 
 # ── Accurate Discovery of Total Available Pages ───────────────────────
 _DISCOVERY_CACHE: dict[str, dict] = {}
 
 def discover_available_pages(start_url: str, force_refresh: bool = False) -> dict:
     """
-    Scans the website to discover all available pages under the domain deterministically.
-    1. Checks in-memory domain cache for previously discovered results.
-    2. Checks robots.txt for all Sitemap declarations.
-    3. Checks standard sitemap endpoints.
-    4. Deterministically expands sub-sitemaps (sitemap index files) iteratively.
-    5. Falls back to rapid internal link extraction only if no sitemaps are found.
+    Scans the website to discover all available pages under the domain, strictly
+    preserving the original order of links from the main website URL:
+    - Page 1 is ALWAYS the main URL itself.
+    - Page 2, Page 3, ... are the links on the main page in exact HTML document order.
+    - Subpages are expanded via deterministic BFS in link order.
+    - Sitemaps (if present) contribute any unlinked pages appended at the end.
+    - Assigns sequential 1-based page numbers matching the link order.
     """
     start_url = start_url.strip()
     if not start_url.startswith(("http://", "https://")):
         start_url = "https://" + start_url
 
-    parsed = urlparse(start_url)
+    clean_start = _normalize_page_url(start_url, start_url)
+    parsed = urlparse(clean_start)
     origin = f"{parsed.scheme}://{parsed.netloc}"
     domain = _clean_domain(parsed.netloc) or parsed.netloc.lower()
 
@@ -411,11 +448,51 @@ def discover_available_pages(start_url: str, force_refresh: bool = False) -> dic
         logger.info(f"[Crawler Discovery] Cache hit for domain '{domain}' ({_DISCOVERY_CACHE[domain]['total_available']} pages)")
         return _DISCOVERY_CACHE[domain]
 
-    discovered_pages: set[str] = set()
-    clean_start = start_url.split("#")[0].rstrip("/")
-    if _is_valid_page_url(clean_start, start_url):
-        discovered_pages.add(clean_start)
+    ordered_pages: list[str] = [clean_start]
+    seen: set[str] = {clean_start}
 
+    # 1. Fetch the main URL and extract links in exact HTML document order
+    logger.info(f"[Crawler Discovery] Fetching main URL for ordered discovery: {clean_start}")
+    main_html = _fetch_html(clean_start, timeout=12)
+    main_links: list[str] = []
+    if main_html:
+        main_links = _extract_links(main_html, clean_start)
+        for link in main_links:
+            if link not in seen:
+                seen.add(link)
+                ordered_pages.append(link)
+
+    # 2. BFS crawl internal links starting from the main page's links
+    crawl_queue: list[str] = list(main_links)
+    crawled_in_discovery: set[str] = {clean_start}
+
+    while crawl_queue and len(crawled_in_discovery) < 50:
+        batch = [u for u in crawl_queue if u not in crawled_in_discovery][:6]
+        if not batch:
+            break
+        for b in batch:
+            crawled_in_discovery.add(b)
+            if b in crawl_queue:
+                crawl_queue.remove(b)
+
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            future_to_url = {executor.submit(_fetch_html, b_url, 10): b_url for b_url in batch}
+            # Process in strict batch order to keep discovery deterministic and ordered
+            for b_url in batch:
+                fut = [f for f, u in future_to_url.items() if u == b_url][0]
+                try:
+                    html = fut.result()
+                    if html:
+                        found_links = _extract_links(html, b_url)
+                        for fl in found_links:
+                            if fl not in seen:
+                                seen.add(fl)
+                                ordered_pages.append(fl)
+                                crawl_queue.append(fl)
+                except Exception:
+                    pass
+
+    # 3. Augment with sitemaps (if any), appending unlinked pages to the end
     sitemap_candidates: list[str] = [
         f"{origin}/sitemap.xml",
         f"{origin}/sitemap_index.xml",
@@ -424,9 +501,8 @@ def discover_available_pages(start_url: str, force_refresh: bool = False) -> dic
     ]
     has_sitemap = False
 
-    # 1. Parse robots.txt for any Sitemap: directives
     try:
-        r_txt = _fetch_html(f"{origin}/robots.txt", timeout=8)
+        r_txt = _fetch_html(f"{origin}/robots.txt", timeout=6)
         if r_txt:
             for line in r_txt.splitlines():
                 if line.lower().startswith("sitemap:"):
@@ -436,12 +512,10 @@ def discover_available_pages(start_url: str, force_refresh: bool = False) -> dic
     except Exception:
         pass
 
-    # Deterministic sorted queue of sitemaps
-    sitemaps_to_crawl: list[str] = sorted(list(set(sitemap_candidates)))
+    sitemaps_to_crawl: list[str] = list(dict.fromkeys(sitemap_candidates))
     processed_sitemaps: set[str] = set()
 
-    # Process sitemaps and sub-sitemaps (breadth-first up to 150 sitemaps)
-    while sitemaps_to_crawl and len(processed_sitemaps) < 150:
+    while sitemaps_to_crawl and len(processed_sitemaps) < 100:
         current_batch = [sm for sm in sitemaps_to_crawl if sm not in processed_sitemaps][:5]
         if not current_batch:
             break
@@ -450,19 +524,19 @@ def discover_available_pages(start_url: str, force_refresh: bool = False) -> dic
             sitemaps_to_crawl.remove(sm)
 
         with ThreadPoolExecutor(max_workers=5) as executor:
-            future_to_url = {executor.submit(_fetch_sitemap_text, sm_url, 15): sm_url for sm_url in current_batch}
-            for future in as_completed(future_to_url):
+            future_to_url = {executor.submit(_fetch_sitemap_text, sm_url, 12): sm_url for sm_url in current_batch}
+            for sm_url in current_batch:
+                fut = [f for f, u in future_to_url.items() if u == sm_url][0]
                 try:
-                    text = future.result()
+                    text = fut.result()
                     if not text or "<loc" not in text.lower():
                         continue
                     has_sitemap = True
                     locs = _extract_sitemap_locs(text)
                     for loc in locs:
-                        clean_loc = loc.split("#")[0].rstrip("/")
-                        if not _is_same_domain(start_url, clean_loc):
+                        clean_loc = _normalize_page_url(loc, start_url)
+                        if not clean_loc or not _is_same_domain(start_url, clean_loc):
                             continue
-                        # Check if it's a sub-sitemap
                         loc_lower = clean_loc.lower()
                         if (
                             loc_lower.endswith(".xml")
@@ -472,60 +546,14 @@ def discover_available_pages(start_url: str, force_refresh: bool = False) -> dic
                             if clean_loc not in processed_sitemaps and clean_loc not in sitemaps_to_crawl:
                                 sitemaps_to_crawl.append(clean_loc)
                         elif _is_valid_page_url(clean_loc, start_url):
-                            discovered_pages.add(clean_loc)
+                            if clean_loc not in seen:
+                                seen.add(clean_loc)
+                                ordered_pages.append(clean_loc)
                 except Exception as exc:
                     logger.debug(f"[Crawler Discovery] Error processing sitemap batch: {exc}")
 
-    # Fallback to internal link extraction ONLY if no sitemaps were found or yielded <= 1 page
-    if not has_sitemap and len(discovered_pages) <= 1:
-        logger.info(f"[Crawler Discovery] No sitemaps found. Running rapid internal link crawl for {start_url}...")
-        crawl_queue: list[str] = sorted(list(discovered_pages))
-        crawled_in_discovery: set[str] = set()
-
-        while crawl_queue and len(crawled_in_discovery) < 30:
-            batch = [u for u in crawl_queue if u not in crawled_in_discovery][:6]
-            if not batch:
-                break
-            for b in batch:
-                crawled_in_discovery.add(b)
-                if b in crawl_queue:
-                    crawl_queue.remove(b)
-
-            with ThreadPoolExecutor(max_workers=5) as executor:
-                future_to_batch = {executor.submit(_fetch_html, b_url, 10): b_url for b_url in batch}
-                for future in as_completed(future_to_batch):
-                    b_url = future_to_batch[future]
-                    try:
-                        html = future.result()
-                        if html:
-                            found = _extract_links(html, b_url)
-                            for f in sorted(found):
-                                if f not in discovered_pages:
-                                    discovered_pages.add(f)
-                                    crawl_queue.append(f)
-                    except Exception:
-                        pass
-
-    # Deterministic normalization, deduplication and sorting
-    normalized_pages: set[str] = set()
-    for u in discovered_pages:
-        if _is_valid_page_url(u, start_url):
-            norm_u = _normalize_page_url(u, start_url)
-            if norm_u and _is_valid_page_url(norm_u, start_url):
-                normalized_pages.add(norm_u)
-
-    clean_start_norm = _normalize_page_url(start_url, start_url)
-    normalized_pages.add(clean_start_norm)
-
-    raw_deduped = sorted(list(normalized_pages))
-    if clean_start_norm in raw_deduped:
-        raw_deduped.remove(clean_start_norm)
-        deduped_pages = [clean_start_norm] + raw_deduped
-    else:
-        deduped_pages = raw_deduped
-
-    total = len(deduped_pages)
-    logger.info(f"[Crawler Discovery] Total discoverable pages for {start_url}: {total} (has_sitemap={has_sitemap})")
+    total = len(ordered_pages)
+    logger.info(f"[Crawler Discovery] Total discoverable pages for {start_url}: {total} (main_page_links={len(main_links)}, has_sitemap={has_sitemap})")
 
     discovered_items = [
         {
@@ -533,14 +561,14 @@ def discover_available_pages(start_url: str, force_refresh: bool = False) -> dic
             "url": p_url,
             "title": derive_title_from_url(p_url),
         }
-        for idx, p_url in enumerate(deduped_pages)
+        for idx, p_url in enumerate(ordered_pages)
     ]
 
     result = {
         "total_available": total,
         "domain": domain or parsed.netloc,
         "has_sitemap": has_sitemap,
-        "discovered_pages": deduped_pages,
+        "discovered_pages": ordered_pages,
         "discovered_items": discovered_items,
     }
 

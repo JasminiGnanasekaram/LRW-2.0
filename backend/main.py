@@ -54,9 +54,17 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Comma-separated list, e.g. CORS_ORIGINS=https://my-app.vercel.app,http://localhost:5173
+# (settings reads the real environment variable first, then backend/.env)
+origins = [
+    o.strip().rstrip("/")
+    for o in (settings.CORS_ORIGINS or "http://localhost:5173").split(",")
+    if o.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],

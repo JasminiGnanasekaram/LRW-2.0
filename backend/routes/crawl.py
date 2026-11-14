@@ -44,7 +44,9 @@ class PageResult(BaseModel):
     url:     str
     text:    str
     summary: str = ""
-    doc_id:  str
+    doc_id:      str
+    page_number: Optional[int] = None
+    title:       Optional[str] = None
 
 
 class CrawlResponse(BaseModel):
@@ -108,7 +110,7 @@ async def discover_pages_endpoint(
     if document_id and not force_refresh:
         try:
             doc = await raw_documents_col.find_one({"_id": ObjectId(document_id)})
-            if doc and (doc.get("discovered_pages") or doc.get("discovered_items")):
+            if doc and doc.get("discovered_order_version") == 2 and (doc.get("discovered_pages") or doc.get("discovered_items")):
                 doc_url = doc.get("filename") or ""
                 doc_domain = _clean_domain(doc_url)
                 if not doc_domain or doc_domain == target_domain:
@@ -149,10 +151,12 @@ async def discover_pages_endpoint(
                         "discovered_pages": cached.get("discovered_pages", []),
                         "discovered_items": cached_items,
                         "has_sitemap": cached.get("has_sitemap", False),
+                        "discovered_order_version": 2,
                     }}
                 )
             except Exception:
                 pass
+
         return DiscoverResponse(**cached)
 
     result = await run_in_threadpool(discover_available_pages, clean_u, force_refresh)
@@ -169,6 +173,7 @@ async def discover_pages_endpoint(
                     "discovered_pages": result.get("discovered_pages", []),
                     "discovered_items": discovered_items_res,
                     "has_sitemap": result.get("has_sitemap", False),
+                    "discovered_order_version": 2,
                 }}
             )
         except Exception:
@@ -184,6 +189,7 @@ async def _save_page_as_document(
     user_id: str,
     parent_id: Optional[str] = None,
     title: Optional[str] = None,
+    page_number: Optional[int] = None,
 ) -> tuple[str, str]:
     """
     Runs the pipeline for a crawled subpage and links it to parent_id.
@@ -203,6 +209,7 @@ async def _save_page_as_document(
         "source_id":          src.inserted_id,
         "filename":           page_url,
         "title":              title or page_url,
+        "page_number":        page_number,
         "file_type":          "url",
         "raw_text":           raw_text[:500_000],
         "is_crawled_subpage": True,
@@ -226,6 +233,7 @@ async def _save_page_as_document(
             "source":      "crawler",
             "crawled_url": page_url,
             "title":       title or page_url,
+            "page_number": page_number,
         },
         "created_at": datetime.utcnow(),
     })
@@ -318,8 +326,20 @@ async def start_crawl(
     if target_parent_id:
         try:
             p_doc = await raw_documents_col.find_one({"_id": ObjectId(target_parent_id)})
-            if p_doc and p_doc.get("discovered_pages"):
+            if p_doc and p_doc.get("discovered_order_version") == 2 and p_doc.get("discovered_pages"):
                 seed_urls = p_doc["discovered_pages"]
+            else:
+                disc = await run_in_threadpool(discover_available_pages, req.url)
+                seed_urls = disc.get("discovered_pages")
+                await raw_documents_col.update_one(
+                    {"_id": ObjectId(target_parent_id)},
+                    {"$set": {
+                        "total_available_pages": len(disc.get("discovered_pages", [])),
+                        "discovered_pages": disc.get("discovered_pages", []),
+                        "discovered_items": disc.get("discovered_items", []),
+                        "discovered_order_version": 2,
+                    }}
+                )
         except Exception:
             seed_urls = None
 
@@ -363,13 +383,14 @@ async def start_crawl(
 
     # Save each page and build the response
     results: list[PageResult] = []
-    for page in pages:
+    for idx, page in enumerate(pages):
+        page_num = page.get("page_number") or (idx + 1)
         doc_id, page_summary = await _save_page_as_document(
             page["url"], page["text"], user["id"], parent_id=target_parent_id,
-            title=page.get("title")
+            title=page.get("title"), page_number=page_num
         )
         results.append(
-            PageResult(url=page["url"], text=page["text"], summary=page_summary, doc_id=doc_id)
+            PageResult(url=page["url"], text=page["text"], summary=page_summary, doc_id=doc_id, page_number=page_num, title=page.get("title") or page["url"])
         )
 
     # Persist the newly crawled pages array on the parent document (overwriting previous crawl results)
@@ -449,7 +470,7 @@ async def crawl_specific_page_endpoint(
             )
 
         if target_page_number is None:
-            discovered_pages = (parent_doc.get("discovered_pages") if parent_doc else None) or []
+            discovered_pages = (parent_doc.get("discovered_pages") if (parent_doc and parent_doc.get("discovered_order_version") == 2) else None) or []
             clean_target = target_url.rstrip("/")
             for idx, p in enumerate(discovered_pages):
                 if p.rstrip("/") == clean_target:
@@ -460,7 +481,7 @@ async def crawl_specific_page_endpoint(
         if req.page_number < 1:
             raise HTTPException(status_code=400, detail="Page number must be at least 1.")
 
-        discovered_pages = (parent_doc.get("discovered_pages") if parent_doc else None) or []
+        discovered_pages = (parent_doc.get("discovered_pages") if (parent_doc and parent_doc.get("discovered_order_version") == 2) else None) or []
         if not discovered_pages:
             discovery_res = await run_in_threadpool(discover_available_pages, base_url)
             discovered_pages = discovery_res.get("discovered_pages") or []
@@ -471,6 +492,7 @@ async def crawl_specific_page_endpoint(
                         {"$set": {
                             "total_available_pages": len(discovered_pages),
                             "discovered_pages": discovered_pages,
+                            "discovered_order_version": 2,
                         }}
                     )
                 except Exception:
@@ -538,6 +560,7 @@ async def crawl_specific_page_endpoint(
         user["id"],
         parent_id=target_parent_id,
         title=title,
+        page_number=target_page_number,
     )
 
     cleaned_doc = await cleaned_documents_col.find_one({"raw_document_id": ObjectId(doc_id)})
