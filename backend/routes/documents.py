@@ -225,7 +225,10 @@ async def upload(
         if file_type != "url":
             if not file:
                 raise HTTPException(status_code=400, detail="file required")
-            content_b64 = base64.b64encode(await file.read()).decode()
+            content = await file.read()
+            if file_type == "image" and extraction.is_pdf_content(content):
+                file_type = "pdf"
+            content_b64 = base64.b64encode(content).decode()
 
         src = await sources_col.insert_one({
             "user_id": ObjectId(user["id"]), "type": file_type,
@@ -268,6 +271,8 @@ async def upload(
         if not file:
             raise HTTPException(status_code=400, detail="file required")
         content = await file.read()
+        if file_type == "image" and extraction.is_pdf_content(content):
+            file_type = "pdf"
         try:
             raw_text = extraction.extract(file_type, content=content, filename=file.filename, language=language)
         except NotImplementedError as e:

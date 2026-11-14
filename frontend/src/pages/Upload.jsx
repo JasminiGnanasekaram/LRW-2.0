@@ -1,6 +1,7 @@
 import { useRef, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { uploadDocument, api } from "../api";
+import { COUNTRIES } from "../countries";
 
 const FILE_TYPES = [
   { value: "text", label: "Text file", desc: ".txt", accept: ".txt" },
@@ -43,6 +44,7 @@ const LICENSES = [
 
 const EMPTY_META = {
   source: "",
+  region: "",
   author: "",
   publication_date: "",
   domain: "",
@@ -398,6 +400,15 @@ export default function Upload() {
                 placeholder="Author name"
               />
             </Field>
+
+            <SelectField
+              id="meta-region"
+              label="Region / Country"
+              placeholder="Select country..."
+              options={COUNTRIES}
+              value={meta.region}
+              onChange={updateMeta("region")}
+            />
 
             <SelectField
               id="meta-domain"

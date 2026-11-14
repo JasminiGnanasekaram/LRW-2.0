@@ -22,7 +22,8 @@ admin dashboard, charts, CSV/JSON export, and optional async processing via Cele
 2. **MongoDB** — `docker run -d -p 27017:27017 --name lrw-mongo mongo:7`
 3. **Tesseract OCR** (for image uploads):
    - Windows: https://github.com/UB-Mannheim/tesseract/wiki
-   - Install the Tamil (`tam`) language data; English and Sinhala are used when available.
+   - Install the English (`eng`), Tamil (`tam`), and Sinhala (`sin`) language data for multilingual OCR.
+   - Legacy-font Tamil and Sinhala PDFs are rendered and OCRed into Unicode; the matching language data must be installed.
    - For scanned Tamil PDFs, install Tesseract to `G:\001\LRW-2.0\Tesseract-OCR\tesseract.exe` (the default `TESSERACT_CMD`), or set `TESSERACT_CMD` in `backend/.env` to another absolute path.
    - macOS: `brew install tesseract`
    - Linux: `sudo apt install tesseract-ocr`
@@ -62,11 +63,21 @@ celery -A celery_app.celery worker --loglevel=info
 
 Now `/documents/upload` returns a `job_id` immediately; poll `/jobs/{id}` for status.
 
-### Email (verification + password reset)
+### Email (Gmail OAuth)
 
-Without SMTP, dev links are printed to the backend console — copy them into the browser.
-To send real emails set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`,
-`SMTP_FROM`, `APP_BASE_URL` in `.env`.
+Email verification and password reset messages are sent through the Gmail API
+using OAuth; no SMTP password is used. In Google Cloud, enable the Gmail API and
+create OAuth client credentials for a desktop application. Save
+the downloaded credentials as `backend/gmail_credentials.json`, then run:
+
+```bash
+cd backend
+python generate_gmail_token.py
+```
+
+Authorize the Gmail account in the browser. The generated token is stored under
+`backend/gmail/` and is ignored by Git. Set `APP_BASE_URL` for verification and
+reset links.
 
 ## Frontend Setup
 
