@@ -9,8 +9,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr-eng \
     tesseract-ocr-tam \
     tesseract-ocr-sin \
+    poppler-utils \
     ffmpeg \
     && rm -rf /var/lib/apt/lists/*
+
+RUN tesseract --version
+RUN tesseract --list-langs
 
 WORKDIR /app
 

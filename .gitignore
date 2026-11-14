@@ -37,3 +37,4 @@ backend/gmail/
 
 backend/.env
 frontend/.env
+backend/Tesseract-OCR/

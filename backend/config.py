@@ -38,6 +38,13 @@ class Settings(BaseSettings):
     USE_CELERY: bool = False
     DEV_SKIP_EMAIL_VERIFICATION: bool = False
 
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM: str = "no-reply@lrw.local"
+    BREVO_API_KEY: str = ""
+    EMAIL_FROM: str = ""
     APP_BASE_URL: str = "http://localhost:5173"
     GROQ_API_KEY: str | None = None
     TESSERACT_CMD: str | None = _find_default_tesseract()
