@@ -1,0 +1,29 @@
+
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    tesseract-ocr-tam \
+    tesseract-ocr-sin \
+    poppler-utils \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN tesseract --version
+RUN tesseract --list-langs
+
+WORKDIR /app
+
+COPY requirements.txt .
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+RUN python -m spacy download en_core_web_sm
+
+COPY . .
+
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]

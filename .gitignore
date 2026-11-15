@@ -39,3 +39,4 @@ backend/.env
 frontend/.env
 Tesseract-OCR/
 backend/.env
+backend/Tesseract-OCR/
