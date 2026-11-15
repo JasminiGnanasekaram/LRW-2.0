@@ -334,15 +334,21 @@ def compute_statistics(text, token_data, lang_data=None):
         "characters_without_spaces": sum(
             not char.isspace() for char in text
         ),
-        "tokens": token_data["token_count"],
-        "unique_tokens": token_data["unique_tokens"],
-        "sentences": token_data["sentence_count"],
+        "tokens": token_data.get("token_count", len(token_data.get("tokens") or [])),
+        "unique_tokens": token_data.get(
+            "unique_tokens",
+            len(token_data.get("word_counts") or token_data.get("top_words") or [])
+            or len({str(t).lower() for t in (token_data.get("tokens") or [])}),
+        ),
+        "sentences": token_data.get(
+            "sentence_count", len(token_data.get("sentences") or [])
+        ),
         "paragraphs": len(paragraphs),
         "language_distribution": {
             item["language"]: item["percentage"]
             for item in lang_data["languages_detected"]
         },
-        "pos_distribution": token_data["pos_distribution"],
+        "pos_distribution": token_data.get("pos_distribution") or {},
     }
 
 
