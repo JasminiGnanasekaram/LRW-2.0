@@ -65,7 +65,10 @@ async def _doc_out(raw, cleaned=None, meta=None, analysis=None):
     nlp_data = dict(analysis.get("data") or {}) if analysis else None
     if nlp_data is not None:
         analysis_text = (cleaned or {}).get("text") or raw_text or ""
-        computed_stats = nlp.compute_statistics(analysis_text, nlp_data)
+        computed_stats = nlp.compute_statistics(
+            analysis_text or "",
+            nlp_data or {},
+        )
         nlp_data["statistics"] = {**computed_stats, **(nlp_data.get("statistics") or {})}
 
     # Generate summary: prefer stored summary, fallback to extractive summary
