@@ -367,44 +367,38 @@ const buildNlpSectionJson = (sectionKey, nlp, docId, lang) => {
 
   switch (sectionKey) {
     case "tokens": {
-      const rows = getWordCountRows(nlp);
+      const rows = getWordCountRows(undefined, nlp);
 
       if (rows === null) {
         window.alert("Run NLP analysis again to generate word counts.");
         return;
       }
 
-      return downloadNlpCsv(
-        `${filename}.csv`,
-        ["Word", "Count"],
-        rows
-      );
+      return {
+        ...base,
+        count: rows.length,
+        total: rows.reduce((sum, [, count]) => sum + count, 0),
+        data: rows.map(([word, count]) => ({ word, count })),
+      };
     }
     case "sentences": {
-      const rows = [];
+      const sentences = (nlp?.sentences ?? []).filter(
+        (sentence) => typeof sentence === "string"
+      );
 
-      for (const sentence of nlp?.sentences ?? []) {
-        if (typeof sentence !== "string") continue;
-
-        // Turn line breaks, tabs, and repeated spaces into one space.
-        // Tamil letters, vowel signs, and punctuation stay together.
-        const text = sentence.replace(/\s+/gu, " ").trim();
-
-        if (text) {
-          rows.push([rows.length + 1, text]);
-        }
-      }
-
-      if (rows.length === 0) {
+      if (sentences.length === 0) {
         window.alert("No sentences are available to download.");
         return;
       }
 
-      return downloadNlpCsv(
-        `${filename}.csv`,
-        ["Sentence No.", "Sentence"],
-        rows
-      );
+      return {
+        ...base,
+        count: sentences.length,
+        data: sentences.map((sentence, index) => ({
+          index: index + 1,
+          sentence,
+        })),
+      };
     }
     case "pos":
       return {
@@ -473,7 +467,9 @@ const downloadNlpJson = (filename, payload) => {
 const downloadNlpSection = (sectionKey, nlp, docId, lang, format = "csv", sourceText) => {
   const filename = `LRW_${String(docId || "document").replace(/[^a-zA-Z0-9_-]/g, "_")}_${sectionKey}`;
   if (format === "json") {
-    return downloadNlpJson(`${filename}.json`, buildNlpSectionJson(sectionKey, nlp, docId, lang));
+    const payload = buildNlpSectionJson(sectionKey, nlp, docId, lang);
+    if (payload === undefined) return;
+    return downloadNlpJson(`${filename}.json`, payload);
   }
   if (format !== "csv" && format !== "svg") {
     throw new Error("Unsupported download format.");
