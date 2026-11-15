@@ -659,7 +659,7 @@ function EditTokenModal({
     setError(null);
   }, [token, initialTab]);
 
-  if (!isOpen || !token) return null;
+  if (!token) return null;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -3776,7 +3776,6 @@ export default function DocumentView() {
     return () => window.removeEventListener("lrw_lang_changed", handleLang);
   }, []);
 
-  if (loading) return <div className="page" style={{ paddingTop: 32 }}><p className="muted">Loading document…</p></div>;
   if (error) {
     return (
       <div className="page" style={{ maxWidth: 720, paddingTop: 32 }}>
